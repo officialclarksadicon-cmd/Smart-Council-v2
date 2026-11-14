@@ -1,0 +1,368 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Default-Deny Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return (
+        request.auth != null && (
+          request.auth.uid == 'r6KDRrPBerb0KiJ3M5QYpZ0Yjl62' ||
+          request.auth.token.email == 'official.clarksadicon@gmail.com' ||
+          exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+          (
+            exists(/databases/$(database)/documents/councilAccounts/$(request.auth.uid)) &&
+            get(/databases/$(database)/documents/councilAccounts/$(request.auth.uid)).data.role == 'admin'
+          ) ||
+          (
+            exists(/databases/$(database)/documents/officialUsers/$(request.auth.uid)) &&
+            get(/databases/$(database)/documents/officialUsers/$(request.auth.uid)).data.role == 'admin'
+          )
+        )
+      );
+    }
+
+    function isOfficialOrAdmin() {
+      return isAdmin() || (
+        request.auth != null && (
+          exists(/databases/$(database)/documents/councilAccounts/$(request.auth.uid)) ||
+          exists(/databases/$(database)/documents/officialUsers/$(request.auth.uid))
+        )
+      );
+    }
+
+    function isForumParticipant() {
+      return isSignedIn() || isOfficialOrAdmin();
+    }
+
+    // Validation Blueprint: StudentUser (/students/{studentId})
+    function isValidStudentUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'yearCourse', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'name', 'email', 'yearCourse', 'photoURL', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.uid == request.auth.uid &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.email == request.auth.token.email &&
+        data.yearCourse is string && data.yearCourse.size() >= 1 && data.yearCourse.size() <= 100 &&
+        (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: Unified CouncilAccount (/councilAccounts/{accountId})
+    function isValidCouncilAccount(data) {
+      return data.keys().hasAll(['id', 'email', 'passcode', 'name', 'position', 'role', 'createdByEmail', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'email', 'passcode', 'name', 'position', 'role', 'authUid', 'createdByEmail', 'createdAt', 'updatedAt']) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 160 &&
+        data.passcode is string && data.passcode.size() >= 4 && data.passcode.size() <= 64 &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.position is string && data.position.size() >= 1 && data.position.size() <= 80 &&
+        data.role is string && (data.role == 'admin' || data.role == 'official') &&
+        (!('authUid' in data) || (data.authUid is string && data.authUid.size() >= 1 && data.authUid.size() <= 128 && data.authUid.matches('^[a-zA-Z0-9_\\-]+$'))) &&
+        data.createdByEmail is string && data.createdByEmail.size() >= 3 && data.createdByEmail.size() <= 160 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: CouncilOfficer (/councilOfficers/{officerId})
+    function isValidCouncilOfficer(data) {
+      return data.keys().hasAll(['id', 'term', 'name', 'position', 'committee', 'visibility', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'term', 'name', 'position', 'committee', 'image', 'optional', 'accountId', 'visibility', 'createdAt', 'updatedAt']) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.term is string && data.term.size() >= 4 && data.term.size() <= 32 &&
+        data.name is string && data.name.size() <= 120 &&
+        data.position is string && data.position.size() >= 1 && data.position.size() <= 80 &&
+        data.committee is string && (
+          data.committee == 'Executive Board' ||
+          data.committee == 'Year Level Representatives' ||
+          data.committee == 'Information' ||
+          data.committee == 'Documentary' ||
+          data.committee == 'Technical'
+        ) &&
+        (!('image' in data) || (data.image is string && data.image.size() <= 500)) &&
+        (!('optional' in data) || data.optional is bool) &&
+        (!('accountId' in data) || (data.accountId is string && data.accountId.size() >= 1 && data.accountId.size() <= 128 && data.accountId.matches('^[a-zA-Z0-9_\\-]+$'))) &&
+        data.visibility is string && data.visibility == 'public' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: Announcement (/announcements/{announcementId})
+    function isValidAnnouncement(data) {
+      return data.keys().hasAll(['id', 'title', 'date', 'category', 'summary', 'issuedBy', 'visibility', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'title', 'date', 'category', 'summary', 'issuedBy', 'image', 'visibility', 'createdAt', 'updatedAt']) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        data.date is string && data.date.size() >= 1 && data.date.size() <= 60 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 80 &&
+        data.summary is string && data.summary.size() >= 1 && data.summary.size() <= 2000 &&
+        data.issuedBy is string && data.issuedBy.size() >= 1 && data.issuedBy.size() <= 160 &&
+        (!('image' in data) || (data.image is string && data.image.size() <= 500)) &&
+        data.visibility is string && data.visibility == 'public' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: PortalEvent (/events/{eventId})
+    function isValidPortalEvent(data) {
+      return data.keys().hasAll(['id', 'title', 'date', 'time', 'location', 'category', 'description', 'image', 'imageAlt', 'visibility', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'title', 'date', 'time', 'location', 'category', 'description', 'image', 'imageAlt', 'visibility', 'createdAt', 'updatedAt']) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        data.date is string && data.date.size() >= 1 && data.date.size() <= 80 &&
+        data.time is string && data.time.size() >= 1 && data.time.size() <= 80 &&
+        data.location is string && data.location.size() >= 1 && data.location.size() <= 160 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 80 &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 2000 &&
+        data.image is string && data.image.size() >= 1 && data.image.size() <= 500 &&
+        data.imageAlt is string && data.imageAlt.size() >= 1 && data.imageAlt.size() <= 240 &&
+        data.visibility is string && data.visibility == 'public' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: ForumThreadDoc (/forumThreads/{threadId})
+    function isValidForumThread(data) {
+      return data.keys().hasAll(['id', 'author', 'yearLevel', 'postedAt', 'topic', 'title', 'body', 'supportCount', 'replies', 'visibility', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'author', 'yearLevel', 'postedAt', 'topic', 'title', 'body', 'supportCount', 'replies', 'visibility', 'createdAt', 'updatedAt']) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.author is string && data.author.size() >= 1 && data.author.size() <= 120 &&
+        data.yearLevel is string && data.yearLevel.size() >= 1 && data.yearLevel.size() <= 100 &&
+        data.postedAt is string && data.postedAt.size() >= 1 && data.postedAt.size() <= 60 &&
+        data.topic is string && data.topic.size() >= 1 && data.topic.size() <= 80 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 3000 &&
+        data.supportCount is int && data.supportCount >= 0 && data.supportCount <= 100000 &&
+        data.replies is list && data.replies.size() <= 100 && (data.replies.size() == 0 || data.replies[0] is map) &&
+        data.visibility is string && data.visibility == 'public' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: PortalSettings (/portalSettings/{settingId})
+    function isValidPortalSettings(data) {
+      return data.keys().hasAll(['id', 'announcementFilters', 'eventFilters', 'forumFilters', 'aiAutoSync', 'visibility', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'announcementFilters', 'eventFilters', 'forumFilters', 'aiAutoSync', 'customLogoUrl', 'aboutSlacImage', 'heroImage', 'visibility', 'createdAt', 'updatedAt']) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.announcementFilters is list && data.announcementFilters.size() >= 1 && data.announcementFilters.size() <= 25 && data.announcementFilters[0] is string &&
+        data.eventFilters is list && data.eventFilters.size() >= 1 && data.eventFilters.size() <= 25 && data.eventFilters[0] is string &&
+        data.forumFilters is list && data.forumFilters.size() >= 1 && data.forumFilters.size() <= 25 && data.forumFilters[0] is string &&
+        data.aiAutoSync is bool &&
+        (!('customLogoUrl' in data) || (data.customLogoUrl is string && data.customLogoUrl.size() <= 500)) &&
+        (!('aboutSlacImage' in data) || (data.aboutSlacImage is string && data.aboutSlacImage.size() <= 500)) &&
+        (!('heroImage' in data) || (data.heroImage is string && data.heroImage.size() <= 500)) &&
+        data.visibility is string && data.visibility == 'public' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: FaqDoc (/faqs/{faqId})
+    function isValidFaqDoc(data) {
+      return data.keys().hasAll(['id', 'category', 'question', 'answer', 'order', 'visibility', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'category', 'question', 'answer', 'order', 'visibility', 'createdAt', 'updatedAt']) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 80 &&
+        data.question is string && data.question.size() >= 1 && data.question.size() <= 300 &&
+        data.answer is string && data.answer.size() >= 1 && data.answer.size() <= 2000 &&
+        data.order is int && data.order >= 0 && data.order <= 10000 &&
+        data.visibility is string && data.visibility == 'public' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // 1. Normal Student Users
+    match /students/{studentId} {
+      allow get: if isValidId(studentId) && (isOwner(studentId) || isAdmin());
+      allow list: if false;
+      allow create: if isOwner(studentId) &&
+        isValidId(studentId) &&
+        isValidStudentUser(incoming()) &&
+        incoming().uid == studentId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(studentId) &&
+        isValidStudentUser(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().email == existing().email &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (isOwner(studentId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'yearCourse', 'photoURL', 'updatedAt']))
+        );
+      allow delete: if isValidId(studentId) && isAdmin();
+    }
+
+    // 2. Legacy Official Users (Kept only for automatic cleanup of old duplicate docs)
+    match /officialUsers/{userId} {
+      allow get, list, delete: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+
+    // 3. Unified Council & Admin Accounts Table (/councilAccounts/{accountId})
+    match /councilAccounts/{accountId} {
+      allow get, list: if isOfficialOrAdmin() || (existing().role == 'admin' || existing().role == 'official');
+      allow create: if isAdmin() &&
+        isValidId(accountId) &&
+        isValidCouncilAccount(incoming()) &&
+        incoming().id == accountId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isAdmin() &&
+        isValidId(accountId) &&
+        isValidCouncilAccount(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['email', 'passcode', 'name', 'position', 'role', 'authUid', 'updatedAt']);
+      allow delete: if isValidId(accountId) && isAdmin();
+    }
+
+    // 4. Council Officers Directory
+    match /councilOfficers/{officerId} {
+      allow get: if isValidId(officerId) && (resource == null || existing().visibility == 'public' || isOfficialOrAdmin());
+      allow list: if existing().visibility == 'public';
+      allow create: if isOfficialOrAdmin() &&
+        isValidId(officerId) &&
+        isValidCouncilOfficer(incoming()) &&
+        incoming().id == officerId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isOfficialOrAdmin() &&
+        isValidId(officerId) &&
+        isValidCouncilOfficer(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['term', 'name', 'position', 'committee', 'image', 'optional', 'accountId', 'visibility', 'updatedAt']);
+      allow delete: if isValidId(officerId) && isOfficialOrAdmin();
+    }
+
+    // 5. Official Announcements
+    match /announcements/{announcementId} {
+      allow get: if isValidId(announcementId) && (resource == null || existing().visibility == 'public' || isOfficialOrAdmin());
+      allow list: if existing().visibility == 'public';
+      allow create: if isOfficialOrAdmin() &&
+        isValidId(announcementId) &&
+        isValidAnnouncement(incoming()) &&
+        incoming().id == announcementId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isOfficialOrAdmin() &&
+        isValidId(announcementId) &&
+        isValidAnnouncement(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'date', 'category', 'summary', 'issuedBy', 'image', 'visibility', 'updatedAt']);
+      allow delete: if isValidId(announcementId) && isOfficialOrAdmin();
+    }
+
+    // 6. Upcoming Events Gallery
+    match /events/{eventId} {
+      allow get: if isValidId(eventId) && (resource == null || existing().visibility == 'public' || isOfficialOrAdmin());
+      allow list: if existing().visibility == 'public';
+      allow create: if isOfficialOrAdmin() &&
+        isValidId(eventId) &&
+        isValidPortalEvent(incoming()) &&
+        incoming().id == eventId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isOfficialOrAdmin() &&
+        isValidId(eventId) &&
+        isValidPortalEvent(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['title', 'date', 'time', 'location', 'category', 'description', 'image', 'imageAlt', 'visibility', 'updatedAt']);
+      allow delete: if isValidId(eventId) && isOfficialOrAdmin();
+    }
+
+    // 7. Live Student Forum Threads
+    match /forumThreads/{threadId} {
+      allow get: if isValidId(threadId) && (resource == null || existing().visibility == 'public' || isForumParticipant());
+      allow list: if existing().visibility == 'public';
+      allow create: if isForumParticipant() &&
+        isValidId(threadId) &&
+        isValidForumThread(incoming()) &&
+        incoming().id == threadId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isForumParticipant() &&
+        isValidId(threadId) &&
+        isValidForumThread(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time && (
+          incoming().diff(existing()).affectedKeys().hasOnly(['replies', 'supportCount', 'updatedAt']) ||
+          (isOfficialOrAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['topic', 'title', 'body', 'replies', 'supportCount', 'visibility', 'updatedAt']))
+        );
+      allow delete: if isValidId(threadId) && isOfficialOrAdmin();
+    }
+
+    // 8. Synchronized Portal Category Filters & Branding Assets
+    match /portalSettings/{settingId} {
+      allow get: if isValidId(settingId) && (resource == null || existing().visibility == 'public' || isOfficialOrAdmin());
+      allow list: if existing().visibility == 'public';
+      allow create: if isOfficialOrAdmin() &&
+        isValidId(settingId) &&
+        isValidPortalSettings(incoming()) &&
+        incoming().id == settingId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isOfficialOrAdmin() &&
+        isValidId(settingId) &&
+        isValidPortalSettings(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['announcementFilters', 'eventFilters', 'forumFilters', 'aiAutoSync', 'customLogoUrl', 'aboutSlacImage', 'heroImage', 'visibility', 'updatedAt']);
+      allow delete: if isValidId(settingId) && isAdmin();
+    }
+
+    // 9. Frequently Asked Questions
+    match /faqs/{faqId} {
+      allow get: if isValidId(faqId) && (resource == null || existing().visibility == 'public' || isOfficialOrAdmin());
+      allow list: if existing().visibility == 'public';
+      allow create: if isOfficialOrAdmin() &&
+        isValidId(faqId) &&
+        isValidFaqDoc(incoming()) &&
+        incoming().id == faqId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isOfficialOrAdmin() &&
+        isValidId(faqId) &&
+        isValidFaqDoc(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['category', 'question', 'answer', 'order', 'visibility', 'updatedAt']);
+      allow delete: if isValidId(faqId) && isOfficialOrAdmin();
+    }
+  }
+}

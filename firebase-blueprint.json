@@ -1,0 +1,683 @@
+{
+  "entities": {
+    "StudentUser": {
+      "title": "StudentUser",
+      "description": "Normal SLAC student user authenticated via Google Sign-In, stored separately from council officers.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the student.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full display name of the student.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified Google email address of the student.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "yearCourse": {
+          "type": "string",
+          "description": "Year and degree program of the student.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Optional Google profile avatar URL.",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["uid", "name", "email", "yearCourse", "createdAt", "updatedAt"]
+    },
+    "OfficialUser": {
+      "title": "OfficialUser",
+      "description": "Verified Firebase Auth UID registry for provisioned SSC Officials and Web Admins.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the official.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "accountId": {
+          "type": "string",
+          "description": "Corresponding CouncilAccount document ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Official full name.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "position": {
+          "type": "string",
+          "description": "Official SLAC SSC position title.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "role": {
+          "type": "string",
+          "description": "Access role (admin or official).",
+          "enum": ["admin", "official"]
+        },
+        "visibility": {
+          "type": "string",
+          "description": "Visibility marker for admin queries.",
+          "enum": ["public"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "uid",
+        "accountId",
+        "name",
+        "position",
+        "role",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CouncilAccount": {
+      "title": "CouncilAccount",
+      "description": "Provisioned SSC Officer or Web Admin account managed exclusively by official.clarksadicon@gmail.com.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Account identifier.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Registered email for the council officer or admin.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "passcode": {
+          "type": "string",
+          "description": "Assigned officer login passcode.",
+          "minLength": 4,
+          "maxLength": 64
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the council officer or admin.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "position": {
+          "type": "string",
+          "description": "Official SLAC SSC position title.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "role": {
+          "type": "string",
+          "description": "Access tier (admin or official).",
+          "enum": ["admin", "official"]
+        },
+        "authUid": {
+          "type": "string",
+          "description": "Optional linked Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdByEmail": {
+          "type": "string",
+          "description": "Admin email that provisioned this account.",
+          "minLength": 3,
+          "maxLength": 160
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "passcode",
+        "name",
+        "position",
+        "role",
+        "createdByEmail",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CouncilOfficer": {
+      "title": "CouncilOfficer",
+      "description": "Public SLAC SSC Council Officer directory record pushed when the Web Admin or an official updates officer rosters, stored separately from normal student users.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique officer slot or record ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "term": {
+          "type": "string",
+          "description": "Academic term label (e.g., 2025–2026).",
+          "minLength": 4,
+          "maxLength": 32
+        },
+        "name": {
+          "type": "string",
+          "description": "Officer full name.",
+          "minLength": 0,
+          "maxLength": 120
+        },
+        "position": {
+          "type": "string",
+          "description": "Official SLAC SSC position.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "committee": {
+          "type": "string",
+          "description": "Council committee division.",
+          "enum": [
+            "Executive Board",
+            "Year Level Representatives",
+            "Information",
+            "Documentary",
+            "Technical"
+          ]
+        },
+        "image": {
+          "type": "string",
+          "description": "ImageKit cloud portrait URL.",
+          "maxLength": 500
+        },
+        "optional": {
+          "type": "boolean",
+          "description": "Whether this position slot is optional (Asst. Secretary)."
+        },
+        "accountId": {
+          "type": "string",
+          "description": "Optional linked CouncilAccount ID.",
+          "maxLength": 128
+        },
+        "visibility": {
+          "type": "string",
+          "description": "Public visibility marker for secure list queries.",
+          "enum": ["public"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "term",
+        "name",
+        "position",
+        "committee",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Announcement": {
+      "title": "Announcement",
+      "description": "Official SLAC SSC memo and campus announcement streamed in real time to all visitors.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique announcement ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Announcement headline.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "date": {
+          "type": "string",
+          "description": "Display date label.",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "category": {
+          "type": "string",
+          "description": "Announcement category filter tag.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "summary": {
+          "type": "string",
+          "description": "Full announcement summary body.",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "issuedBy": {
+          "type": "string",
+          "description": "Issuing officer or council office.",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "image": {
+          "type": "string",
+          "description": "Optional ImageKit cloud banner URL.",
+          "maxLength": 500
+        },
+        "visibility": {
+          "type": "string",
+          "description": "Public visibility marker for secure list queries.",
+          "enum": ["public"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "date",
+        "category",
+        "summary",
+        "issuedBy",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PortalEvent": {
+      "title": "PortalEvent",
+      "description": "Upcoming SLAC SSC campus activity and gallery item streamed in real time to all visitors.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique event ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Event title.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "date": {
+          "type": "string",
+          "description": "Event date string.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "time": {
+          "type": "string",
+          "description": "Event time window.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "location": {
+          "type": "string",
+          "description": "Campus venue.",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "category": {
+          "type": "string",
+          "description": "Event filter category.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "description": {
+          "type": "string",
+          "description": "Event description.",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "image": {
+          "type": "string",
+          "description": "ImageKit cloud event cover photo URL.",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "imageAlt": {
+          "type": "string",
+          "description": "Accessible alt text for event cover image.",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "visibility": {
+          "type": "string",
+          "description": "Public visibility marker for secure list queries.",
+          "enum": ["public"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "date",
+        "time",
+        "location",
+        "category",
+        "description",
+        "image",
+        "imageAlt",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ForumThreadDoc": {
+      "title": "ForumThreadDoc",
+      "description": "Live student forum discussion thread and bounded replies list.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique thread ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "author": {
+          "type": "string",
+          "description": "Verified student or officer display name.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "yearLevel": {
+          "type": "string",
+          "description": "Author year/program or council position.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "postedAt": {
+          "type": "string",
+          "description": "Human-readable posted timestamp.",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "topic": {
+          "type": "string",
+          "description": "Forum topic category.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "title": {
+          "type": "string",
+          "description": "Discussion title.",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "body": {
+          "type": "string",
+          "description": "Discussion body text.",
+          "minLength": 1,
+          "maxLength": 3000
+        },
+        "supportCount": {
+          "type": "number",
+          "description": "Total student support count."
+        },
+        "replies": {
+          "type": "array",
+          "description": "Bounded list of up to 100 reply objects."
+        },
+        "visibility": {
+          "type": "string",
+          "description": "Public visibility marker for secure list queries.",
+          "enum": ["public"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "author",
+        "yearLevel",
+        "postedAt",
+        "topic",
+        "title",
+        "body",
+        "supportCount",
+        "replies",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PortalSettings": {
+      "title": "PortalSettings",
+      "description": "Synchronized category filter tags and AI filter settings for all portal visitors.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Settings document ID (e.g., config).",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "announcementFilters": {
+          "type": "array",
+          "description": "Bounded list of announcement filter tags."
+        },
+        "eventFilters": {
+          "type": "array",
+          "description": "Bounded list of event filter tags."
+        },
+        "forumFilters": {
+          "type": "array",
+          "description": "Bounded list of forum topic filter tags."
+        },
+        "aiAutoSync": {
+          "type": "boolean",
+          "description": "Whether AI filter sync runs automatically on new entries."
+        },
+        "visibility": {
+          "type": "string",
+          "description": "Public visibility marker for secure queries.",
+          "enum": ["public"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "announcementFilters",
+        "eventFilters",
+        "forumFilters",
+        "aiAutoSync",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "FaqDoc": {
+      "title": "FaqDoc",
+      "description": "Frequently Asked Question entry editable by SSC Officials and Web Admins and streamed live to all portal visitors.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique FAQ item ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "category": {
+          "type": "string",
+          "description": "FAQ topic category label.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "question": {
+          "type": "string",
+          "description": "Student question headline.",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "answer": {
+          "type": "string",
+          "description": "Official council answer.",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "order": {
+          "type": "number",
+          "description": "Display sort order."
+        },
+        "visibility": {
+          "type": "string",
+          "description": "Public visibility marker for secure queries.",
+          "enum": ["public"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "id",
+        "category",
+        "question",
+        "answer",
+        "order",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/students/{studentId}": {
+      "schema": "StudentUser",
+      "description": "Normal student users authenticated with Google Sign-In (isolated from council officers)."
+    },
+    "/officialUsers/{userId}": {
+      "schema": "OfficialUser",
+      "description": "Verified Firebase Auth UID registry for provisioned SSC Officials and Web Admins."
+    },
+    "/councilAccounts/{accountId}": {
+      "schema": "CouncilAccount",
+      "description": "Provisioned SSC Officer and Web Admin accounts managed exclusively by official.clarksadicon@gmail.com."
+    },
+    "/councilOfficers/{officerId}": {
+      "schema": "CouncilOfficer",
+      "description": "Council officers collection populated and streamed live across all users."
+    },
+    "/announcements/{announcementId}": {
+      "schema": "Announcement",
+      "description": "Official SLAC SSC announcements streamed live to guests, students, and officers."
+    },
+    "/events/{eventId}": {
+      "schema": "PortalEvent",
+      "description": "Upcoming SLAC SSC campus events streamed live to guests, students, and officers."
+    },
+    "/forumThreads/{threadId}": {
+      "schema": "ForumThreadDoc",
+      "description": "Live student forum discussions readable by all visitors and writable by signed-in students and officers."
+    },
+    "/portalSettings/{settingId}": {
+      "schema": "PortalSettings",
+      "description": "Synchronized portal filter categories for announcements, events, and forum topics."
+    },
+    "/faqs/{faqId}": {
+      "schema": "FaqDoc",
+      "description": "Editable Frequently Asked Questions streamed live to guests, students, and officers."
+    }
+  }
+}

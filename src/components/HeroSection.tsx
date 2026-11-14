@@ -1,0 +1,374 @@
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Calendar,
+  Megaphone,
+  MessageSquare,
+  Plus,
+} from 'lucide-react';
+import {
+  AnnouncementItem,
+  ForumThread,
+  GalleryEventItem,
+  PageRoute,
+  siteConfig,
+} from '../siteConfig';
+import type { ThemeMode } from '../App';
+import { HeroOffice3D } from './HeroOffice3D';
+import { ScrollReveal } from './ScrollReveal';
+import { WordRevealText } from './WordRevealText';
+
+interface HeroSectionProps {
+  announcements: AnnouncementItem[];
+  events: GalleryEventItem[];
+  forumThreads: ForumThread[];
+  theme: ThemeMode;
+  customLogoUrl?: string;
+  isActive?: boolean;
+  unreadCounts?: {
+    announcements: number;
+    events: number;
+    forum: number;
+  };
+  onToggleTheme?: () => void;
+  onNavigate: (page: PageRoute) => void;
+}
+
+/**
+ * BODY SECTION 1: UNIFIED FULL-BLEED 3D COUNCIL OFFICE & SKY STAGE + KARST HIGHLIGHTS GRID
+ * - The 3D Scene Stage (z-20) sits ABOVE the Campus Highlights body section (z-10) so the isometric
+ *   3D office platform is never clipped or buried beneath the body.
+ * - Both Mobile and PC use a true transparent glass-blur Hero text card (zero solid background color)
+ *   positioned harmoniously inside the 3D scene stage.
+ */
+export function HeroSection({
+  announcements,
+  events,
+  forumThreads,
+  theme,
+  customLogoUrl,
+  isActive = true,
+  unreadCounts,
+  onToggleTheme,
+  onNavigate,
+}: HeroSectionProps) {
+  const { eyebrow, headline, introduction, primaryCtaText, secondaryCtaText } =
+    siteConfig.hero;
+
+  const latestAnnouncement = announcements[0];
+  const nextEvent = events[0];
+  const latestThread = forumThreads[0];
+
+  const annBadge = unreadCounts?.announcements ?? 0;
+  const evtBadge = unreadCounts?.events ?? 0;
+  const forumBadge = unreadCounts?.forum ?? 0;
+
+  const isDark = theme === 'dark';
+
+  // Day (Sunny Blue Sky) / Night (Starry Deep Sky) backdrop behind the transparent-alpha 3D WebGL stage
+  const skyBackdropStyle = {
+    background: isDark
+      ? 'linear-gradient(180deg, #0b1120 0%, #111827 52%, #111312 100%)'
+      : 'linear-gradient(180deg, #8ecaf9 0%, #d4ecff 52%, #f5f3ee 100%)',
+  };
+
+  // True transparent glass-blur Hero text card (zero solid color fill)
+  const transparentGlassCardStyle = {
+    background: isDark
+      ? 'linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(15, 20, 30, 0.22) 100%)'
+      : 'linear-gradient(135deg, rgba(255, 255, 255, 0.42) 0%, rgba(245, 243, 238, 0.24) 100%)',
+    backdropFilter: 'blur(14px) saturate(140%)',
+    WebkitBackdropFilter: 'blur(14px) saturate(140%)',
+    border: isDark
+      ? '1px solid rgba(255, 255, 255, 0.18)'
+      : '1px solid rgba(255, 255, 255, 0.58)',
+    boxShadow: isDark
+      ? '0 14px 36px -10px rgba(0, 0, 0, 0.34)'
+      : '0 14px 36px -10px rgba(23, 24, 22, 0.10)',
+  };
+
+  // Transparent glass secondary CTA button (matches the transparent blur card instead of solid color)
+  const secondaryGlassButtonStyle = {
+    backgroundColor: isDark
+      ? 'rgba(255, 255, 255, 0.10)'
+      : 'rgba(23, 24, 22, 0.08)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    border: isDark
+      ? '1px solid rgba(255, 255, 255, 0.22)'
+      : '1px solid rgba(23, 24, 22, 0.18)',
+  };
+
+  return (
+    <section
+      id="top"
+      aria-label="Smart Council introduction"
+      className="relative w-full overflow-hidden border-b border-white/[0.14]"
+    >
+      {/* 1. UNIFIED FULL-BLEED 3D OFFICE & SKY STAGE (Positioned ABOVE the Body with z-20) */}
+      <div
+        style={skyBackdropStyle}
+        className="relative z-20 w-full h-[650px] sm:h-[680px] lg:h-[690px] transition-colors duration-300"
+      >
+        {/* Full-Bleed Interactive 3D Isometric Office & Sky Canvas (z-10, transparent alpha) */}
+        <div className="absolute inset-0 z-10">
+          <HeroOffice3D
+            theme={theme}
+            customLogoUrl={customLogoUrl}
+            isActive={isActive}
+            onToggleTheme={onToggleTheme}
+          />
+        </div>
+
+        {/* Transparent Blur Hero Card (Both Mobile & PC):
+            - Mobile (< lg): Sits in the lower portion while the 3D office is elevated clearly in the upper half.
+            - Desktop (>= lg): Sits on the left while the 3D office is positioned clearly on the right. */}
+        <div className="relative z-30 pointer-events-none mx-auto max-w-[1440px] h-full px-4 sm:px-8 lg:px-12 pt-16 pb-6 sm:pb-8 lg:py-20 flex items-end lg:items-center">
+          <div
+            style={transparentGlassCardStyle}
+            className="pointer-events-auto w-full max-w-[445px] rounded-2xl p-5 sm:p-6 lg:p-8 space-y-3.5 sm:space-y-4 transition-all duration-300"
+          >
+            <div
+              className={`flex flex-wrap items-center justify-between gap-2 text-xs font-semibold pb-2.5 border-b ${
+                isDark ? 'border-white/15' : 'border-black/12'
+              }`}
+            >
+              <span
+                className={`uppercase tracking-[0.1em] font-bold ${
+                  isDark ? 'text-[#f2a65a]' : 'text-[#b5483a]'
+                }`}
+              >
+                {eyebrow}
+              </span>
+              <span
+                className={`tabular-nums font-semibold ${
+                  isDark ? 'text-[#e2e6ee]' : 'text-[#262825]'
+                }`}
+              >
+                A.Y. 2025–2026
+              </span>
+            </div>
+
+            <div>
+              <WordRevealText
+                as="h1"
+                text={headline}
+                className="font-bold tracking-[-0.025em] leading-[1.06] text-[#f5f4f0]"
+                style={{ fontSize: 'clamp(1.85rem, 3.3vw, 3.05rem)' }}
+                delay={0.05}
+                y={22}
+                stagger={0.07}
+                highlightWords={['student', 'voice']}
+                highlightClassName="text-[#3ddc97]"
+              />
+
+              <p
+                className={`mt-2.5 sm:mt-3 text-xs sm:text-base leading-relaxed font-medium ${
+                  isDark ? 'text-[#e2e6ee]' : 'text-[#262825]'
+                }`}
+              >
+                {introduction}
+              </p>
+            </div>
+
+            <div className="pt-1 flex flex-row flex-wrap items-center gap-2.5 sm:gap-3">
+              <button
+                type="button"
+                onClick={() => onNavigate('announcements')}
+                className="gemini-cta min-h-[42px] sm:min-h-[46px] px-4 sm:px-6 py-2 sm:py-2.5 rounded-full inline-flex items-center justify-center gap-2 text-xs sm:text-sm font-bold uppercase tracking-[0.06em] active:scale-[0.99] transition-transform cursor-pointer"
+              >
+                <span>{primaryCtaText}</span>
+                {annBadge > 0 && (
+                  <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#ef4444] px-1.5 text-[11px] font-bold text-white tabular-nums">
+                    {annBadge}
+                  </span>
+                )}
+                <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onNavigate('forum')}
+                style={secondaryGlassButtonStyle}
+                className="min-h-[42px] sm:min-h-[46px] px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold text-[#f5f4f0] hover:opacity-90 inline-flex items-center justify-center gap-2 transition-opacity cursor-pointer shrink-0"
+              >
+                <span>
+                  {secondaryCtaText} ({forumThreads.length})
+                </span>
+                <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. KARST BOXY OUTLINED HIGHLIGHTS GRID (Positioned BELOW the 3D Scene Stage with z-10) */}
+      <div className="relative z-10 mx-auto max-w-[1440px] border-x border-t border-white/[0.14] bg-[#121620]">
+        {/* FULL-WIDTH BOXY SECTION TITLE BAR */}
+        <div className="border-b border-white/[0.14] px-6 sm:px-10 lg:px-12 py-6 sm:py-7 flex flex-wrap items-baseline justify-between gap-4">
+          <WordRevealText
+            as="h2"
+            text="Campus highlights"
+            className="font-bold tracking-[-0.025em] text-[#f5f4f0]"
+            style={{ fontSize: 'clamp(1.75rem, 3vw, 2.5rem)' }}
+            y={20}
+            stagger={0.08}
+          />
+        </div>
+
+        {/* 3-COLUMN BOXY OUTLINED HIGHLIGHTS GRID WITH ROUNDED INNER CARDS & PLAIN TEXT METADATA */}
+        <ScrollReveal delay={0.04}>
+          <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-white/[0.14] bg-[#121620]">
+            {/* Boxy Cell 1: Latest Advisory */}
+            <button
+              type="button"
+              onClick={() => onNavigate('announcements')}
+              className="group w-full rounded-none p-6 sm:p-8 lg:p-10 text-left flex flex-col justify-between gap-6 bg-[#121620] hover:bg-[#181d29]/70 transition-colors cursor-pointer"
+            >
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="inline-flex items-center gap-2 text-xs font-semibold text-[#3ddc97]">
+                    <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>Latest Advisory</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {annBadge > 0 && (
+                      <span className="text-xs font-semibold text-[#ef4444] tabular-nums">
+                        {annBadge} new
+                      </span>
+                    )}
+                    <ArrowUpRight
+                      className="h-4 w-4 text-[#949ba8] group-hover:text-[#3ddc97] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0"
+                      aria-hidden="true"
+                    />
+                  </div>
+                </div>
+
+                {/* Rounded Inner Card Inside Boxy Cell */}
+                <div className="card-elevated rounded-2xl p-5 space-y-2">
+                  <p className="text-xs font-medium text-[#949ba8]">
+                    {latestAnnouncement?.category ?? 'Official Notice'}
+                  </p>
+                  <p className="font-display text-lg sm:text-xl font-bold text-[#f5f4f0] leading-snug line-clamp-2">
+                    {latestAnnouncement?.title ?? 'Official SLAC SSC Advisories'}
+                  </p>
+                  <p className="text-xs sm:text-sm text-[#b4bac6] line-clamp-2 leading-relaxed">
+                    {latestAnnouncement?.summary ??
+                      'Read the latest campus-wide announcements and memoranda from the Supreme Student Council.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/[0.1] flex items-center justify-between gap-3 text-xs text-[#949ba8] tabular-nums">
+                <span>{latestAnnouncement?.date ?? 'Updated'}</span>
+                <span>{announcements.length} published</span>
+              </div>
+            </button>
+
+            {/* Boxy Cell 2: Next Event */}
+            <button
+              type="button"
+              onClick={() => onNavigate('events')}
+              className="group w-full rounded-none p-6 sm:p-8 lg:p-10 text-left flex flex-col justify-between gap-6 bg-[#121620] hover:bg-[#181d29]/70 transition-colors cursor-pointer"
+            >
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="inline-flex items-center gap-2 text-xs font-semibold text-[#f87171]">
+                    <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>Next Event</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {evtBadge > 0 && (
+                      <span className="text-xs font-semibold text-[#e8985e] tabular-nums">
+                        {evtBadge} new
+                      </span>
+                    )}
+                    <ArrowUpRight
+                      className="h-4 w-4 text-[#949ba8] group-hover:text-[#f87171] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0"
+                      aria-hidden="true"
+                    />
+                  </div>
+                </div>
+
+                {/* Rounded Inner Card Inside Boxy Cell */}
+                <div className="card-elevated rounded-2xl p-5 space-y-2">
+                  <p className="text-xs font-medium text-[#949ba8]">
+                    {nextEvent?.category ?? 'Campus Activity'}
+                  </p>
+                  <p className="font-display text-lg sm:text-xl font-bold text-[#f5f4f0] leading-snug line-clamp-2">
+                    {nextEvent?.title ?? 'SLAC Campus Activities'}
+                  </p>
+                  <p className="text-xs sm:text-sm text-[#b4bac6] line-clamp-2 leading-relaxed">
+                    {nextEvent?.description ??
+                      'Check schedules, venues, and registration details for upcoming student activities.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/[0.1] flex items-center justify-between gap-3 text-xs text-[#949ba8] tabular-nums">
+                <span>{nextEvent?.date ?? 'Upcoming'}</span>
+                <span className="truncate max-w-[160px]">
+                  {nextEvent?.location ?? 'SLAC Campus'}
+                </span>
+              </div>
+            </button>
+
+            {/* Boxy Cell 3: Student Forum */}
+            <button
+              type="button"
+              onClick={() => onNavigate('forum')}
+              className="group w-full rounded-none p-6 sm:p-8 lg:p-10 text-left flex flex-col justify-between gap-6 bg-[#121620] hover:bg-[#181d29]/70 transition-colors cursor-pointer"
+            >
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="inline-flex items-center gap-2 text-xs font-semibold text-[#facc15]">
+                    <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>Student Forum</span>
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {forumBadge > 0 && (
+                      <span className="text-xs font-semibold text-[#ef4444] tabular-nums">
+                        {forumBadge} new
+                      </span>
+                    )}
+                    <ArrowUpRight
+                      className="h-4 w-4 text-[#949ba8] group-hover:text-[#facc15] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0"
+                      aria-hidden="true"
+                    />
+                  </div>
+                </div>
+
+                {/* Rounded Inner Card Inside Boxy Cell */}
+                <div className="card-elevated rounded-2xl p-5 space-y-2">
+                  <p className="text-xs font-medium text-[#949ba8]">
+                    {latestThread?.topic ?? 'Open Discussion'}
+                  </p>
+                  <p className="font-display text-lg sm:text-xl font-bold text-[#f5f4f0] leading-snug line-clamp-2">
+                    {latestThread?.title ?? 'Share Campus Ideas & Proposals'}
+                  </p>
+                  <p className="text-xs sm:text-sm text-[#b4bac6] line-clamp-2 leading-relaxed">
+                    {latestThread?.body ??
+                      'Join fellow SLACians in constructive dialogue and propose student initiatives.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-white/[0.1] flex items-center justify-between gap-3 text-xs text-[#949ba8] tabular-nums">
+                <span className="truncate font-medium text-[#f5f4f0]">
+                  {latestThread?.author ?? 'SLAC Student Body'}
+                </span>
+                <span>
+                  {latestThread
+                    ? `${latestThread.replies.length} ${
+                        latestThread.replies.length === 1 ? 'reply' : 'replies'
+                      }`
+                    : `${forumThreads.length} threads`}
+                </span>
+              </div>
+            </button>
+          </div>
+        </ScrollReveal>
+      </div>
+    </section>
+  );
+}
