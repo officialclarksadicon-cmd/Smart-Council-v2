@@ -75,14 +75,14 @@ export function HeroSection({
   // Subtle edge-to-transparent fading gradients (zero shapes/cards, keeping the 3D scene clearly visible)
   const mobileBottomFadeStyle = {
     background: isDark
-      ? 'linear-gradient(0deg, rgba(17, 19, 18, 0.94) 0%, rgba(17, 19, 18, 0.64) 46%, rgba(17, 19, 18, 0) 100%)'
-      : 'linear-gradient(0deg, rgba(245, 243, 238, 0.94) 0%, rgba(245, 243, 238, 0.66) 46%, rgba(245, 243, 238, 0) 100%)',
+      ? 'linear-gradient(0deg, rgba(17, 19, 18, 0.97) 0%, rgba(17, 19, 18, 0.82) 48%, rgba(17, 19, 18, 0) 100%)'
+      : 'linear-gradient(0deg, rgba(250, 249, 246, 0.98) 0%, rgba(250, 249, 246, 0.84) 50%, rgba(250, 249, 246, 0) 100%)',
   };
 
   const desktopLeftFadeStyle = {
     background: isDark
-      ? 'linear-gradient(90deg, rgba(17, 19, 18, 0.84) 0%, rgba(17, 19, 18, 0.46) 52%, rgba(17, 19, 18, 0) 100%)'
-      : 'linear-gradient(90deg, rgba(245, 243, 238, 0.86) 0%, rgba(245, 243, 238, 0.48) 52%, rgba(245, 243, 238, 0) 100%)',
+      ? 'linear-gradient(90deg, rgba(17, 19, 18, 0.94) 0%, rgba(17, 19, 18, 0.7) 50%, rgba(17, 19, 18, 0) 100%)'
+      : 'linear-gradient(90deg, rgba(250, 249, 246, 0.96) 0%, rgba(250, 249, 246, 0.72) 50%, rgba(250, 249, 246, 0) 100%)',
   };
 
   // Secondary CTA button without backdrop blur
@@ -103,6 +103,7 @@ export function HeroSection({
     >
       {/* 1. UNIFIED FULL-BLEED 3D OFFICE & SKY STAGE (Positioned ABOVE the Body with z-20) */}
       <div
+        id="hero-stage"
         style={skyBackdropStyle}
         className="relative z-20 w-full h-[650px] sm:h-[680px] lg:h-[690px] transition-colors duration-300"
       >
@@ -120,12 +121,12 @@ export function HeroSection({
         <div
           aria-hidden="true"
           style={mobileBottomFadeStyle}
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-[52%] lg:hidden transition-colors duration-300"
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-[64%] lg:hidden transition-colors duration-300"
         />
         <div
           aria-hidden="true"
           style={desktopLeftFadeStyle}
-          className="pointer-events-none hidden lg:block absolute inset-y-0 left-0 z-20 w-[48%] transition-colors duration-300"
+          className="pointer-events-none hidden lg:block absolute inset-y-0 left-0 z-20 w-[58%] transition-colors duration-300"
         />
 
         {/* Hero Text Content (Zero card shapes, borders, or blur):
@@ -160,7 +161,7 @@ export function HeroSection({
                 y={22}
                 stagger={0.07}
                 highlightWords={['student', 'voice']}
-                highlightClassName="text-[#3ddc97]"
+                highlightClassName="text-[#3ddc97] hero-accent"
               />
 
               <p

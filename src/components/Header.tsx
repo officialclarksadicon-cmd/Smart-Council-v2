@@ -92,8 +92,8 @@ function parseYear(yearCourse?: string): string {
 
 /**
  * HEADER SECTION
- * - Fixed top bar that smoothly folds away when scrolling down and reveals itself when scrolling up.
- * - Glassmorphic at the top edge (scrollY = 0) and smoothly interpolates to solid website color as you scroll.
+ * - Fixed top bar that always stays visible (never collapses when scrolling in either direction).
+ * - Glassmorphic over the hero section, then fills with the solid website color once scrolled well past the hero.
  * - Non-overlapping 3-zone flex architecture so navigation items never collide with the right-side profile pill.
  * - Portaled GPU-accelerated Burger Menu with Claude Window Bar, Karst boxy outer frame, and rounded inner cards.
  */
@@ -113,10 +113,8 @@ export function Header({
 }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [identityModalOpen, setIdentityModalOpen] = useState(false);
-  const [isHeaderHidden, setIsHeaderHidden] = useState(false);
-  const [scrollRatio, setScrollRatio] = useState(0);
+  const [isFilled, setIsFilled] = useState(false);
 
-  const lastScrollYRef = useRef(0);
   const scrollTickingRef = useRef(false);
 
   const [editStudentName, setEditStudentName] = useState(student?.name ?? '');
@@ -169,66 +167,44 @@ export function Header({
     setIdentityModalOpen(false);
   };
 
-  // Reveal header whenever navigating to a new page or opening menus
+  // Glass over the hero, solid fill once the page has scrolled well past the hero section.
+  // On pages without a hero stage, the fill kicks in after a short scroll.
   useEffect(() => {
-    const currentY = Math.max(0, window.scrollY || 0);
-    setIsHeaderHidden(false);
-    setScrollRatio(
-      currentY <= 8 ? 0 : Math.min(1, (currentY - 8) / 88)
-    );
-    lastScrollYRef.current = currentY;
-  }, [currentPage, mobileMenuOpen, identityModalOpen]);
+    const HEADER_HEIGHT = 64;
+    const PAST_HERO_BUFFER = 72;
+    const NO_HERO_THRESHOLD = 24;
 
-  // Slowly fold header when scrolling down deeper, reveal when scrolling up,
-  // and transition from glassmorphism at the top edge (0px) to 100% solid theme color as it scrolls/moves away
-  useEffect(() => {
-    const initialY = Math.max(0, window.scrollY || 0);
-    lastScrollYRef.current = initialY;
-    setScrollRatio(
-      initialY <= 8 ? 0 : Math.min(1, (initialY - 8) / 88)
-    );
-
-    const updateHeaderVisibility = () => {
+    const updateHeaderFill = () => {
       scrollTickingRef.current = false;
       const currentScrollY = Math.max(
         0,
         window.scrollY || document.documentElement.scrollTop || 0
       );
+      const heroStage = document.getElementById('hero-stage');
 
-      // Smoothly interpolate from pure glass at top edge (<= 8px) to solid color as it moves away
-      const nextRatio =
-        currentScrollY <= 8 ? 0 : Math.min(1, (currentScrollY - 8) / 88);
-      setScrollRatio(nextRatio);
-
-      if (mobileMenuOpen || identityModalOpen || currentScrollY < 110) {
-        setIsHeaderHidden(false);
-        lastScrollYRef.current = currentScrollY;
-        return;
-      }
-
-      const delta = currentScrollY - lastScrollYRef.current;
-
-      if (delta > 12) {
-        setIsHeaderHidden(true);
-        lastScrollYRef.current = currentScrollY;
-      } else if (delta < -6) {
-        setIsHeaderHidden(false);
-        lastScrollYRef.current = currentScrollY;
+      if (heroStage) {
+        const heroBottom = heroStage.getBoundingClientRect().bottom;
+        setIsFilled(heroBottom <= HEADER_HEIGHT - PAST_HERO_BUFFER);
+      } else {
+        setIsFilled(currentScrollY > NO_HERO_THRESHOLD);
       }
     };
 
     const handleScroll = () => {
       if (!scrollTickingRef.current) {
         scrollTickingRef.current = true;
-        window.requestAnimationFrame(updateHeaderVisibility);
+        window.requestAnimationFrame(updateHeaderFill);
       }
     };
 
+    updateHeaderFill();
     window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll);
     return () => {
       window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleScroll);
     };
-  }, [mobileMenuOpen, identityModalOpen]);
+  }, [currentPage]);
 
   // Lock background page scroll & listen for Escape when Burger Menu is open
   useEffect(() => {
@@ -250,7 +226,6 @@ export function Header({
 
   const handleMobileNavigate = (page: PageRoute) => {
     setMobileMenuOpen(false);
-    setIsHeaderHidden(false);
     onNavigate(page);
   };
 
@@ -295,31 +270,15 @@ export function Header({
       : []),
   ];
 
-  const shouldFoldHeader =
-    isHeaderHidden && !mobileMenuOpen && !identityModalOpen;
-
-  // Fully transparent header (zero glass blur, zero background fill)
-  const headerDynamicStyle = {
-    backgroundColor: 'transparent',
-    backdropFilter: 'none',
-    WebkitBackdropFilter: 'none',
-    borderBottom: 'none',
-    boxShadow: 'none',
-  };
+  // Glass morphism over the hero; solid fill (with a hairline + soft shadow) once past the hero.
+  // While the burger menu is open the bar is always solid so the drawer reads as one surface.
+  const headerFillClass =
+    isFilled || mobileMenuOpen ? 'karst-header-solid' : 'karst-header-glass';
 
   return (
     <>
-      <motion.header
-        initial={false}
-        animate={{ y: shouldFoldHeader ? '-100%' : '0%' }}
-        transition={{
-          duration: 0.58,
-          ease: [0.22, 1, 0.36, 1],
-        }}
-        style={headerDynamicStyle}
-        className={`fixed top-0 left-0 right-0 z-50 w-full bg-transparent will-change-transform ${
-          shouldFoldHeader ? 'pointer-events-none' : ''
-        }`}
+      <header
+        className={`fixed top-0 left-0 right-0 z-50 w-full ${headerFillClass}`}
       >
         <div className="mx-auto max-w-[1440px] px-4 sm:px-8 h-16 grid grid-cols-[1fr_auto_1fr] items-center gap-3 xl:gap-6">
           {/* Zone 1 (Left): Desktop Single-Line Navigation */}
@@ -411,8 +370,7 @@ export function Header({
               className="inline-flex items-center justify-center whitespace-nowrap shrink-0 cursor-pointer focus-visible:rounded-md px-2 py-1"
             >
               <span
-                className="text-[16px] sm:text-[18px] font-bold tracking-tight whitespace-nowrap text-[#f5f4f0]"
-                style={{ fontFamily: 'var(--font-display)' }}
+                className="karst-wordmark text-[#f5f4f0]"
               >
                 {siteConfig.brand.name}
               </span>
@@ -563,7 +521,7 @@ export function Header({
             </div>
           </div>
         )}
-      </motion.header>
+      </header>
 
       {/* In-Flow Spacer Matching Fixed Header Height on Inner Pages */}
       <div
