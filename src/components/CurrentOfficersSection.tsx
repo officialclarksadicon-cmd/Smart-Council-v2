@@ -41,9 +41,13 @@ export function CurrentOfficersSection({
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [rawFallbacks, setRawFallbacks] = useState<Record<string, boolean>>({});
 
+  const [isOverflowing, setIsOverflowing] = useState(false);
+
   const sectionRef = useRef<HTMLElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const firstHalfRef = useRef<HTMLDivElement>(null);
   const halfWidthRef = useRef(0);
+  const isOverflowingRef = useRef(false);
   const x = useMotionValue(0);
 
   const isDraggingRef = useRef(false);
@@ -74,21 +78,49 @@ export function CurrentOfficersSection({
   const hasOfficers = Boolean(activeRoster && activeOfficers.length > 0);
 
   useEffect(() => {
-    if (!hasOfficers) return;
+    if (!hasOfficers) {
+      isOverflowingRef.current = false;
+      setIsOverflowing(false);
+      x.set(0);
+      return;
+    }
     const node = firstHalfRef.current;
-    if (!node) return;
+    const viewportNode = viewportRef.current;
+    if (!node || !viewportNode) return;
 
     const updateWidth = () => {
       const w = node.getBoundingClientRect().width || node.offsetWidth;
-      if (w > 0) {
+      const computed = window.getComputedStyle(viewportNode);
+      const padX =
+        (parseFloat(computed.paddingLeft) || 0) +
+        (parseFloat(computed.paddingRight) || 0);
+      const innerViewportW = Math.max(0, viewportNode.clientWidth - padX);
+
+      // Subtract trailing pr-3.5 (14px) when comparing against available boundary width
+      const cardsNaturalWidth = Math.max(0, w - 14);
+      const overflows =
+        innerViewportW > 0 && cardsNaturalWidth > innerViewportW + 16;
+
+      isOverflowingRef.current = overflows;
+      setIsOverflowing((prev) => (prev === overflows ? prev : overflows));
+
+      if (w > 0 && overflows) {
         halfWidthRef.current = w;
         x.set(normalizeLoopX(x.get(), w));
+      } else {
+        halfWidthRef.current = w;
+        activeAnimRef.current?.stop();
+        activeAnimRef.current = null;
+        isDraggingRef.current = false;
+        flickVelocityRef.current = 0;
+        x.set(0);
       }
     };
 
     updateWidth();
     const observer = new ResizeObserver(updateWidth);
     observer.observe(node);
+    observer.observe(viewportNode);
     return () => observer.disconnect();
   }, [hasOfficers, activeRoster?.term, activeOfficers.length, x]);
 
@@ -102,7 +134,10 @@ export function CurrentOfficersSection({
   }, [activeRoster?.term, x]);
 
   useEffect(() => {
-    if (!hasOfficers) return;
+    if (!hasOfficers || !isOverflowing) {
+      x.set(0);
+      return;
+    }
 
     const prefersReduced = window.matchMedia(
       '(prefers-reduced-motion: reduce)'
@@ -117,6 +152,10 @@ export function CurrentOfficersSection({
 
     const tick = (now: number) => {
       if (!isRunning) return;
+      if (!isOverflowingRef.current) {
+        x.set(0);
+        return;
+      }
       const dt = Math.min(0.05, (now - lastTime) / 1000);
       lastTime = now;
 
@@ -149,7 +188,7 @@ export function CurrentOfficersSection({
           glideSpeedRef.current +=
             (targetSpeed - glideSpeedRef.current) * (1 - Math.exp(-3.5 * dt));
           const next = normalizeLoopX(
-            x.get() + glideSpeedRef.current * dt,
+            x.get() - glideSpeedRef.current * dt,
             half
           );
           x.set(next);
@@ -160,7 +199,13 @@ export function CurrentOfficersSection({
     };
 
     const startLoop = () => {
-      if (isRunning || document.hidden || !isInViewportRef.current) return;
+      if (
+        isRunning ||
+        document.hidden ||
+        !isInViewportRef.current ||
+        !isOverflowingRef.current
+      )
+        return;
       isRunning = true;
       lastTime = performance.now();
       rafId = window.requestAnimationFrame(tick);
@@ -207,12 +252,13 @@ export function CurrentOfficersSection({
       document.removeEventListener('visibilitychange', onVisibilityChange);
       activeAnimRef.current?.stop();
     };
-  }, [hasOfficers, x]);
+  }, [hasOfficers, isOverflowing, x]);
 
   useEffect(() => {
-    if (!hasOfficers) return;
+    if (!hasOfficers || !isOverflowing) return;
 
     const onPointerMove = (e: PointerEvent) => {
+      if (!isOverflowingRef.current) return;
       const session = pointerSessionRef.current;
       if (!session || e.pointerId !== session.pointerId) return;
 
@@ -280,10 +326,11 @@ export function CurrentOfficersSection({
       window.removeEventListener('pointerup', endPointerSession);
       window.removeEventListener('pointercancel', endPointerSession);
     };
-  }, [hasOfficers, x]);
+  }, [hasOfficers, isOverflowing, x]);
 
   const handleViewportPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
+      if (!isOverflowingRef.current) return;
       if (e.button !== 0 && e.pointerType === 'mouse') return;
       if (e.pointerType !== 'mouse') {
         isMouseHoveredRef.current = false;
@@ -309,6 +356,7 @@ export function CurrentOfficersSection({
   );
 
   const animateGlideTo = (deltaX: number, duration = 0.36) => {
+    if (!isOverflowingRef.current) return;
     const half = halfWidthRef.current;
     if (half <= 0) return;
 
@@ -426,22 +474,26 @@ export function CurrentOfficersSection({
               </div>
 
               <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  aria-label="Step officers left"
-                  onClick={() => animateGlideTo(225)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-none border border-white/[0.14] bg-[#121620] text-[#b4bac6] hover:text-[#f5f4f0] hover:border-white/[0.28] active:scale-95 transition-transform cursor-pointer"
-                >
-                  <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Step officers right"
-                  onClick={() => animateGlideTo(-225)}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-none border border-white/[0.14] bg-[#121620] text-[#b4bac6] hover:text-[#f5f4f0] hover:border-white/[0.28] active:scale-95 transition-transform cursor-pointer"
-                >
-                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
-                </button>
+                {isOverflowing && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Step officers left"
+                      onClick={() => animateGlideTo(225)}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-none border border-white/[0.14] bg-[#121620] text-[#b4bac6] hover:text-[#f5f4f0] hover:border-white/[0.28] active:scale-95 transition-transform cursor-pointer"
+                    >
+                      <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Step officers right"
+                      onClick={() => animateGlideTo(-225)}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-none border border-white/[0.14] bg-[#121620] text-[#b4bac6] hover:text-[#f5f4f0] hover:border-white/[0.28] active:scale-95 transition-transform cursor-pointer"
+                    >
+                      <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   onClick={() => onNavigate('officers')}
@@ -457,6 +509,7 @@ export function CurrentOfficersSection({
             </div>
 
             <div
+              ref={viewportRef}
               onDragStart={(e) => e.preventDefault()}
               onPointerDown={handleViewportPointerDown}
               onPointerEnter={(e) => {
@@ -476,6 +529,7 @@ export function CurrentOfficersSection({
                 isFocusPausedRef.current = false;
               }}
               onWheel={(e) => {
+                if (!isOverflowingRef.current) return;
                 const delta =
                   Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : 0;
                 if (delta !== 0) {
@@ -487,10 +541,14 @@ export function CurrentOfficersSection({
                   resumeAtRef.current = performance.now() + 450;
                 }
               }}
-              className="overflow-hidden px-6 sm:px-10 lg:px-12 py-6 sm:py-8 touch-pan-y select-none cursor-grab active:cursor-grabbing"
+              className={`overflow-hidden px-6 sm:px-10 lg:px-12 py-6 sm:py-8 touch-pan-y select-none ${
+                isOverflowing
+                  ? 'cursor-grab active:cursor-grabbing'
+                  : 'cursor-default'
+              }`}
             >
               <motion.div
-                style={{ x }}
+                style={{ x: isOverflowing ? x : 0 }}
                 className="flex w-max will-change-transform"
               >
                 <div
@@ -499,12 +557,16 @@ export function CurrentOfficersSection({
                 >
                   {activeOfficers.map((member) => renderOfficerCard(member, 'a'))}
                 </div>
-                <div
-                  className="flex items-stretch gap-3.5 pr-3.5"
-                  aria-hidden="true"
-                >
-                  {activeOfficers.map((member) => renderOfficerCard(member, 'b'))}
-                </div>
+                {isOverflowing && (
+                  <div
+                    className="flex items-stretch gap-3.5 pr-3.5"
+                    aria-hidden="true"
+                  >
+                    {activeOfficers.map((member) =>
+                      renderOfficerCard(member, 'b')
+                    )}
+                  </div>
+                )}
               </motion.div>
             </div>
           </div>

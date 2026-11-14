@@ -72,28 +72,24 @@ export function HeroSection({
       : 'linear-gradient(180deg, #8ecaf9 0%, #d4ecff 52%, #f5f3ee 100%)',
   };
 
-  // True transparent glass-blur Hero text card (zero solid color fill)
-  const transparentGlassCardStyle = {
+  // Subtle edge-to-transparent fading gradients (zero shapes/cards, keeping the 3D scene clearly visible)
+  const mobileBottomFadeStyle = {
     background: isDark
-      ? 'linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(15, 20, 30, 0.22) 100%)'
-      : 'linear-gradient(135deg, rgba(255, 255, 255, 0.42) 0%, rgba(245, 243, 238, 0.24) 100%)',
-    backdropFilter: 'blur(14px) saturate(140%)',
-    WebkitBackdropFilter: 'blur(14px) saturate(140%)',
-    border: isDark
-      ? '1px solid rgba(255, 255, 255, 0.18)'
-      : '1px solid rgba(255, 255, 255, 0.58)',
-    boxShadow: isDark
-      ? '0 14px 36px -10px rgba(0, 0, 0, 0.34)'
-      : '0 14px 36px -10px rgba(23, 24, 22, 0.10)',
+      ? 'linear-gradient(0deg, rgba(17, 19, 18, 0.94) 0%, rgba(17, 19, 18, 0.64) 46%, rgba(17, 19, 18, 0) 100%)'
+      : 'linear-gradient(0deg, rgba(245, 243, 238, 0.94) 0%, rgba(245, 243, 238, 0.66) 46%, rgba(245, 243, 238, 0) 100%)',
   };
 
-  // Transparent glass secondary CTA button (matches the transparent blur card instead of solid color)
-  const secondaryGlassButtonStyle = {
+  const desktopLeftFadeStyle = {
+    background: isDark
+      ? 'linear-gradient(90deg, rgba(17, 19, 18, 0.84) 0%, rgba(17, 19, 18, 0.46) 52%, rgba(17, 19, 18, 0) 100%)'
+      : 'linear-gradient(90deg, rgba(245, 243, 238, 0.86) 0%, rgba(245, 243, 238, 0.48) 52%, rgba(245, 243, 238, 0) 100%)',
+  };
+
+  // Secondary CTA button without backdrop blur
+  const secondaryButtonStyle = {
     backgroundColor: isDark
-      ? 'rgba(255, 255, 255, 0.10)'
-      : 'rgba(23, 24, 22, 0.08)',
-    backdropFilter: 'blur(10px)',
-    WebkitBackdropFilter: 'blur(10px)',
+      ? 'rgba(255, 255, 255, 0.12)'
+      : 'rgba(23, 24, 22, 0.09)',
     border: isDark
       ? '1px solid rgba(255, 255, 255, 0.22)'
       : '1px solid rgba(23, 24, 22, 0.18)',
@@ -120,19 +116,24 @@ export function HeroSection({
           />
         </div>
 
-        {/* Transparent Blur Hero Card (Both Mobile & PC):
+        {/* Pure Fading Gradient Backdrop (No card shapes, 3D scene stays clearly visible) */}
+        <div
+          aria-hidden="true"
+          style={mobileBottomFadeStyle}
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-[52%] lg:hidden transition-colors duration-300"
+        />
+        <div
+          aria-hidden="true"
+          style={desktopLeftFadeStyle}
+          className="pointer-events-none hidden lg:block absolute inset-y-0 left-0 z-20 w-[48%] transition-colors duration-300"
+        />
+
+        {/* Hero Text Content (Zero card shapes, borders, or blur):
             - Mobile (< lg): Sits in the lower portion while the 3D office is elevated clearly in the upper half.
             - Desktop (>= lg): Sits on the left while the 3D office is positioned clearly on the right. */}
-        <div className="relative z-30 pointer-events-none mx-auto max-w-[1440px] h-full px-4 sm:px-8 lg:px-12 pt-16 pb-6 sm:pb-8 lg:py-20 flex items-end lg:items-center">
-          <div
-            style={transparentGlassCardStyle}
-            className="pointer-events-auto w-full max-w-[445px] rounded-2xl p-5 sm:p-6 lg:p-8 space-y-3.5 sm:space-y-4 transition-all duration-300"
-          >
-            <div
-              className={`flex flex-wrap items-center justify-between gap-2 text-xs font-semibold pb-2.5 border-b ${
-                isDark ? 'border-white/15' : 'border-black/12'
-              }`}
-            >
+        <div className="relative z-30 pointer-events-none mx-auto max-w-[1440px] h-full px-4 sm:px-8 lg:px-12 pt-16 pb-7 sm:pb-9 lg:py-20 flex items-end lg:items-center">
+          <div className="pointer-events-auto w-full max-w-[445px] space-y-3.5 sm:space-y-4">
+            <div className="flex flex-wrap items-center gap-3 text-xs font-semibold">
               <span
                 className={`uppercase tracking-[0.1em] font-bold ${
                   isDark ? 'text-[#f2a65a]' : 'text-[#b5483a]'
@@ -189,7 +190,7 @@ export function HeroSection({
               <button
                 type="button"
                 onClick={() => onNavigate('forum')}
-                style={secondaryGlassButtonStyle}
+                style={secondaryButtonStyle}
                 className="min-h-[42px] sm:min-h-[46px] px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold text-[#f5f4f0] hover:opacity-90 inline-flex items-center justify-center gap-2 transition-opacity cursor-pointer shrink-0"
               >
                 <span>

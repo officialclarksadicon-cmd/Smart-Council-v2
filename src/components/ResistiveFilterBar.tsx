@@ -188,6 +188,7 @@ export function ResistiveFilterBar<T extends string = string>({
 
     const el = scrollerRef.current;
     const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
+    if (maxScroll <= 8) return;
     const atLeft = el.scrollLeft <= 1;
     const atRight = el.scrollLeft >= maxScroll - 1;
 

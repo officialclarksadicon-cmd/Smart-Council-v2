@@ -103,11 +103,30 @@ function OfficerCommitteeRow({
   onSelectOfficer,
 }: OfficerCommitteeRowProps) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const [canScroll, setCanScroll] = useState(false);
   const theme = COMMITTEE_ACCENT[committee];
+
+  useEffect(() => {
+    const node = trackRef.current;
+    if (!node) return;
+
+    const checkOverflow = () => {
+      const overflows = node.scrollWidth > node.clientWidth + 16;
+      setCanScroll((prev) => (prev === overflows ? prev : overflows));
+      if (!overflows && node.scrollLeft !== 0) {
+        node.scrollLeft = 0;
+      }
+    };
+
+    checkOverflow();
+    const ro = new ResizeObserver(checkOverflow);
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, [members.length]);
 
   const scrollTrack = (direction: 'left' | 'right') => {
     const node = trackRef.current;
-    if (!node) return;
+    if (!node || !canScroll) return;
     const distance = direction === 'left' ? -280 : 280;
     node.scrollBy({ left: distance, behavior: 'smooth' });
   };
@@ -125,31 +144,37 @@ function OfficerCommitteeRow({
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              aria-label={`Scroll ${committee} left`}
-              onClick={() => scrollTrack('left')}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-none border border-white/[0.14] bg-[#0b0e15] text-[#b4bac6] hover:text-[#f5f4f0] hover:border-white/[0.28] active:scale-95 transition-transform cursor-pointer"
-            >
-              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              aria-label={`Scroll ${committee} right`}
-              onClick={() => scrollTrack('right')}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-none border border-white/[0.14] bg-[#0b0e15] text-[#b4bac6] hover:text-[#f5f4f0] hover:border-white/[0.28] active:scale-95 transition-transform cursor-pointer"
-            >
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
+          {canScroll && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                aria-label={`Scroll ${committee} left`}
+                onClick={() => scrollTrack('left')}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-none border border-white/[0.14] bg-[#0b0e15] text-[#b4bac6] hover:text-[#f5f4f0] hover:border-white/[0.28] active:scale-95 transition-transform cursor-pointer"
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                aria-label={`Scroll ${committee} right`}
+                onClick={() => scrollTrack('right')}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-none border border-white/[0.14] bg-[#0b0e15] text-[#b4bac6] hover:text-[#f5f4f0] hover:border-white/[0.28] active:scale-95 transition-transform cursor-pointer"
+              >
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          )}
         </div>
       </ScrollReveal>
 
       <ScrollReveal>
         <div
           ref={trackRef}
-          className="flex items-stretch gap-4 sm:gap-5 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2"
+          className={`flex items-stretch gap-4 sm:gap-5 no-scrollbar pb-2 ${
+            canScroll
+              ? 'overflow-x-auto snap-x snap-mandatory touch-pan-x'
+              : 'overflow-x-hidden touch-pan-y'
+          }`}
         >
           {members.map((member) => {
             const imgKey = `${member.id}:${member.image || ''}`;

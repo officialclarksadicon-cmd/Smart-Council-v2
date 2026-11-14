@@ -29,7 +29,6 @@ import {
   siteConfig,
 } from '../siteConfig';
 import type { ThemeMode } from '../App';
-import { SiteLogo } from './SiteLogo';
 import { ResistiveFilterBar } from './ResistiveFilterBar';
 import type { AuthModalMode } from './OfficialAuthModal';
 
@@ -299,34 +298,14 @@ export function Header({
   const shouldFoldHeader =
     isHeaderHidden && !mobileMenuOpen && !identityModalOpen;
 
-  // Glassmorphism when fully extended at top edge (scrollRatio = 0) with zero shadow/depth step;
-  // transitions to 100% solid theme color when scrolling down or moving away (shouldFoldHeader)
-  const effectiveSolidRatio =
-    mobileMenuOpen || shouldFoldHeader ? 1 : scrollRatio;
-  const isSolid = effectiveSolidRatio >= 0.96;
-  const bgAlpha = isSolid ? 1 : 0.12 + effectiveSolidRatio * 0.88;
-  const blurPx = isSolid ? 0 : Math.max(4, Math.round(12 - effectiveSolidRatio * 8));
-
-  const headerDynamicStyle =
-    theme === 'dark'
-      ? {
-          backgroundColor: isSolid
-            ? '#111312'
-            : `rgba(17, 19, 18, ${bgAlpha.toFixed(3)})`,
-          backdropFilter: isSolid ? 'none' : `blur(${blurPx}px)`,
-          WebkitBackdropFilter: isSolid ? 'none' : `blur(${blurPx}px)`,
-          borderBottom: 'none',
-          boxShadow: 'none',
-        }
-      : {
-          backgroundColor: isSolid
-            ? '#f5f3ee'
-            : `rgba(245, 243, 238, ${bgAlpha.toFixed(3)})`,
-          backdropFilter: isSolid ? 'none' : `blur(${blurPx}px)`,
-          WebkitBackdropFilter: isSolid ? 'none' : `blur(${blurPx}px)`,
-          borderBottom: 'none',
-          boxShadow: 'none',
-        };
+  // Fully transparent header (zero glass blur, zero background fill)
+  const headerDynamicStyle = {
+    backgroundColor: 'transparent',
+    backdropFilter: 'none',
+    WebkitBackdropFilter: 'none',
+    borderBottom: 'none',
+    boxShadow: 'none',
+  };
 
   return (
     <>
@@ -338,100 +317,110 @@ export function Header({
           ease: [0.22, 1, 0.36, 1],
         }}
         style={headerDynamicStyle}
-        className={`fixed top-0 left-0 right-0 z-50 w-full will-change-transform transition-[background-color,backdrop-filter] duration-300 ease-out ${
+        className={`fixed top-0 left-0 right-0 z-50 w-full bg-transparent will-change-transform ${
           shouldFoldHeader ? 'pointer-events-none' : ''
         }`}
       >
-        <div className="mx-auto max-w-[1440px] px-4 sm:px-8 h-16 flex items-center justify-between gap-3 xl:gap-6">
-          {/* Zone 1: Brand Crest & Wordmark (shrink-0 so it never compresses) */}
-          <div className="shrink-0 flex items-center gap-2.5">
-            <SiteLogo
-              onNavigate={handleMobileNavigate}
-              customLogoUrl={customLogoUrl}
-            />
-          </div>
+        <div className="mx-auto max-w-[1440px] px-4 sm:px-8 h-16 grid grid-cols-[1fr_auto_1fr] items-center gap-3 xl:gap-6">
+          {/* Zone 1 (Left): Desktop Single-Line Navigation */}
+          <div className="min-w-0 flex items-center justify-start">
+            <nav
+              aria-label="Main navigation"
+              className="hidden lg:flex min-w-0 items-center justify-start gap-3 xl:gap-5 overflow-x-auto no-scrollbar"
+            >
+              {siteConfig.header.navItems.map((item) => {
+                const isActive = currentPage === item.page;
+                const badge = getBadgeCount(item.page);
+                const tone = NAV_TONE_BY_PAGE[item.page];
+                const indicatorColor =
+                  tone === 'amber'
+                    ? 'bg-[#e8985e]'
+                    : tone === 'red'
+                      ? 'bg-[#ef4444]'
+                      : tone === 'yellow'
+                        ? 'bg-[#facc15]'
+                        : 'bg-[#3ddc97]';
+                return (
+                  <button
+                    key={item.label}
+                    type="button"
+                    aria-current={isActive ? 'page' : undefined}
+                    onClick={() => onNavigate(item.page)}
+                    className={`relative inline-flex items-center gap-1.5 py-2 px-1 text-sm font-medium transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
+                      isActive
+                        ? 'text-[#f5f4f0] font-semibold'
+                        : 'text-[#b4bac6] hover:text-[#f5f4f0]'
+                    }`}
+                  >
+                    <span>{item.label}</span>
+                    {badge > 0 && (
+                      <span
+                        aria-label={`${badge} new`}
+                        className="inline-flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#ef4444] px-1.5 text-[10px] font-bold text-white leading-none tabular-nums shadow-xs"
+                      >
+                        {badge}
+                      </span>
+                    )}
+                    {isActive && (
+                      <motion.span
+                        layoutId="active-nav-indicator"
+                        aria-hidden="true"
+                        className={`absolute left-0 right-0 bottom-0 h-[2px] rounded-full ${indicatorColor}`}
+                        transition={{
+                          type: 'spring',
+                          stiffness: 460,
+                          damping: 34,
+                        }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
 
-          {/* Zone 2: Desktop Single-Line Navigation (flex-1 min-w-0 so it absorbs width cleanly without overlapping Zone 3) */}
-          <nav
-            aria-label="Main navigation"
-            className="hidden lg:flex flex-1 min-w-0 items-center justify-center gap-3.5 xl:gap-7 px-2 overflow-x-auto no-scrollbar"
-          >
-            {siteConfig.header.navItems.map((item) => {
-              const isActive = currentPage === item.page;
-              const badge = getBadgeCount(item.page);
-              const tone = NAV_TONE_BY_PAGE[item.page];
-              const indicatorColor =
-                tone === 'amber'
-                  ? 'bg-[#e8985e]'
-                  : tone === 'red'
-                    ? 'bg-[#ef4444]'
-                    : tone === 'yellow'
-                      ? 'bg-[#facc15]'
-                      : 'bg-[#3ddc97]';
-              return (
+              {official && (
                 <button
-                  key={item.label}
                   type="button"
-                  aria-current={isActive ? 'page' : undefined}
-                  onClick={() => onNavigate(item.page)}
+                  aria-current={currentPage === 'admin' ? 'page' : undefined}
+                  onClick={() => onNavigate('admin')}
                   className={`relative inline-flex items-center gap-1.5 py-2 px-1 text-sm font-medium transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
-                    isActive
-                      ? 'text-[#f5f4f0] font-semibold'
+                    currentPage === 'admin'
+                      ? 'text-[#3ddc97] font-semibold'
                       : 'text-[#b4bac6] hover:text-[#f5f4f0]'
                   }`}
                 >
-                  <span>{item.label}</span>
-                  {badge > 0 && (
-                    <span
-                      aria-label={`${badge} new`}
-                      className="inline-flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#ef4444] px-1.5 text-[10px] font-bold text-white leading-none tabular-nums shadow-xs"
-                    >
-                      {badge}
-                    </span>
-                  )}
-                  {isActive && (
+                  <LayoutDashboard className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Admin</span>
+                  {currentPage === 'admin' && (
                     <motion.span
                       layoutId="active-nav-indicator"
                       aria-hidden="true"
-                      className={`absolute left-0 right-0 bottom-0 h-[2px] rounded-full ${indicatorColor}`}
-                      transition={{
-                        type: 'spring',
-                        stiffness: 460,
-                        damping: 34,
-                      }}
+                      className="absolute left-0 right-0 bottom-0 h-[2px] rounded-full bg-[#3ddc97]"
+                      transition={{ type: 'spring', stiffness: 460, damping: 34 }}
                     />
                   )}
                 </button>
-              );
-            })}
+              )}
+            </nav>
+          </div>
 
-            {official && (
-              <button
-                type="button"
-                aria-current={currentPage === 'admin' ? 'page' : undefined}
-                onClick={() => onNavigate('admin')}
-                className={`relative inline-flex items-center gap-1.5 py-2 px-1 text-sm font-medium transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
-                  currentPage === 'admin'
-                    ? 'text-[#3ddc97] font-semibold'
-                    : 'text-[#b4bac6] hover:text-[#f5f4f0]'
-                }`}
+          {/* Zone 2 (Middle): Centered Smart Council Text (No Logo) */}
+          <div className="shrink-0 flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => handleMobileNavigate('home')}
+              className="inline-flex items-center justify-center whitespace-nowrap shrink-0 cursor-pointer focus-visible:rounded-md px-2 py-1"
+            >
+              <span
+                className="text-[16px] sm:text-[18px] font-bold tracking-tight whitespace-nowrap text-[#f5f4f0]"
+                style={{ fontFamily: 'var(--font-display)' }}
               >
-                <LayoutDashboard className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>Admin</span>
-                {currentPage === 'admin' && (
-                  <motion.span
-                    layoutId="active-nav-indicator"
-                    aria-hidden="true"
-                    className="absolute left-0 right-0 bottom-0 h-[2px] rounded-full bg-[#3ddc97]"
-                    transition={{ type: 'spring', stiffness: 460, damping: 34 }}
-                  />
-                )}
-              </button>
-            )}
-          </nav>
+                {siteConfig.brand.name}
+              </span>
+            </button>
+          </div>
 
-          {/* Zone 3: Desktop Controls (Theme + Auth) & Burger Button (borderless so header blends flawlessly) */}
-          <div className="shrink-0 flex items-center justify-end gap-2">
+          {/* Zone 3 (Right): Desktop Controls (Theme + Auth) & Burger Button */}
+          <div className="min-w-0 flex items-center justify-end gap-2">
             {/* Desktop-Only Theme Toggle */}
             <button
               type="button"
