@@ -467,155 +467,150 @@ export function Header({
         </div>
       )}
 
-      {/* Portaled Menu Drawer (Houses Navigation, Theme Toggle, and User Profile) */}
+      {/* Portaled Facebook-Style Right Slide-In Menu Drawer */}
       {typeof document !== 'undefined' &&
         createPortal(
           <AnimatePresence>
             {menuDrawerOpen && (
-              <div className="fixed inset-0 z-40">
-                {/* Blurred Background Overlay */}
+              <div className="fixed inset-0 z-[70] overflow-hidden">
+                {/* Soft Dimmed Background Overlay */}
                 <motion.div
                   aria-hidden="true"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.16, ease: 'easeOut' }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
                   onClick={() => setMenuDrawerOpen(false)}
-                  className="fixed inset-0 bg-black/50 backdrop-blur-xs will-change-[opacity] touch-none select-none"
+                  className="fixed inset-0 bg-black/55 touch-none select-none"
                 />
 
-                {/* Menu Sheet: Full width below header on mobile, right-aligned floating panel on desktop */}
-                <motion.div
+                {/* Full-Height Right Slide-In Drawer (Facebook Menu Style) */}
+                <motion.aside
                   id="portal-menu-drawer"
                   role="dialog"
                   aria-modal="true"
-                  aria-label="Portal menu and account settings"
-                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                  transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                  style={{ transformOrigin: 'top right' }}
-                  className="fixed top-[68px] left-3 right-3 sm:left-auto sm:right-6 lg:right-8 z-50 sm:w-[380px] rounded-2xl overflow-hidden border border-white/[0.16] bg-[#0d1017] shadow-2xl will-change-[transform,opacity]"
+                  aria-label="Menu and account settings"
+                  initial={{ x: '100%' }}
+                  animate={{ x: 0 }}
+                  exit={{ x: '100%' }}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 380,
+                    damping: 36,
+                    mass: 0.85,
+                  }}
+                  className="fixed top-0 right-0 bottom-0 z-[75] w-full max-w-[360px] flex flex-col border-l border-white/[0.16] bg-[#0d1017] shadow-2xl will-change-transform"
                 >
-                  <div className="p-4 sm:p-5 space-y-4 max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain no-scrollbar touch-pan-y">
-                    {/* Section 1: Signed-In User Profile or Sign-In Action */}
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between px-0.5 text-xs text-[#949ba8]">
-                        <span className="font-semibold text-[#f5f4f0]">
-                          Account
-                        </span>
-                        <span>
-                          {official
-                            ? 'Council Official'
-                            : student
-                              ? 'Student'
-                              : 'Guest'}
-                        </span>
-                      </div>
+                  {/* Drawer Top Header Bar */}
+                  <div className="shrink-0 flex items-center justify-between px-5 h-16 border-b border-white/[0.12] bg-[#121620]">
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-lg font-bold tracking-tight text-[#f5f4f0]">
+                        Menu
+                      </span>
+                      <span className="rounded-md border border-white/[0.14] bg-[#181d29] px-2 py-0.5 text-[11px] font-semibold text-[#b4bac6]">
+                        {official
+                          ? 'Official'
+                          : student
+                            ? 'Student'
+                            : 'Guest'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Close menu"
+                      onClick={() => setMenuDrawerOpen(false)}
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.14] bg-[#181d29] text-[#b4bac6] hover:text-[#f5f4f0] active:scale-95 transition-all cursor-pointer"
+                    >
+                      <X className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
 
-                      {official ? (
-                        <div className="rounded-xl border border-white/[0.14] bg-[#121620] p-3.5 space-y-3">
-                          <div className="flex items-start justify-between gap-2.5">
-                            <div className="flex items-start gap-2.5 min-w-0">
-                              <ShieldCheck
-                                className="h-5 w-5 text-[#3ddc97] shrink-0 mt-0.5"
-                                aria-hidden="true"
-                              />
-                              <div className="min-w-0">
-                                <p className="text-sm font-bold text-[#f5f4f0] break-words">
-                                  {official.name}
-                                </p>
-                                <p className="text-xs text-[#949ba8] break-words">
-                                  {official.position}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleNavigateSelect('admin')}
-                              className="inline-flex w-full min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-white/[0.16] bg-[#181d29] px-3 py-1.5 text-xs font-semibold text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
-                            >
-                              <LayoutDashboard
-                                className="h-3.5 w-3.5 text-[#3ddc97]"
-                                aria-hidden="true"
-                              />
-                              <span>SSC Suite</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMenuDrawerOpen(false);
-                                onSignOutOfficial();
-                              }}
-                              className="inline-flex w-full min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-[#fca5a5] hover:bg-red-500/20 transition-colors cursor-pointer"
-                            >
-                              <LogOut
-                                className="h-3.5 w-3.5 shrink-0"
-                                aria-hidden="true"
-                              />
-                              <span>Sign Out</span>
-                            </button>
+                  {/* Scrollable Drawer Body */}
+                  <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar p-4 sm:p-5 space-y-5 touch-pan-y">
+                    {/* 1. Facebook-Style Profile Card */}
+                    {official ? (
+                      <div className="rounded-2xl border border-white/[0.16] bg-[#121620] p-4 shadow-sm space-y-3.5">
+                        <div className="flex items-center gap-3">
+                          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#3ddc97]/15 border border-[#3ddc97]/35 text-[#3ddc97]">
+                            <ShieldCheck className="h-5 w-5" aria-hidden="true" />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold text-[#f5f4f0] truncate">
+                              {official.name}
+                            </p>
+                            <p className="text-xs text-[#949ba8] truncate">
+                              {official.position}
+                            </p>
                           </div>
                         </div>
-                      ) : student ? (
-                        <div className="rounded-xl border border-white/[0.14] bg-[#121620] p-3.5 space-y-3">
-                          <div className="flex items-start justify-between gap-2.5">
-                            <div className="flex items-start gap-2.5 min-w-0">
-                              <GraduationCap
-                                className="h-5 w-5 text-[#facc15] shrink-0 mt-0.5"
-                                aria-hidden="true"
-                              />
-                              <div className="min-w-0">
-                                <p className="text-sm font-bold text-[#f5f4f0] break-words">
-                                  {student.name}
-                                </p>
-                                <p className="text-xs text-[#949ba8] break-words">
-                                  {student.yearCourse || 'SLAC Student'}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMenuDrawerOpen(false);
-                                openIdentityEditor();
-                              }}
-                              className="inline-flex w-full min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-white/[0.16] bg-[#181d29] px-3 py-1.5 text-xs font-semibold text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
-                            >
-                              <Edit3
-                                className="h-3.5 w-3.5 text-[#3ddc97]"
-                                aria-hidden="true"
-                              />
-                              <span>Edit Profile</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMenuDrawerOpen(false);
-                                onSignOutStudent();
-                              }}
-                              className="inline-flex w-full min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-[#fca5a5] hover:bg-red-500/20 transition-colors cursor-pointer"
-                            >
-                              <LogOut
-                                className="h-3.5 w-3.5 shrink-0"
-                                aria-hidden="true"
-                              />
-                              <span>Sign Out</span>
-                            </button>
+
+                        <div className="pt-3 border-t border-white/[0.1] flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleNavigateSelect('admin')}
+                            className="inline-flex flex-1 min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-white/[0.16] bg-[#181d29] px-3 py-1.5 text-xs font-semibold text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
+                          >
+                            <LayoutDashboard
+                              className="h-3.5 w-3.5 text-[#3ddc97]"
+                              aria-hidden="true"
+                            />
+                            <span>Open SSC Suite</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : student ? (
+                      <div className="rounded-2xl border border-white/[0.16] bg-[#121620] p-4 shadow-sm space-y-3.5">
+                        <div className="flex items-center gap-3">
+                          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#facc15]/15 border border-[#facc15]/35 text-[#facc15]">
+                            <GraduationCap
+                              className="h-5 w-5"
+                              aria-hidden="true"
+                            />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold text-[#f5f4f0] truncate">
+                              {student.name}
+                            </p>
+                            <p className="text-xs text-[#949ba8] truncate">
+                              {student.yearCourse || 'SLAC Student'}
+                            </p>
                           </div>
                         </div>
-                      ) : (
+
+                        <div className="pt-3 border-t border-white/[0.1] flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMenuDrawerOpen(false);
+                              openIdentityEditor();
+                            }}
+                            className="inline-flex flex-1 min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-white/[0.16] bg-[#181d29] px-3 py-1.5 text-xs font-semibold text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
+                          >
+                            <Edit3
+                              className="h-3.5 w-3.5 text-[#3ddc97]"
+                              aria-hidden="true"
+                            />
+                            <span>Edit Student Profile</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-white/[0.16] bg-[#121620] p-4 shadow-sm space-y-3">
+                        <div className="space-y-1">
+                          <p className="text-sm font-bold text-[#f5f4f0]">
+                            Sign in to Smart Council
+                          </p>
+                          <p className="text-xs text-[#949ba8] leading-relaxed">
+                            Post in the Student Forum, support proposals, or access SSC Suite.
+                          </p>
+                        </div>
                         <button
                           type="button"
                           onClick={() => {
                             setMenuDrawerOpen(false);
                             onOpenAuth('student');
                           }}
-                          className="gemini-cta inline-flex w-full min-h-[42px] items-center justify-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold cursor-pointer"
+                          className="gemini-cta inline-flex w-full min-h-[42px] items-center justify-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold cursor-pointer"
                         >
                           <LogIn
                             className="h-4 w-4 shrink-0"
@@ -623,57 +618,14 @@ export function Header({
                           />
                           <span>{siteConfig.header.primaryButtonText}</span>
                         </button>
-                      )}
-                    </div>
-
-                    {/* Section 2: Appearance / Theme Toggle */}
-                    <div className="pt-3 border-t border-white/[0.12] space-y-2">
-                      <div className="flex items-center justify-between px-0.5 text-xs text-[#949ba8]">
-                        <div className="flex items-center gap-1.5 font-semibold text-[#f5f4f0]">
-                          <Settings
-                            className="h-3.5 w-3.5 text-[#3ddc97]"
-                            aria-hidden="true"
-                          />
-                          <span>Appearance</span>
-                        </div>
-                        <span>
-                          {theme === 'dark' ? 'Dark Theme' : 'Light Theme'}
-                        </span>
                       </div>
+                    )}
 
-                      <button
-                        type="button"
-                        onClick={onToggleTheme}
-                        className="flex w-full min-h-[42px] items-center justify-between gap-2 rounded-xl border border-white/[0.14] bg-[#121620] px-3.5 py-2 text-xs font-semibold text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
-                      >
-                        <span className="text-[#b4bac6]">Theme Mode</span>
-                        <span className="inline-flex items-center gap-2 text-[#f5f4f0]">
-                          {theme === 'dark' ? (
-                            <>
-                              <Sun
-                                className="h-4 w-4 text-[#facc15]"
-                                aria-hidden="true"
-                              />
-                              <span>Switch to Light</span>
-                            </>
-                          ) : (
-                            <>
-                              <Moon
-                                className="h-4 w-4 text-[#3ddc97]"
-                                aria-hidden="true"
-                              />
-                              <span>Switch to Dark</span>
-                            </>
-                          )}
-                        </span>
-                      </button>
-                    </div>
-
-                    {/* Section 3: Portal Navigation Pages */}
-                    <div className="pt-3 border-t border-white/[0.12] space-y-2.5">
-                      <div className="flex items-center justify-between px-0.5 text-xs text-[#949ba8]">
+                    {/* 2. Mobile-Only Vertical Navigation List (Hidden on Desktop >= lg where header shows links) */}
+                    <div className="lg:hidden space-y-2">
+                      <div className="flex items-center justify-between px-1 text-xs text-[#949ba8]">
                         <span className="font-semibold text-[#f5f4f0]">
-                          Pages
+                          Navigation
                         </span>
                         <span className="tabular-nums">
                           {mobileNavOptions.length} sections
@@ -681,8 +633,8 @@ export function Header({
                       </div>
 
                       <nav
-                        aria-label="Menu drawer navigation"
-                        className="grid grid-cols-1 gap-1.5"
+                        aria-label="Mobile drawer navigation"
+                        className="flex flex-col gap-1.5"
                       >
                         {mobileNavOptions.map((option) => {
                           const isActive = currentPage === option.value;
@@ -701,14 +653,16 @@ export function Header({
                               type="button"
                               aria-current={isActive ? 'page' : undefined}
                               onClick={() => handleNavigateSelect(option.value)}
-                              className={`flex w-full min-h-[42px] items-center justify-between gap-3 rounded-xl px-3.5 py-2 text-sm font-medium transition-all cursor-pointer ${
+                              className={`flex w-full min-h-[46px] items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all cursor-pointer ${
                                 isActive
-                                  ? 'bg-[#181d29] text-[#f5f4f0] border border-white/[0.24]'
-                                  : 'bg-[#121620] text-[#b4bac6] hover:text-[#f5f4f0] border border-white/[0.1]'
+                                  ? 'bg-[#181d29] text-[#f5f4f0] border border-white/[0.24] shadow-xs'
+                                  : 'bg-[#121620] text-[#b4bac6] hover:text-[#f5f4f0] border border-white/[0.12]'
                               }`}
                             >
-                              <span className="flex items-center gap-2.5 min-w-0">
-                                <span className={`shrink-0 ${accentText}`}>
+                              <span className="flex items-center gap-3 min-w-0">
+                                <span
+                                  className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0b0e15] border border-white/[0.1] ${accentText}`}
+                                >
                                   {option.icon}
                                 </span>
                                 <span className="truncate font-semibold">
@@ -733,8 +687,99 @@ export function Header({
                         })}
                       </nav>
                     </div>
+
+                    {/* 3. Settings & Appearance (Display / Theme Mode) */}
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between px-1 text-xs text-[#949ba8]">
+                        <div className="flex items-center gap-1.5 font-semibold text-[#f5f4f0]">
+                          <Settings
+                            className="h-3.5 w-3.5 text-[#3ddc97]"
+                            aria-hidden="true"
+                          />
+                          <span>Display &amp; Accessibility</span>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/[0.14] bg-[#121620] p-3.5 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <p className="text-xs font-semibold text-[#f5f4f0]">
+                              Theme Appearance
+                            </p>
+                            <p className="text-[11px] text-[#949ba8]">
+                              {theme === 'dark'
+                                ? 'Warm charcoal dark mode active'
+                                : 'Eye-friendly warm stone light mode active'}
+                            </p>
+                          </div>
+                          {theme === 'dark' ? (
+                            <Moon
+                              className="h-4 w-4 text-[#3ddc97] shrink-0"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <Sun
+                              className="h-4 w-4 text-[#facc15] shrink-0"
+                              aria-hidden="true"
+                            />
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-[#0b0e15] border border-white/[0.12]">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (theme !== 'light') onToggleTheme();
+                            }}
+                            className={`inline-flex items-center justify-center gap-1.5 h-9 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                              theme === 'light'
+                                ? 'bg-[#181d29] text-[#f5f4f0] border border-white/[0.18] shadow-xs'
+                                : 'text-[#949ba8] hover:text-[#f5f4f0]'
+                            }`}
+                          >
+                            <Sun className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>Light</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (theme !== 'dark') onToggleTheme();
+                            }}
+                            className={`inline-flex items-center justify-center gap-1.5 h-9 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                              theme === 'dark'
+                                ? 'bg-[#181d29] text-[#f5f4f0] border border-white/[0.18] shadow-xs'
+                                : 'text-[#949ba8] hover:text-[#f5f4f0]'
+                            }`}
+                          >
+                            <Moon className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>Dark</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </motion.div>
+
+                  {/* Drawer Bottom Footer (Sign Out when authenticated) */}
+                  {(official || student) && (
+                    <div className="shrink-0 p-4 border-t border-white/[0.12] bg-[#121620]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuDrawerOpen(false);
+                          if (official) {
+                            onSignOutOfficial();
+                          } else {
+                            onSignOutStudent();
+                          }
+                        }}
+                        className="inline-flex w-full min-h-[42px] items-center justify-center gap-2 rounded-xl border border-red-500/35 bg-red-500/10 px-4 py-2 text-xs font-semibold text-[#fca5a5] hover:bg-red-500/20 transition-colors cursor-pointer"
+                      >
+                        <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>Log Out</span>
+                      </button>
+                    </div>
+                  )}
+                </motion.aside>
               </div>
             )}
           </AnimatePresence>,

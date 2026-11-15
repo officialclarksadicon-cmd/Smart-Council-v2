@@ -7,33 +7,33 @@
 :root {
   color-scheme: light;
 
-  /* Karst Milk-White & Warm Stone Surfaces (Default Primary Palette) */
-  --bg-canvas: #f5f3ee;
-  --bg-surface: #faf9f5;
-  --bg-recessed: #edeae2;
-  --bg-card: #faf9f5;
-  --bg-elevated: #e5e1d7;
+  /* Eye-Friendly Warm Stone Canvas + Soft Cream & Sage Surfaces (Zero Stark White) */
+  --bg-canvas: #e6e2d6;
+  --bg-surface: #f2efe5;
+  --bg-recessed: #dbd7c9;
+  --bg-card: #f4f1e7;
+  --bg-elevated: #dce3dc;
 
-  /* Crisp Warm Charcoal Hairlines */
-  --border-subtle: rgba(23, 24, 22, 0.09);
-  --border-strong: rgba(23, 24, 22, 0.18);
+  /* Crisp Warm Charcoal Borders for Strong Light-Mode Contrast */
+  --border-subtle: rgba(23, 24, 22, 0.15);
+  --border-strong: rgba(23, 24, 22, 0.25);
 
-  /* Soft Charcoal Black Ink (WCAG AA compliant on milk-white surfaces) */
-  --text-primary: #171816;
-  --text-secondary: #434641;
-  --text-muted: #666a63;
+  /* High-Contrast Charcoal Ink (WCAG AAA/AA on warm stone & cream) */
+  --text-primary: #151715;
+  --text-secondary: #383b36;
+  --text-muted: #585c55;
 
-  /* Eye-Friendly Soft Green, Ochre Yellow, and Terracotta Red Accents */
-  --ssc-green: #2b5b42;
-  --ssc-green-bright: #2b5b42;
-  --ssc-green-deep: #214834;
-  --ssc-green-ink: #f5f3ee;
+  /* Eye-Friendly Botanical Green, Ochre Amber, and Terracotta Red Accents */
+  --ssc-green: #24523b;
+  --ssc-green-bright: #24523b;
+  --ssc-green-deep: #1b3f2d;
+  --ssc-green-ink: #f4f1e7;
 
-  --ssc-yellow: #8e631d;
-  --ssc-yellow-bright: #8e631d;
+  --ssc-yellow: #845a16;
+  --ssc-yellow-bright: #845a16;
 
-  --ssc-red: #b5483a;
-  --ssc-red-soft: #a83e31;
+  --ssc-red: #ad4133;
+  --ssc-red-soft: #9e382b;
 
   /* Claude-Inspired Typography Pairing:
      - Editorial Serif Headings (Newsreader)
@@ -131,8 +131,8 @@ h4,
   letter-spacing: 0.06em;
   border-radius: 3px;
   border: 1px solid rgba(23, 24, 22, 0.35);
-  background-color: #faf9f5;
-  color: #171816;
+  background-color: #f4f1e7;
+  color: #151715;
   white-space: nowrap;
 }
 
@@ -170,8 +170,8 @@ h4,
   font-weight: 500;
   border-radius: 9999px;
   border: 1px solid rgba(23, 24, 22, 0.24);
-  background-color: #edeae2;
-  color: #434641;
+  background-color: #dbd7c9;
+  color: #383b36;
   font-variant-numeric: tabular-nums;
 }
 
@@ -225,22 +225,22 @@ html[data-theme="dark"] .claude-pill-version {
     -webkit-backdrop-filter 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Top of Page: Translucent Frosted Glass */
+/* Top of Page: Translucent Frosted Warm Stone Glass */
 .karst-header-glass {
-  background-color: rgba(245, 243, 238, 0.68);
+  background-color: rgba(230, 226, 214, 0.76);
   backdrop-filter: blur(18px) saturate(140%);
   -webkit-backdrop-filter: blur(18px) saturate(140%);
-  border-bottom: 1px solid rgba(23, 24, 22, 0.07);
+  border-bottom: 1px solid rgba(23, 24, 22, 0.13);
   box-shadow: none;
 }
 
-/* Scrolled Down: Frosted Glass with Elevated Contrast */
+/* Scrolled Down: Frosted Warm Cream Glass with Elevated Contrast */
 .karst-header-solid {
-  background-color: rgba(245, 243, 238, 0.82);
+  background-color: rgba(242, 239, 229, 0.88);
   backdrop-filter: blur(20px) saturate(150%);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
-  border-bottom: 1px solid rgba(23, 24, 22, 0.12);
-  box-shadow: 0 4px 20px -6px rgba(23, 24, 22, 0.07);
+  border-bottom: 1px solid rgba(23, 24, 22, 0.18);
+  box-shadow: 0 4px 20px -6px rgba(23, 24, 22, 0.10);
 }
 
 html[data-theme="dark"] .karst-header-glass {
@@ -290,7 +290,7 @@ html[data-theme="dark"] .karst-header-solid {
 }
 
 .skeleton-shimmer {
-  background-color: #e4e0d6;
+  background-color: #d6d2c4;
   animation: skeleton-pulse-matte 1.5s ease-in-out infinite;
 }
 
@@ -303,10 +303,10 @@ html[data-theme="dark"] .skeleton-shimmer {
    SOLID MATTE BOTANICAL GREEN PRIMARY CTA (NO GRADIENTS)
    ========================================================================== */
 .gemini-cta {
-  background-color: #2b5b42;
+  background-color: #24523b;
   background-image: none;
-  color: #f5f3ee !important;
-  box-shadow: 0 2px 6px -1px rgba(23, 24, 22, 0.12);
+  color: #f4f1e7 !important;
+  box-shadow: 0 2px 6px -1px rgba(23, 24, 22, 0.16);
   transition:
     background-color 200ms ease,
     transform 150ms ease,
@@ -314,9 +314,9 @@ html[data-theme="dark"] .skeleton-shimmer {
 }
 
 .gemini-cta:hover {
-  background-color: #214834;
+  background-color: #1b3f2d;
   background-image: none;
-  box-shadow: 0 4px 12px -2px rgba(23, 24, 22, 0.18);
+  box-shadow: 0 4px 12px -2px rgba(23, 24, 22, 0.22);
 }
 
 html[data-theme="dark"] .gemini-cta {
@@ -334,7 +334,7 @@ html[data-theme="dark"] .gemini-cta:hover {
    Scoped to the hero stage and the header so the rest of the site is unchanged.
    ========================================================================== */
 html:not([data-theme="dark"]) #top .hero-accent {
-  color: #1f9d66;
+  color: #1c8555;
 }
 
 html[data-theme="dark"] #top .hero-accent {
@@ -343,14 +343,14 @@ html[data-theme="dark"] #top .hero-accent {
 
 html:not([data-theme="dark"]) #top .gemini-cta,
 html:not([data-theme="dark"]) header .gemini-cta {
-  background-color: #23a06a;
-  color: #ffffff !important;
-  box-shadow: 0 4px 14px -3px rgba(35, 160, 106, 0.45);
+  background-color: #1f8e5c;
+  color: #f7f5ef !important;
+  box-shadow: 0 4px 14px -3px rgba(31, 142, 92, 0.42);
 }
 
 html:not([data-theme="dark"]) #top .gemini-cta:hover,
 html:not([data-theme="dark"]) header .gemini-cta:hover {
-  background-color: #1c8a5a;
+  background-color: #18754b;
 }
 
 html[data-theme="dark"] #top .gemini-cta,
@@ -404,7 +404,7 @@ html[data-theme="dark"] header .gemini-cta:hover {
   }
 
   ::-webkit-scrollbar-thumb {
-    background: rgba(23, 24, 22, 0.18);
+    background: rgba(23, 24, 22, 0.22);
     border-radius: 9999px;
   }
 
@@ -413,7 +413,7 @@ html[data-theme="dark"] header .gemini-cta:hover {
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(43, 91, 66, 0.45);
+    background: rgba(36, 82, 59, 0.5);
   }
 }
 
@@ -421,15 +421,20 @@ html[data-theme="dark"] header .gemini-cta:hover {
    MATTE ARCHITECTURAL CARDS & SURFACES (ZERO GRADIENTS)
    ========================================================================== */
 .card-elevated {
-  background-color: #faf9f5;
+  background-color: #f4f1e7;
   background-image: none;
-  border: 1px solid rgba(23, 24, 22, 0.10);
-  box-shadow: 0 2px 10px -3px rgba(23, 24, 22, 0.05);
+  border: 1px solid rgba(23, 24, 22, 0.15);
+  box-shadow: 0 3px 12px -3px rgba(23, 24, 22, 0.08), 0 1px 2px rgba(23, 24, 22, 0.04);
   transition:
     transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
     border-color 220ms ease,
     box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
     background-color 220ms ease;
+}
+
+html:not([data-theme="dark"]) [class~="bg-[#121620]"] .card-elevated {
+  background-color: #e6ebe3;
+  border-color: rgba(36, 82, 59, 0.22);
 }
 
 html[data-theme="dark"] .card-elevated {
@@ -442,8 +447,8 @@ html[data-theme="dark"] .card-elevated {
 @media (hover: hover) {
   .card-elevated:hover {
     transform: translateY(-2px);
-    border-color: rgba(43, 91, 66, 0.32);
-    box-shadow: 0 8px 22px -6px rgba(23, 24, 22, 0.09);
+    border-color: rgba(36, 82, 59, 0.38);
+    box-shadow: 0 8px 22px -6px rgba(23, 24, 22, 0.12);
   }
 
   html[data-theme="dark"] .card-elevated:hover {
@@ -453,9 +458,9 @@ html[data-theme="dark"] .card-elevated {
 }
 
 .surface-depth {
-  background-color: #edeae2;
+  background-color: #dce2da;
   background-image: none;
-  border: 1px solid rgba(23, 24, 22, 0.09);
+  border: 1px solid rgba(23, 24, 22, 0.14);
   box-shadow: none;
 }
 
@@ -467,13 +472,13 @@ html[data-theme="dark"] .surface-depth {
 }
 
 /* ==========================================================================
-   KARST MILK-WHITE (LIGHT) & WARM CHARCOAL (DARK) SURFACE & INK MAPPING
+   WARM STONE, SOFT CREAM & SAGE (LIGHT) + WARM CHARCOAL (DARK) SURFACE MAPPING
    ========================================================================== */
 html:not([data-theme="dark"]) [class~="bg-[#07090e]"] {
-  background-color: #f5f3ee;
+  background-color: #e6e2d6;
 }
 html:not([data-theme="dark"]) [class~="bg-[#07090e]/85"] {
-  background-color: #edeae2;
+  background-color: #ddd9cc;
 }
 html:not([data-theme="dark"]) [class~="bg-[#0b0e15]"],
 html:not([data-theme="dark"]) [class~="bg-[#0b0f18]"],
@@ -482,21 +487,23 @@ html:not([data-theme="dark"]) [class~="bg-[#0d1017]"],
 html:not([data-theme="dark"]) [class~="bg-[#0d1017]/85"],
 html:not([data-theme="dark"]) [class~="bg-[#0b0e15]/85"],
 html:not([data-theme="dark"]) [class~="bg-[#0b0e15]/80"] {
-  background-color: #edeae2;
+  background-color: #ddd9cc;
 }
-html:not([data-theme="dark"]) #mobile-nav-drawer {
-  background-color: #f5f3ee;
-  border-color: rgba(23, 24, 22, 0.12);
+html:not([data-theme="dark"]) #mobile-nav-drawer,
+html:not([data-theme="dark"]) #portal-menu-drawer {
+  background-color: #ebe7dc;
+  border-color: rgba(23, 24, 22, 0.18);
 }
 html:not([data-theme="dark"]) [class~="bg-[#121620]"],
 html:not([data-theme="dark"]) [class~="bg-[#121620]/90"],
+html:not([data-theme="dark"]) [class~="bg-[#121620]/70"],
 html:not([data-theme="dark"]) [class~="bg-[#131519]"] {
-  background-color: #faf9f5;
-  box-shadow: 0 1px 4px rgba(23, 24, 22, 0.04);
+  background-color: #f4f1e7;
+  box-shadow: 0 2px 6px rgba(23, 24, 22, 0.06);
 }
 html:not([data-theme="dark"]) [class~="bg-[#181d29]"],
 html:not([data-theme="dark"]) [class~="bg-[#1a1d22]"] {
-  background-color: #e6e2d8;
+  background-color: #dce3dc;
 }
 
 /* Opposite-Contrast SLAC SSC Seal across Light & Dark Themes */
@@ -517,31 +524,36 @@ html:not([data-theme="dark"]) .photo-overlay[class~="bg-[#0b0e15]/90"] {
   background-color: rgba(23, 24, 22, 0.86);
 }
 
-html:not([data-theme="dark"]) [class~="divide-white/[0.08]"] > :not(:first-child) {
-  border-color: rgba(23, 24, 22, 0.09);
+html:not([data-theme="dark"]) [class~="divide-white/[0.08]"] > :not(:first-child),
+html:not([data-theme="dark"]) [class~="divide-white/[0.14]"] > :not(:first-child) {
+  border-color: rgba(23, 24, 22, 0.15);
 }
 html:not([data-theme="dark"]) [class~="border-white/[0.08]"] {
-  border-color: rgba(23, 24, 22, 0.09);
+  border-color: rgba(23, 24, 22, 0.14);
 }
 html:not([data-theme="dark"]) [class~="border-white/[0.1]"] {
-  border-color: rgba(23, 24, 22, 0.11);
+  border-color: rgba(23, 24, 22, 0.16);
 }
 html:not([data-theme="dark"]) [class~="border-white/[0.12]"],
 html:not([data-theme="dark"]) [class~="border-white/[0.14]"],
 html:not([data-theme="dark"]) [class~="border-white/15"],
-html:not([data-theme="dark"]) [class~="border-white/[0.16]"] {
-  border-color: rgba(23, 24, 22, 0.14);
+html:not([data-theme="dark"]) [class~="border-white/[0.16]"],
+html:not([data-theme="dark"]) [class~="border-white/[0.18]"],
+html:not([data-theme="dark"]) [class~="border-white/[0.24]"] {
+  border-color: rgba(23, 24, 22, 0.20);
 }
 
 html:not([data-theme="dark"]) [class~="hover:bg-[#121620]"]:hover,
 html:not([data-theme="dark"]) [class~="hover:bg-[#131519]"]:hover,
 html:not([data-theme="dark"]) [class~="hover:bg-[#181d29]"]:hover,
 html:not([data-theme="dark"]) [class~="hover:bg-[#181d29]/60"]:hover,
+html:not([data-theme="dark"]) [class~="hover:bg-[#181d29]/70"]:hover,
 html:not([data-theme="dark"]) [class~="hover:bg-[#1a1d22]"]:hover,
+html:not([data-theme="dark"]) [class~="hover:bg-white/[0.04]"]:hover,
 html:not([data-theme="dark"]) [class~="hover:bg-white/[0.06]"]:hover,
 html:not([data-theme="dark"]) [class~="hover:bg-white/[0.05]"]:hover,
 html:not([data-theme="dark"]) [class~="hover:bg-white/[0.08]"]:hover {
-  background-color: #e4e0d5;
+  background-color: #d4dcd4;
 }
 html:not([data-theme="dark"]) [class~="hover:border-white/[0.18]"]:hover,
 html:not([data-theme="dark"]) [class~="hover:border-white/[0.2]"]:hover,
@@ -549,53 +561,53 @@ html:not([data-theme="dark"]) [class~="hover:border-white/[0.22]"]:hover,
 html:not([data-theme="dark"]) [class~="hover:border-white/[0.24]"]:hover,
 html:not([data-theme="dark"]) [class~="hover:border-white/[0.26]"]:hover,
 html:not([data-theme="dark"]) [class~="hover:border-white/[0.28]"]:hover {
-  border-color: rgba(23, 24, 22, 0.26);
+  border-color: rgba(36, 82, 59, 0.36);
 }
 
-/* Charcoal Black Typography Hierarchy on Milk-White Surfaces */
+/* Charcoal Black Typography Hierarchy on Warm Stone & Cream Surfaces */
 html:not([data-theme="dark"]) [class~="text-[#f5f4f0]"]:not(.photo-overlay):not(.photo-overlay *),
 html:not([data-theme="dark"]) [class~="hover:text-[#f5f4f0]"]:hover:not(.photo-overlay):not(.photo-overlay *) {
-  color: #171816;
+  color: #151715;
 }
 html:not([data-theme="dark"]) [class~="text-[#e2e5eb]"]:not(.photo-overlay):not(.photo-overlay *) {
-  color: #262825;
+  color: #222521;
 }
 html:not([data-theme="dark"]) [class~="text-[#b4bac6]"]:not(.photo-overlay):not(.photo-overlay *) {
-  color: #454843;
+  color: #3d413b;
 }
 html:not([data-theme="dark"]) [class~="text-[#949ba8]"]:not(.photo-overlay):not(.photo-overlay *) {
-  color: #666a63;
+  color: #585c55;
 }
 html:not([data-theme="dark"]) [class~="placeholder:text-[#949ba8]"]::placeholder {
-  color: #858981;
+  color: #6e736b;
 }
 
 /* Eye-Friendly Soft Botanical Green, Ochre Yellow & Terracotta Red Mapping */
 html:not([data-theme="dark"]) [class~="text-[#3ddc97]"]:not(.photo-overlay):not(.photo-overlay *),
 html:not([data-theme="dark"]) [class~="hover:text-[#3ddc97]"]:hover:not(.photo-overlay):not(.photo-overlay *),
 html:not([data-theme="dark"]) [class~="group-hover:text-[#3ddc97]"]:not(.photo-overlay):not(.photo-overlay *) {
-  color: #2b5b42;
+  color: #24523b;
 }
 html:not([data-theme="dark"]) [class~="bg-[#3ddc97]"],
 html:not([data-theme="dark"]) [class~="bg-[#3ddc97]"][class~="text-[#042412]"] {
-  background-color: #2b5b42;
-  color: #f5f3ee;
+  background-color: #24523b;
+  color: #f4f1e7;
 }
 html:not([data-theme="dark"]) [class~="text-[#facc15]"]:not(.photo-overlay):not(.photo-overlay *),
 html:not([data-theme="dark"]) [class~="hover:text-[#facc15]"]:hover:not(.photo-overlay):not(.photo-overlay *),
 html:not([data-theme="dark"]) [class~="group-hover:text-[#facc15]"]:not(.photo-overlay):not(.photo-overlay *) {
-  color: #8e631d;
+  color: #845a16;
 }
 html:not([data-theme="dark"]) [class~="text-[#38bdf8]"]:not(.photo-overlay):not(.photo-overlay *),
 html:not([data-theme="dark"]) [class~="hover:text-[#38bdf8]"]:hover:not(.photo-overlay):not(.photo-overlay *),
 html:not([data-theme="dark"]) [class~="group-hover:text-[#38bdf8]"]:not(.photo-overlay):not(.photo-overlay *) {
-  color: #2b5b42;
+  color: #24523b;
 }
 html:not([data-theme="dark"]) [class~="text-[#f87171]"]:not(.photo-overlay):not(.photo-overlay *),
 html:not([data-theme="dark"]) [class~="hover:text-[#f87171]"]:hover:not(.photo-overlay):not(.photo-overlay *),
 html:not([data-theme="dark"]) [class~="group-hover:text-[#f87171]"]:not(.photo-overlay):not(.photo-overlay *),
 html:not([data-theme="dark"]) [class~="text-[#fca5a5]"]:not(.photo-overlay):not(.photo-overlay *) {
-  color: #a83e31;
+  color: #9e382b;
 }
 
 /* Soft Terracotta Red Notification Badges */
@@ -606,26 +618,26 @@ html:not([data-theme="dark"]) [class~="text-[#fca5a5]"]:not(.photo-overlay):not(
 html:not([data-theme="dark"]) [class~="bg-[#3ddc97]/15"],
 html:not([data-theme="dark"]) [class~="bg-[#3ddc97]/12"],
 html:not([data-theme="dark"]) [class~="bg-[#3ddc97]/10"] {
-  background-color: rgba(43, 91, 66, 0.11);
+  background-color: rgba(36, 82, 59, 0.14);
 }
 html:not([data-theme="dark"]) [class~="bg-[#facc15]/15"],
 html:not([data-theme="dark"]) [class~="bg-[#facc15]/10"],
 html:not([data-theme="dark"]) [class~="bg-yellow-400/[0.05]"] {
-  background-color: rgba(196, 143, 47, 0.12);
+  background-color: rgba(132, 90, 22, 0.14);
 }
 html:not([data-theme="dark"]) [class~="border-[#facc15]/25"],
 html:not([data-theme="dark"]) [class~="border-[#facc15]/30"],
 html:not([data-theme="dark"]) [class~="border-[#facc15]/35"],
 html:not([data-theme="dark"]) [class~="border-[#facc15]/40"],
 html:not([data-theme="dark"]) [class~="border-yellow-400/20"] {
-  border-color: rgba(142, 99, 29, 0.28);
+  border-color: rgba(132, 90, 22, 0.34);
 }
 html:not([data-theme="dark"]) [class~="border-[#3ddc97]/25"],
 html:not([data-theme="dark"]) [class~="border-[#3ddc97]/30"],
 html:not([data-theme="dark"]) [class~="border-[#3ddc97]/35"],
 html:not([data-theme="dark"]) [class~="border-[#3ddc97]/40"],
 html:not([data-theme="dark"]) [class~="border-[#3ddc97]/60"] {
-  border-color: rgba(43, 91, 66, 0.34);
+  border-color: rgba(36, 82, 59, 0.38);
 }
 
 /* Dark Mode Surface Refinement (Warm Charcoal Stone) */

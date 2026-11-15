@@ -422,8 +422,8 @@ export function OfficialAuthModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.14 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-sm"
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-[90] overflow-y-auto overscroll-contain flex items-center justify-center p-4 sm:p-6 bg-black/60"
           onClick={() => {
             if (!pendingVerificationEmail) onClose();
           }}
@@ -432,11 +432,11 @@ export function OfficialAuthModal({
           {mode === 'student' && pendingVerificationEmail ? (
             <motion.div
               key="email-verification-popup"
-              initial={{ opacity: 0, scale: 0.96, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 8 }}
-              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-md rounded-2xl bg-[#131519] border border-[#facc15]/35 shadow-2xl p-6 space-y-5"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              transition={{ duration: 0.16, ease: 'easeOut' }}
+              className="my-auto w-full max-w-md rounded-2xl bg-[#131519] border border-[#facc15]/35 shadow-2xl p-6 space-y-5"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-start gap-3.5">
@@ -530,11 +530,11 @@ export function OfficialAuthModal({
           ) : (
             <motion.div
               key="main-auth-modal"
-              initial={{ opacity: 0, scale: 0.97, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.97, y: 6 }}
-              transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-md max-h-[90dvh] overflow-y-auto no-scrollbar rounded-2xl bg-[#131519] border border-white/[0.16] shadow-2xl overflow-hidden"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              className="my-auto w-full max-w-md rounded-2xl bg-[#131519] border border-white/[0.16] shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -1005,7 +1005,7 @@ export function OfficialAuthModal({
                     type="button"
                     disabled={isGoogleLoading || isStudentSubmitting}
                     onClick={() => void handleStudentGoogleSignIn()}
-                    className="w-full min-h-[44px] px-4 py-2.5 rounded-full bg-[#f5f4f0] text-[#0b0d12] hover:bg-white font-semibold text-sm inline-flex items-center justify-center gap-2.5 transition-colors disabled:opacity-60 cursor-pointer"
+                    className="w-full min-h-[44px] px-4 py-2.5 rounded-full border border-white/[0.18] bg-[#181d29] text-[#f5f4f0] hover:border-white/[0.28] font-semibold text-sm inline-flex items-center justify-center gap-2.5 transition-colors disabled:opacity-60 cursor-pointer"
                   >
                     {isGoogleLoading ? (
                       <Loader2

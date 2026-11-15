@@ -69,20 +69,20 @@ export function HeroSection({
   const skyBackdropStyle = {
     background: isDark
       ? 'linear-gradient(180deg, #0b1120 0%, #111827 52%, #111312 100%)'
-      : 'linear-gradient(180deg, #8ecaf9 0%, #d4ecff 52%, #f5f3ee 100%)',
+      : 'linear-gradient(180deg, #7fbff0 0%, #c8e5fc 52%, #e6e2d6 100%)',
   };
 
   // Subtle edge-to-transparent fading gradients (zero shapes/cards, keeping the 3D scene clearly visible)
   const mobileBottomFadeStyle = {
     background: isDark
       ? 'linear-gradient(0deg, rgba(17, 19, 18, 0.97) 0%, rgba(17, 19, 18, 0.82) 48%, rgba(17, 19, 18, 0) 100%)'
-      : 'linear-gradient(0deg, rgba(250, 249, 246, 0.98) 0%, rgba(250, 249, 246, 0.84) 50%, rgba(250, 249, 246, 0) 100%)',
+      : 'linear-gradient(0deg, rgba(230, 226, 214, 0.97) 0%, rgba(230, 226, 214, 0.82) 50%, rgba(230, 226, 214, 0) 100%)',
   };
 
   const desktopLeftFadeStyle = {
     background: isDark
       ? 'linear-gradient(90deg, rgba(17, 19, 18, 0.94) 0%, rgba(17, 19, 18, 0.7) 50%, rgba(17, 19, 18, 0) 100%)'
-      : 'linear-gradient(90deg, rgba(250, 249, 246, 0.96) 0%, rgba(250, 249, 246, 0.72) 50%, rgba(250, 249, 246, 0) 100%)',
+      : 'linear-gradient(90deg, rgba(230, 226, 214, 0.95) 0%, rgba(230, 226, 214, 0.72) 50%, rgba(230, 226, 214, 0) 100%)',
   };
 
   // Secondary CTA button without backdrop blur

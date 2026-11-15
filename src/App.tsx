@@ -31,7 +31,10 @@ import {
   StudentProfile,
   siteConfig,
 } from './siteConfig';
-import type { AuthModalMode } from './components/OfficialAuthModal';
+import {
+  OfficialAuthModal,
+  type AuthModalMode,
+} from './components/OfficialAuthModal';
 import { Header } from './components/Header';
 import { HeroSection } from './components/HeroSection';
 import { CurrentOfficersSection } from './components/CurrentOfficersSection';
@@ -76,11 +79,6 @@ import { AdminDashboardPage } from './pages/AdminDashboardPage';
 
 const ContactModal = lazy(() =>
   import('./components/ContactModal').then((m) => ({ default: m.ContactModal }))
-);
-const OfficialAuthModal = lazy(() =>
-  import('./components/OfficialAuthModal').then((m) => ({
-    default: m.OfficialAuthModal,
-  }))
 );
 
 const STORAGE_KEY = 'smart_council_portal_v11';
@@ -1635,49 +1633,42 @@ export default function App() {
         )}
 
         {/* Separated Student & Official Auth Dialog */}
-        {authModalOpen && (
-          <Suspense fallback={null}>
-            <OfficialAuthModal
-              isOpen={authModalOpen}
-              initialMode={authMode}
-              accounts={officialAccounts}
-              currentStudent={student}
-              onClose={() => setAuthModalOpen(false)}
-              onSignInOfficial={(signedOfficial) => {
-                setOfficial(signedOfficial);
-                setCurrentPage('home');
-                window.location.hash = '';
-                window.scrollTo({ top: 0, behavior: 'auto' });
-                showAuthNotification(
-                  `Signed in as ${signedOfficial.name}.`,
-                  'login'
-                );
-              }}
-              onSignInStudent={(signedStudent) => {
-                setStudent(signedStudent);
-                setCurrentPage('home');
-                window.location.hash = '';
-                window.scrollTo({ top: 0, behavior: 'auto' });
-                showAuthNotification(
-                  `Signed in as ${signedStudent.name}.`,
-                  'login'
-                );
-              }}
-              onContinueAsGuest={() => {
-                if (student) {
-                  showAuthNotification(
-                    'Signed out.',
-                    'logout'
-                  );
-                }
-                setStudent(null);
-                setCurrentPage('home');
-                window.location.hash = '';
-                window.scrollTo({ top: 0, behavior: 'auto' });
-              }}
-            />
-          </Suspense>
-        )}
+        <OfficialAuthModal
+          isOpen={authModalOpen}
+          initialMode={authMode}
+          accounts={officialAccounts}
+          currentStudent={student}
+          onClose={() => setAuthModalOpen(false)}
+          onSignInOfficial={(signedOfficial) => {
+            setOfficial(signedOfficial);
+            setCurrentPage('home');
+            window.location.hash = '';
+            window.scrollTo({ top: 0, behavior: 'auto' });
+            showAuthNotification(
+              `Signed in as ${signedOfficial.name}.`,
+              'login'
+            );
+          }}
+          onSignInStudent={(signedStudent) => {
+            setStudent(signedStudent);
+            setCurrentPage('home');
+            window.location.hash = '';
+            window.scrollTo({ top: 0, behavior: 'auto' });
+            showAuthNotification(
+              `Signed in as ${signedStudent.name}.`,
+              'login'
+            );
+          }}
+          onContinueAsGuest={() => {
+            if (student) {
+              showAuthNotification('Signed out.', 'logout');
+            }
+            setStudent(null);
+            setCurrentPage('home');
+            window.location.hash = '';
+            window.scrollTo({ top: 0, behavior: 'auto' });
+          }}
+        />
       </div>
     </MotionConfig>
   );

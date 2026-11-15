@@ -1,17 +1,21 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
-  ArrowLeft,
-  ChevronRight,
+  ArrowBigUp,
+  Check,
   Clock,
+  Flame,
   GraduationCap,
+  LayoutDashboard,
+  MessageCircle,
   MessageSquare,
   Plus,
+  Search,
   Send,
+  Share2,
   ShieldCheck,
-  ThumbsUp,
-  User,
+  Sparkles,
   X,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -25,7 +29,6 @@ import {
 import { PageSubNav } from '../components/PageSubNav';
 import { ResistiveFilterBar } from '../components/ResistiveFilterBar';
 import { ScrollReveal } from '../components/ScrollReveal';
-import { WordRevealText } from '../components/WordRevealText';
 
 interface ForumPageProps {
   threads: ForumThread[];
@@ -38,11 +41,41 @@ interface ForumPageProps {
   onNavigate: (page: PageRoute) => void;
   onAddThread: (thread: ForumThread) => void;
   onAddReply: (threadId: string, reply: ForumReply) => void;
-  onToggleSupport?: (threadId: string, delta: number) => void;
+  onToggleSupport: (threadId: string, delta: 1 | -1) => void;
 }
 
-const CUSTOM_TOPIC_VALUE = '__custom__';
+const SUPPORTED_THREADS_KEY = 'smart_council_supported_threads_v2';
+const CUSTOM_TOPIC_VALUE = '__custom_topic__';
 const MAX_CUSTOM_TOPIC_LEN = 32;
+
+type SortMode = 'hot' | 'new' | 'discussed';
+
+function getInitials(name: string): string {
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return 'SC';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
+function isOfficialLabel(yearLevel: string): boolean {
+  const lower = yearLevel.toLowerCase();
+  return (
+    lower.includes('ssc') ||
+    lower.includes('president') ||
+    lower.includes('secretary') ||
+    lower.includes('treasurer') ||
+    lower.includes('auditor') ||
+    lower.includes('senator') ||
+    lower.includes('governor') ||
+    lower.includes('representative') ||
+    lower.includes('head of') ||
+    lower.includes('officer') ||
+    lower.includes('admin')
+  );
+}
 
 export function ForumPage({
   threads,
@@ -57,98 +90,165 @@ export function ForumPage({
   onAddReply,
   onToggleSupport,
 }: ForumPageProps) {
-  const [selectedId, setSelectedId] = useState<string>(threads[0]?.id ?? '');
-  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
-  const [topicFilter, setTopicFilter] = useState<string>('All');
-  const [supportedIds, setSupportedIds] = useState<Record<string, boolean>>({});
+  const [selectedTopic, setSelectedTopic] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortMode, setSortMode] = useState<SortMode>('hot');
+  const [expandedThreadIds, setExpandedThreadIds] = useState<
+    Record<string, boolean>
+  >(() => (threads[0]?.id ? { [threads[0].id]: true } : {}));
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [copiedThreadId, setCopiedThreadId] = useState<string | null>(null);
 
-  // New Thread Composer State + Discard/Keep Editing Guard
+  const [supportedMap, setSupportedMap] = useState<
+    Record<string, Record<string, boolean>>
+  >(() => {
+    try {
+      const saved = window.localStorage.getItem(SUPPORTED_THREADS_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return parsed;
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+    return {};
+  });
+
+  const currentAccountKey = official
+    ? `official:${official.email.toLowerCase()}`
+    : student
+      ? `student:${student.identifier.toLowerCase()}`
+      : 'guest';
+
+  const supportedIds = supportedMap[currentAccountKey] ?? {};
+
+  // Text-Only New Thread Modal State
   const [showNewForm, setShowNewForm] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
   const [newTopic, setNewTopic] = useState<string>(
-    filterOptions[0] ?? 'Suggestions'
+    filterOptions[0] ?? 'Academic Affairs'
   );
   const [customTopic, setCustomTopic] = useState('');
-  const [newTitle, setNewTitle] = useState('');
   const [newBody, setNewBody] = useState('');
 
-  // Reply Composer State
-  const [replyMessage, setReplyMessage] = useState('');
-
-  const desktopReplyInputRef = useRef<HTMLInputElement>(null);
-  const mobileReplyInputRef = useRef<HTMLInputElement>(null);
-  const desktopRepliesBoxRef = useRef<HTMLDivElement>(null);
-  const mobileRepliesBoxRef = useRef<HTMLDivElement>(null);
-  const lastThreadMetaRef = useRef<{ id: string; count: number } | null>(null);
-
-  const canPost = Boolean(official || student);
-
-  const dynamicTopics = Array.from(
-    new Set([
-      ...filterOptions,
-      ...threads.map((t) => t.topic.trim()).filter(Boolean),
-    ])
-  );
-  const topics = ['All', ...dynamicTopics];
-  const activeFilter = topics.includes(topicFilter) ? topicFilter : 'All';
-
-  const visibleThreads = threads.filter(
-    (t) => activeFilter === 'All' || t.topic === activeFilter
-  );
-
-  const activeThread =
-    visibleThreads.find((t) => t.id === selectedId) ?? visibleThreads[0];
+  const replyInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
-    if (!mobileSheetOpen && !showNewForm) return;
+    try {
+      window.localStorage.setItem(
+        SUPPORTED_THREADS_KEY,
+        JSON.stringify(supportedMap)
+      );
+    } catch {
+      // Ignore storage errors
+    }
+  }, [supportedMap]);
 
+  const dynamicTopics = useMemo(() => {
+    const set = new Set<string>(filterOptions);
+    threads.forEach((t) => {
+      if (t.topic && t.topic.trim()) {
+        set.add(t.topic.trim());
+      }
+    });
+    return Array.from(set);
+  }, [filterOptions, threads]);
+
+  const topics = useMemo(() => ['All', ...dynamicTopics], [dynamicTopics]);
+
+  const filteredThreads = useMemo(() => {
+    const matching = threads.filter((t) => {
+      const matchesTopic = selectedTopic === 'All' || t.topic === selectedTopic;
+      const q = searchQuery.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        t.title.toLowerCase().includes(q) ||
+        t.body.toLowerCase().includes(q) ||
+        t.author.toLowerCase().includes(q) ||
+        t.topic.toLowerCase().includes(q);
+      return matchesTopic && matchesSearch;
+    });
+
+    return [...matching].sort((a, b) => {
+      if (sortMode === 'hot') {
+        const scoreA = a.supportCount * 2 + a.replies.length;
+        const scoreB = b.supportCount * 2 + b.replies.length;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+      } else if (sortMode === 'discussed') {
+        if (b.replies.length !== a.replies.length) {
+          return b.replies.length - a.replies.length;
+        }
+      }
+      return 0;
+    });
+  }, [threads, selectedTopic, searchQuery, sortMode]);
+
+  const totalRepliesCount = useMemo(
+    () => threads.reduce((acc, t) => acc + t.replies.length, 0),
+    [threads]
+  );
+
+  // Lock background scroll when New Discussion modal is open
+  useEffect(() => {
+    if (!showNewForm) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
-    const onKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showNewForm) {
-          setShowDiscardConfirm(true);
-        } else {
-          setMobileSheetOpen(false);
-        }
+        setShowDiscardConfirm(true);
       }
     };
-    window.addEventListener('keydown', onKeyDown);
-
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
       document.body.style.overflow = prevOverflow;
-      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [mobileSheetOpen, showNewForm]);
+  }, [showNewForm]);
 
-  const toggleSupport = (id: string) => {
-    if (!canPost) {
-      onOpenStudentAuth();
-      return;
-    }
-    const currentlySupported = Boolean(supportedIds[id]);
-    const nextSupported = !currentlySupported;
-    setSupportedIds((prev) => ({ ...prev, [id]: nextSupported }));
-    onToggleSupport?.(id, nextSupported ? 1 : -1);
-    onMarkSeen?.(id);
-  };
+  const canPost = Boolean(student || official);
 
-  const handleSelectThread = (threadId: string, openSheetOnMobile: boolean) => {
-    setSelectedId(threadId);
+  const toggleThreadExpanded = (threadId: string, focusReply = false) => {
     onMarkSeen?.(threadId);
-    if (openSheetOnMobile) {
-      setMobileSheetOpen(true);
-    }
+    setExpandedThreadIds((prev) => {
+      const nextOpen = focusReply ? true : !prev[threadId];
+      if (nextOpen && focusReply) {
+        window.setTimeout(() => {
+          replyInputRefs.current[threadId]?.focus();
+        }, 80);
+      }
+      return { ...prev, [threadId]: nextOpen };
+    });
   };
 
-  const handleOpenNewDiscussion = () => {
-    if (!canPost) {
-      onOpenStudentAuth();
-      return;
+  const toggleSupport = (threadId: string) => {
+    onMarkSeen?.(threadId);
+    const alreadySupported = Boolean(supportedIds[threadId]);
+    const delta: 1 | -1 = alreadySupported ? -1 : 1;
+    setSupportedMap((prev) => ({
+      ...prev,
+      [currentAccountKey]: {
+        ...(prev[currentAccountKey] ?? {}),
+        [threadId]: !alreadySupported,
+      },
+    }));
+    onToggleSupport(threadId, delta);
+  };
+
+  const handleShareThread = async (thread: ForumThread) => {
+    const shareText = `${thread.title} — c/SLACSmartCouncil (${window.location.origin}/#forum)`;
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setCopiedThreadId(thread.id);
+      window.setTimeout(() => {
+        setCopiedThreadId((prev) => (prev === thread.id ? null : prev));
+      }, 1800);
+    } catch {
+      // Ignore clipboard errors
     }
-    setShowDiscardConfirm(false);
-    setShowNewForm(true);
   };
 
   const handleDiscardNewForm = () => {
@@ -165,695 +265,704 @@ export function ForumPage({
       onOpenStudentAuth();
       return;
     }
-
+    const cleanTitle = newTitle.trim();
+    const cleanBody = newBody.trim();
     const resolvedTopic =
       newTopic === CUSTOM_TOPIC_VALUE
         ? customTopic.trim().slice(0, MAX_CUSTOM_TOPIC_LEN)
-        : newTopic || filterOptions[0] || 'Suggestions';
+        : newTopic;
 
-    if (!newTitle.trim() || !newBody.trim() || !resolvedTopic) return;
+    if (!cleanTitle || !cleanBody || !resolvedTopic) return;
 
-    const resolvedAuthor = official
+    const authorName = official
       ? official.name
-      : student
-        ? student.name
-        : 'SLAC Student';
-    const resolvedRole = official
-      ? official.position
-      : student
-        ? student.yearCourse || 'SLAC Student'
-        : 'SLAC Student';
+      : (student?.name ?? 'SLAC Student');
+    const authorRole = official
+      ? `SSC ${official.position}`
+      : (student?.yearCourse ?? 'Student');
 
     const created: ForumThread = {
       id: `thread-${Date.now()}`,
-      author: resolvedAuthor,
-      yearLevel: resolvedRole,
-      postedAt: 'Just now',
+      title: cleanTitle,
+      author: authorName,
+      yearLevel: authorRole,
       topic: resolvedTopic,
-      title: newTitle.trim(),
-      body: newBody.trim(),
+      postedAt: 'Just now',
       supportCount: 1,
+      body: cleanBody,
       replies: [],
     };
 
     onAddThread(created);
-    setSelectedId(created.id);
-    setTopicFilter('All');
-    setShowDiscardConfirm(false);
-    setShowNewForm(false);
+    onMarkSeen?.(created.id);
+    setExpandedThreadIds((prev) => ({ ...prev, [created.id]: true }));
     setNewTitle('');
     setNewBody('');
     setCustomTopic('');
+    setShowDiscardConfirm(false);
+    setShowNewForm(false);
   };
 
-  const handleReplySubmit = (e: FormEvent) => {
+  const handleReplySubmit = (e: FormEvent, threadId: string) => {
     e.preventDefault();
     if (!canPost) {
       onOpenStudentAuth();
       return;
     }
-    if (!activeThread || !replyMessage.trim()) return;
+    const cleanMsg = (replyDrafts[threadId] ?? '').trim();
+    if (!cleanMsg) return;
 
-    const resolvedAuthor = official
+    const replyAuthor = official
       ? official.name
-      : student
-        ? student.name
-        : 'SLAC Student';
-    const resolvedRole = official
-      ? official.position
-      : student
-        ? student.yearCourse || 'SLAC Student'
-        : 'SLAC Student';
+      : (student?.name ?? 'SLAC Student');
+    const replyRole = official
+      ? `SSC ${official.position}`
+      : (student?.yearCourse ?? 'Student');
 
-    const reply: ForumReply = {
-      id: `rep-${Date.now()}`,
-      author: resolvedAuthor,
-      yearLevel: resolvedRole,
+    const createdReply: ForumReply = {
+      id: `reply-${Date.now()}`,
+      author: replyAuthor,
+      yearLevel: replyRole,
       time: 'Just now',
-      message: replyMessage.trim(),
+      message: cleanMsg,
     };
 
-    onAddReply(activeThread.id, reply);
-    onMarkSeen?.(activeThread.id);
-    setReplyMessage('');
+    onAddReply(threadId, createdReply);
+    setReplyDrafts((prev) => ({ ...prev, [threadId]: '' }));
+    setExpandedThreadIds((prev) => ({ ...prev, [threadId]: true }));
   };
 
-  useEffect(() => {
-    if (!activeThread) {
-      lastThreadMetaRef.current = null;
-      return;
-    }
-
-    const prev = lastThreadMetaRef.current;
-    const nextCount = activeThread.replies.length;
-    lastThreadMetaRef.current = { id: activeThread.id, count: nextCount };
-
-    if (prev && prev.id === activeThread.id && nextCount > prev.count) {
-      requestAnimationFrame(() => {
-        if (mobileSheetOpen && mobileRepliesBoxRef.current) {
-          mobileRepliesBoxRef.current.scrollTo({
-            top: mobileRepliesBoxRef.current.scrollHeight,
-            behavior: 'smooth',
-          });
-        } else if (desktopRepliesBoxRef.current) {
-          desktopRepliesBoxRef.current.scrollTo({
-            top: desktopRepliesBoxRef.current.scrollHeight,
-            behavior: 'smooth',
-          });
-        }
-      });
-    }
-  }, [activeThread, mobileSheetOpen]);
-
   return (
-    <section className="w-full border-b border-white/[0.14]">
-      <div className="mx-auto max-w-[1440px] border-x border-white/[0.14] bg-[#121620] px-4 sm:px-8 lg:px-12 py-6 lg:py-8">
+    <section
+      aria-label="Student Forum"
+      className="w-full py-6 sm:py-10 border-b border-white/[0.08]"
+    >
+      <div className="mx-auto max-w-6xl px-4 sm:px-8 space-y-5">
         <PageSubNav currentPage="forum" onNavigate={onNavigate} />
 
-        {/* Page Header */}
-        <ScrollReveal className="pb-6 border-b border-white/[0.14] flex flex-col md:flex-row md:items-end justify-between gap-4">
-          <div>
-            <WordRevealText
-              as="h1"
-              text="Student Forum"
-              className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-[#f5f4f0]"
-              y={32}
-              stagger={0.1}
-              highlightWords={['Forum']}
-            />
-            <p className="mt-2 text-sm sm:text-base text-[#b4bac6] max-w-xl leading-relaxed">
-              Share campus ideas, ask questions, and reply to discussions.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleOpenNewDiscussion}
-            className="gemini-cta inline-flex items-center justify-center gap-2 min-h-[44px] px-6 py-2.5 text-xs sm:text-sm font-bold uppercase tracking-wider rounded-full active:scale-[0.98] transition-transform whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            <span>New Discussion</span>
-          </button>
-        </ScrollReveal>
-
-        {/* Resistive Topic Filter Tabs */}
-        <div className="mt-6 pb-5 border-b border-white/[0.14]">
-          <ResistiveFilterBar
-            ariaLabel="Filter forum discussions"
-            value={activeFilter}
-            onChange={setTopicFilter}
-            options={topics.map((topic) => ({ value: topic, label: topic }))}
-          />
-        </div>
-
-        {visibleThreads.length === 0 ? (
-          <div className="mt-6 rounded-2xl border border-white/[0.12] bg-[#0b0e15] p-6 sm:p-8 text-center">
-            <p className="text-sm sm:text-base font-semibold text-[#f5f4f0]">
-              No discussions under this topic yet
-            </p>
-            <p className="mt-1 text-xs sm:text-sm text-[#b4bac6]">
-              Start a new discussion to share campus ideas or questions with the student body.
-            </p>
-          </div>
-        ) : (
-          <>
-            {/* MOBILE VIEW (< lg) */}
-            <div className="mt-6 space-y-3 lg:hidden">
-              {visibleThreads.map((thread) => {
-                const isSupported = !!supportedIds[thread.id];
-                const isUnseen = !seenIds[thread.id];
-                const topicLower = thread.topic.toLowerCase();
-                const topicColor =
-                  topicLower.includes('concern') || topicLower.includes('urgent')
-                    ? 'text-[#f87171]'
-                    : topicLower.includes('event') ||
-                        topicLower.includes('campus')
-                      ? 'text-[#3ddc97]'
-                      : 'text-[#facc15]';
-
-                return (
-                  <ScrollReveal key={thread.id}>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectThread(thread.id, true)}
-                      className="card-elevated w-full text-left p-5 rounded-2xl active:scale-[0.99] transition-transform cursor-pointer"
-                    >
-                      <div className="flex items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`font-semibold ${topicColor}`}>
-                            {thread.topic}
-                          </span>
-                          {isUnseen && (
-                            <span className="inline-flex items-center rounded-full bg-[#ef4444]/15 px-2 py-0.5 text-[10px] font-bold text-[#f87171]">
-                              NEW
-                            </span>
-                          )}
-                        </div>
-                        <span className="inline-flex items-center gap-1 text-[#949ba8] tabular-nums">
-                          <Clock className="h-3 w-3" aria-hidden="true" />
-                          {thread.postedAt}
-                        </span>
-                      </div>
-
-                      <h2 className="mt-2.5 text-lg font-bold text-[#f5f4f0] leading-snug">
-                        {thread.title}
-                      </h2>
-
-                      <p className="mt-1.5 text-sm text-[#b4bac6] line-clamp-2">
-                        {thread.body}
-                      </p>
-
-                      <div className="mt-3 pt-2.5 border-t border-white/[0.08] flex items-center justify-between text-xs text-[#b4bac6] tabular-nums">
-                        <span className="inline-flex items-center gap-1.5 font-medium text-[#f5f4f0]">
-                          <User
-                            className="h-3.5 w-3.5 text-[#949ba8]"
-                            aria-hidden="true"
-                          />
-                          {thread.author}
-                        </span>
-                        <span className="inline-flex items-center gap-3 font-medium">
-                          <span className={isSupported ? 'text-[#facc15]' : ''}>
-                            {thread.supportCount} support
-                          </span>
-                          <span className="inline-flex items-center gap-1 text-[#3ddc97] font-semibold">
-                            <MessageSquare
-                              className="h-3.5 w-3.5"
-                              aria-hidden="true"
-                            />
-                            {thread.replies.length}
-                            <ChevronRight
-                              className="h-3.5 w-3.5"
-                              aria-hidden="true"
-                            />
-                          </span>
-                        </span>
-                      </div>
-                    </button>
-                  </ScrollReveal>
-                );
-              })}
+        {/* Compact Feed Header */}
+        <ScrollReveal>
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-4 border-b border-white/[0.12]">
+            <div className="space-y-1.5 max-w-2xl">
+              <div className="inline-flex items-center gap-2 text-xs font-semibold text-[#3ddc97]">
+                <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>c/SLACSmartCouncil • Campus Threads</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-[#f5f4f0] tracking-tight">
+                Student Forum
+              </h1>
+              <p className="text-xs sm:text-sm text-[#b4bac6]">
+                Text-only student threads, campus proposals, and direct SSC responses.
+              </p>
             </div>
 
-            {/* DESKTOP VIEW (>= lg) */}
-            <div className="hidden lg:grid lg:grid-cols-12 gap-6 mt-6 lg:h-[620px] min-h-0">
-              <div className="lg:col-span-5 lg:h-full min-h-0 lg:overflow-y-auto no-scrollbar lg:pr-2 lg:border-r lg:border-white/[0.14] space-y-3">
-                {visibleThreads.map((thread) => {
-                  const isSelected = thread.id === activeThread?.id;
-                  const isSupported = !!supportedIds[thread.id];
-                  const isUnseen = !seenIds[thread.id];
-                  const topicLower = thread.topic.toLowerCase();
-                  const topicColor =
-                    topicLower.includes('concern') ||
-                    topicLower.includes('urgent')
-                      ? 'text-[#f87171]'
-                      : topicLower.includes('event') ||
-                          topicLower.includes('campus')
-                        ? 'text-[#3ddc97]'
-                        : 'text-[#facc15]';
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {official && (
+                <button
+                  type="button"
+                  onClick={() => onNavigate('admin')}
+                  className="inline-flex items-center gap-1.5 min-h-[40px] px-3.5 py-2 text-xs font-semibold text-[#f5f4f0] rounded-lg border border-white/[0.16] bg-[#121620] hover:border-white/[0.28] transition-colors cursor-pointer"
+                >
+                  <LayoutDashboard
+                    className="h-3.5 w-3.5 text-[#3ddc97]"
+                    aria-hidden="true"
+                  />
+                  <span>Manage in SSC Suite</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!canPost) {
+                    onOpenStudentAuth();
+                    return;
+                  }
+                  setShowDiscardConfirm(false);
+                  setShowNewForm(true);
+                }}
+                className="gemini-cta inline-flex items-center gap-1.5 min-h-[40px] px-4 py-2 text-xs font-semibold rounded-lg active:scale-[0.98] transition-transform cursor-pointer"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                <span>New Thread</span>
+              </button>
+            </div>
+          </div>
+        </ScrollReveal>
+
+        {/* Main 2-Column Hybrid Feed Layout (Threads Feed on Left, Community Card on Right) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* LEFT COLUMN (lg:col-span-8): Threads-Style Vertical Feed + Reddit Upvote Pills */}
+          <div className="lg:col-span-8 space-y-4 min-w-0">
+            {/* 1. Threads-Style Quick Compose Prompt Bar */}
+            <div className="card-elevated rounded-2xl p-4 sm:p-4.5">
+              <div className="flex items-center gap-3">
+                <span
+                  className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold border ${
+                    official
+                      ? 'bg-[#3ddc97]/15 text-[#3ddc97] border-[#3ddc97]/35'
+                      : student
+                        ? 'bg-[#facc15]/15 text-[#facc15] border-[#facc15]/35'
+                        : 'bg-[#181d29] text-[#b4bac6] border-white/[0.14]'
+                  }`}
+                >
+                  {official ? (
+                    <ShieldCheck className="h-4.5 w-4.5" aria-hidden="true" />
+                  ) : student ? (
+                    getInitials(student.name)
+                  ) : (
+                    <GraduationCap className="h-4.5 w-4.5" aria-hidden="true" />
+                  )}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!canPost) {
+                      onOpenStudentAuth();
+                      return;
+                    }
+                    setShowDiscardConfirm(false);
+                    setShowNewForm(true);
+                  }}
+                  className="flex-1 min-h-[42px] rounded-full border border-white/[0.14] bg-[#0b0e15] px-4 py-2 text-left text-xs sm:text-sm text-[#949ba8] hover:border-white/[0.26] hover:text-[#f5f4f0] transition-colors cursor-pointer truncate"
+                >
+                  {canPost
+                    ? `Start a thread as ${official ? official.name : student?.name}...`
+                    : 'Sign in to start a campus thread or ask the SSC...'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!canPost) {
+                      onOpenStudentAuth();
+                      return;
+                    }
+                    setShowDiscardConfirm(false);
+                    setShowNewForm(true);
+                  }}
+                  className="gemini-cta hidden sm:inline-flex items-center justify-center h-9 px-4 rounded-full text-xs font-semibold shrink-0 cursor-pointer"
+                >
+                  Post
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Reddit-Style Sort & Topic Filter Controls */}
+            <div className="rounded-2xl border border-white/[0.14] bg-[#121620] p-3 sm:p-3.5 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                {/* Sort Pills (Hot / New / Discussed) */}
+                <div
+                  role="tablist"
+                  aria-label="Sort threads"
+                  className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#0b0e15] border border-white/[0.1] self-start"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={sortMode === 'hot'}
+                    onClick={() => setSortMode('hot')}
+                    className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                      sortMode === 'hot'
+                        ? 'bg-[#181d29] text-[#f5f4f0] border border-white/[0.18]'
+                        : 'text-[#949ba8] hover:text-[#f5f4f0]'
+                    }`}
+                  >
+                    <Flame className="h-3.5 w-3.5 text-[#e8985e]" aria-hidden="true" />
+                    <span>Hot</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={sortMode === 'new'}
+                    onClick={() => setSortMode('new')}
+                    className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                      sortMode === 'new'
+                        ? 'bg-[#181d29] text-[#f5f4f0] border border-white/[0.18]'
+                        : 'text-[#949ba8] hover:text-[#f5f4f0]'
+                    }`}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
+                    <span>Newest</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={sortMode === 'discussed'}
+                    onClick={() => setSortMode('discussed')}
+                    className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                      sortMode === 'discussed'
+                        ? 'bg-[#181d29] text-[#f5f4f0] border border-white/[0.18]'
+                        : 'text-[#949ba8] hover:text-[#f5f4f0]'
+                    }`}
+                  >
+                    <MessageCircle
+                      className="h-3.5 w-3.5 text-[#facc15]"
+                      aria-hidden="true"
+                    />
+                    <span>Top Replies</span>
+                  </button>
+                </div>
+
+                {/* Search Input */}
+                <div className="relative flex-1 sm:max-w-xs">
+                  <Search
+                    className="h-3.5 w-3.5 text-[#949ba8] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                    aria-hidden="true"
+                  />
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search threads..."
+                    aria-label="Search threads"
+                    className="w-full h-9 rounded-xl border border-white/[0.12] bg-[#0b0e15] pl-8.5 pr-3 text-xs text-[#f5f4f0] placeholder:text-[#949ba8]"
+                  />
+                </div>
+              </div>
+
+              {/* Topic Filter Pills */}
+              <div className="pt-1 border-t border-white/[0.08]">
+                <ResistiveFilterBar
+                  ariaLabel="Filter forum threads by topic"
+                  compact
+                  value={selectedTopic}
+                  onChange={setSelectedTopic}
+                  options={topics.map((topic) => ({
+                    value: topic,
+                    label: topic,
+                    tone: topic === 'All' ? 'yellow' : 'green',
+                  }))}
+                />
+              </div>
+            </div>
+
+            {/* 3. Thread Feed List */}
+            {filteredThreads.length === 0 ? (
+              <div className="card-elevated rounded-2xl p-10 text-center space-y-3">
+                <p className="text-base font-bold text-[#f5f4f0]">
+                  No threads match your current filter
+                </p>
+                <p className="text-xs sm:text-sm text-[#949ba8] max-w-md mx-auto">
+                  Try selecting &ldquo;All&rdquo; topics or start the first text discussion on this subject.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3.5">
+                {filteredThreads.map((thread) => {
+                  const isSupported = Boolean(supportedIds[thread.id]);
+                  const isUnread = !seenIds[thread.id];
+                  const isExpanded = Boolean(expandedThreadIds[thread.id]);
+                  const authorIsOfficial = isOfficialLabel(thread.yearLevel);
+                  const replyDraft = replyDrafts[thread.id] ?? '';
 
                   return (
-                    <button
+                    <article
                       key={thread.id}
-                      type="button"
-                      aria-pressed={isSelected}
-                      onClick={() => handleSelectThread(thread.id, false)}
-                      className={`w-full text-left p-4 rounded-2xl border transition-colors cursor-pointer ${
-                        isSelected
-                          ? 'border-2 border-[#2b5b42] bg-[#181d29]'
-                          : 'border-white/[0.12] bg-[#0b0e15] hover:border-white/[0.24]'
-                      }`}
+                      onClick={() => onMarkSeen?.(thread.id)}
+                      className="card-elevated rounded-2xl p-4 sm:p-5 transition-all"
                     >
-                      <div className="flex items-center justify-between gap-2 text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`font-semibold ${topicColor}`}>
-                            {thread.topic}
+                      {/* Main Post Row with Left Threads Avatar + Timeline Spine */}
+                      <div className="flex items-stretch gap-3.5">
+                        {/* Left Column: Avatar + Threads Vertical Timeline Connector */}
+                        <div className="flex flex-col items-center shrink-0">
+                          <span
+                            className={`inline-flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold border ${
+                              authorIsOfficial
+                                ? 'bg-[#3ddc97]/15 text-[#3ddc97] border-[#3ddc97]/40'
+                                : 'bg-[#181d29] text-[#f5f4f0] border-white/[0.16]'
+                            }`}
+                          >
+                            {authorIsOfficial ? (
+                              <ShieldCheck
+                                className="h-4.5 w-4.5"
+                                aria-hidden="true"
+                              />
+                            ) : (
+                              getInitials(thread.author)
+                            )}
                           </span>
-                          {isUnseen && (
-                            <span className="inline-flex items-center rounded-full bg-[#ef4444]/15 px-2 py-0.5 text-[10px] font-bold text-[#f87171]">
-                              NEW
+
+                          {/* Continuous Vertical Thread Line */}
+                          {(thread.replies.length > 0 || isExpanded) && (
+                            <div
+                              aria-hidden="true"
+                              className="w-[2px] flex-1 my-2 rounded-full bg-white/[0.14]"
+                            />
+                          )}
+
+                          {/* Mini Reply Count Dot at Bottom of Spine when Collapsed */}
+                          {!isExpanded && thread.replies.length > 0 && (
+                            <span
+                              aria-hidden="true"
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#181d29] border border-white/[0.16] text-[10px] font-bold text-[#3ddc97] tabular-nums"
+                            >
+                              {thread.replies.length}
                             </span>
                           )}
                         </div>
-                        <span className="inline-flex items-center gap-1 text-[#949ba8] tabular-nums">
-                          <Clock className="h-3 w-3" aria-hidden="true" />
-                          {thread.postedAt}
-                        </span>
-                      </div>
 
-                      <h2 className="mt-2.5 text-base sm:text-lg font-bold text-[#f5f4f0]">
-                        {thread.title}
-                      </h2>
+                        {/* Right Column: Header Metadata + Post Title & Text Body + Reddit Action Bar */}
+                        <div className="flex-1 min-w-0 space-y-2.5">
+                          {/* Top Meta Bar (Author, Role/Course, Topic Pill, Timestamp) */}
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs min-w-0">
+                              <span className="font-bold text-[#f5f4f0] truncate">
+                                {thread.author}
+                              </span>
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium border ${
+                                  authorIsOfficial
+                                    ? 'bg-[#3ddc97]/12 text-[#3ddc97] border-[#3ddc97]/30'
+                                    : 'bg-[#0b0e15] text-[#b4bac6] border-white/[0.1]'
+                                }`}
+                              >
+                                {thread.yearLevel}
+                              </span>
+                              <span className="text-[#949ba8]">•</span>
+                              <span className="inline-flex items-center gap-1 text-[#949ba8] tabular-nums">
+                                <Clock className="h-3 w-3" aria-hidden="true" />
+                                {thread.postedAt}
+                              </span>
+                            </div>
 
-                      <div className="mt-2.5 pt-2 border-t border-white/[0.08] flex items-center justify-between text-xs text-[#b4bac6] tabular-nums">
-                        <span className="inline-flex items-center gap-1.5 font-medium text-[#f5f4f0]">
-                          <User
-                            className="h-3.5 w-3.5 text-[#949ba8]"
-                            aria-hidden="true"
-                          />
-                          {thread.author}
-                        </span>
-                        <span className="inline-flex items-center gap-3">
-                          <span className={isSupported ? 'text-[#facc15]' : ''}>
-                            {thread.supportCount} support
-                          </span>
-                          <span className="inline-flex items-center gap-1 font-semibold text-[#3ddc97]">
-                            <MessageSquare
-                              className="h-3.5 w-3.5"
-                              aria-hidden="true"
-                            />
-                            {thread.replies.length}
-                          </span>
-                        </span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {isUnread && (
+                                <span className="rounded-full bg-[#ef4444] px-2 py-0.5 text-[10px] font-bold text-white">
+                                  New
+                                </span>
+                              )}
+                              <span className="rounded-full border border-white/[0.14] bg-[#181d29] px-2.5 py-0.5 text-[11px] font-semibold text-[#facc15]">
+                                {thread.topic}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Post Title & Message Body (Text-Only) */}
+                          <div
+                            onClick={() => toggleThreadExpanded(thread.id)}
+                            className="space-y-1.5 cursor-pointer"
+                          >
+                            <h2 className="text-base sm:text-lg font-bold text-[#f5f4f0] leading-snug break-words">
+                              {thread.title}
+                            </h2>
+                            <p className="text-sm sm:text-[15px] text-[#e2e5eb] leading-relaxed whitespace-pre-line break-words">
+                              {thread.body}
+                            </p>
+                          </div>
+
+                          {/* Hybrid Reddit + Threads Action Pill Bar */}
+                          <div className="pt-1.5 flex flex-wrap items-center gap-2">
+                            {/* Reddit-Style Upvote / Support Pill */}
+                            <button
+                              type="button"
+                              onClick={() => toggleSupport(thread.id)}
+                              aria-pressed={isSupported}
+                              className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold border transition-all active:scale-95 tabular-nums cursor-pointer ${
+                                isSupported
+                                  ? 'bg-[#3ddc97]/15 border-[#3ddc97]/45 text-[#3ddc97]'
+                                  : 'bg-[#0b0e15] border-white/[0.14] text-[#b4bac6] hover:text-[#f5f4f0] hover:border-white/[0.26]'
+                              }`}
+                            >
+                              <ArrowBigUp
+                                className={`h-4 w-4 ${
+                                  isSupported ? 'fill-current' : ''
+                                }`}
+                                aria-hidden="true"
+                              />
+                              <span>{isSupported ? 'Upvoted' : 'Upvote'}</span>
+                              <span className="pl-1 border-l border-current/25 font-bold">
+                                {thread.supportCount}
+                              </span>
+                            </button>
+
+                            {/* Threads / Reddit Replies Toggle Pill */}
+                            <button
+                              type="button"
+                              onClick={() => toggleThreadExpanded(thread.id)}
+                              aria-expanded={isExpanded}
+                              className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold border transition-all tabular-nums cursor-pointer ${
+                                isExpanded
+                                  ? 'bg-[#181d29] border-white/[0.24] text-[#f5f4f0]'
+                                  : 'bg-[#0b0e15] border-white/[0.14] text-[#b4bac6] hover:text-[#f5f4f0] hover:border-white/[0.26]'
+                              }`}
+                            >
+                              <MessageCircle
+                                className="h-3.5 w-3.5"
+                                aria-hidden="true"
+                              />
+                              <span>
+                                {thread.replies.length}{' '}
+                                {thread.replies.length === 1
+                                  ? 'Reply'
+                                  : 'Replies'}
+                              </span>
+                            </button>
+
+                            {/* Quick Reply Focus Button */}
+                            <button
+                              type="button"
+                              onClick={() => toggleThreadExpanded(thread.id, true)}
+                              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-medium border border-white/[0.12] bg-[#0b0e15] text-[#b4bac6] hover:text-[#f5f4f0] hover:border-white/[0.24] transition-colors cursor-pointer"
+                            >
+                              <span>Reply</span>
+                            </button>
+
+                            {/* Share / Copy Link Pill */}
+                            <button
+                              type="button"
+                              onClick={() => void handleShareThread(thread)}
+                              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-medium border border-white/[0.12] bg-[#0b0e15] text-[#949ba8] hover:text-[#f5f4f0] transition-colors cursor-pointer"
+                            >
+                              {copiedThreadId === thread.id ? (
+                                <>
+                                  <Check
+                                    className="h-3.5 w-3.5 text-[#3ddc97]"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="text-[#3ddc97]">Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Share2
+                                    className="h-3.5 w-3.5"
+                                    aria-hidden="true"
+                                  />
+                                  <span>Share</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+
+                          {/* Inline Threads-Style Nested Replies & Reply Composer */}
+                          <AnimatePresence initial={false}>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.18, ease: 'easeOut' }}
+                                className="overflow-hidden pt-3"
+                              >
+                                <div className="space-y-3 border-t border-white/[0.1] pt-3.5">
+                                  {thread.replies.length === 0 ? (
+                                    <p className="text-xs text-[#949ba8] py-1">
+                                      No replies yet. Be the first to respond to this thread.
+                                    </p>
+                                  ) : (
+                                    <div className="space-y-2.5">
+                                      {thread.replies.map((reply, idx) => {
+                                        const replyIsOfficial = isOfficialLabel(
+                                          reply.yearLevel
+                                        );
+                                        const isLastReply =
+                                          idx === thread.replies.length - 1;
+
+                                        return (
+                                          <div
+                                            key={reply.id}
+                                            className="flex items-stretch gap-2.5"
+                                          >
+                                            {/* Mini Reply Avatar + Thread Spine */}
+                                            <div className="flex flex-col items-center shrink-0">
+                                              <span
+                                                className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold border ${
+                                                  replyIsOfficial
+                                                    ? 'bg-[#3ddc97]/15 text-[#3ddc97] border-[#3ddc97]/40'
+                                                    : 'bg-[#0b0e15] text-[#b4bac6] border-white/[0.14]'
+                                                }`}
+                                              >
+                                                {replyIsOfficial ? (
+                                                  <ShieldCheck
+                                                    className="h-3.5 w-3.5"
+                                                    aria-hidden="true"
+                                                  />
+                                                ) : (
+                                                  getInitials(reply.author)
+                                                )}
+                                              </span>
+                                              {!isLastReply && (
+                                                <div
+                                                  aria-hidden="true"
+                                                  className="w-[1.5px] flex-1 my-1 bg-white/[0.1]"
+                                                />
+                                              )}
+                                            </div>
+
+                                            {/* Reply Bubble */}
+                                            <div className="flex-1 min-w-0 rounded-xl border border-white/[0.1] bg-[#0b0e15] p-3 space-y-1">
+                                              <div className="flex flex-wrap items-center justify-between gap-1.5 text-xs">
+                                                <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                                                  <span className="font-bold text-[#f5f4f0]">
+                                                    {reply.author}
+                                                  </span>
+                                                  <span
+                                                    className={`text-[11px] font-medium ${
+                                                      replyIsOfficial
+                                                        ? 'text-[#3ddc97]'
+                                                        : 'text-[#949ba8]'
+                                                    }`}
+                                                  >
+                                                    {reply.yearLevel}
+                                                  </span>
+                                                  {replyIsOfficial && (
+                                                    <span className="rounded-md bg-[#3ddc97]/15 border border-[#3ddc97]/30 px-1.5 py-0.2 text-[10px] font-semibold text-[#3ddc97]">
+                                                      SSC Official
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <span className="text-[11px] text-[#949ba8] tabular-nums shrink-0">
+                                                  {reply.time}
+                                                </span>
+                                              </div>
+                                              <p className="text-xs sm:text-sm text-[#e2e5eb] leading-relaxed break-words">
+                                                {reply.message}
+                                              </p>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+
+                                  {/* Inline Text-Only Reply Input */}
+                                  {canPost ? (
+                                    <form
+                                      onSubmit={(e) =>
+                                        handleReplySubmit(e, thread.id)
+                                      }
+                                      className="flex items-center gap-2 pt-1"
+                                    >
+                                      <input
+                                        ref={(el) => {
+                                          replyInputRefs.current[thread.id] = el;
+                                        }}
+                                        type="text"
+                                        required
+                                        value={replyDraft}
+                                        onChange={(e) =>
+                                          setReplyDrafts((prev) => ({
+                                            ...prev,
+                                            [thread.id]: e.target.value,
+                                          }))
+                                        }
+                                        placeholder={`Reply to ${thread.author}...`}
+                                        aria-label={`Reply to ${thread.title}`}
+                                        className="flex-1 min-h-[38px] rounded-full border border-white/[0.14] bg-[#0b0e15] px-4 py-1.5 text-xs sm:text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                                      />
+                                      <button
+                                        type="submit"
+                                        className="gemini-cta inline-flex items-center gap-1.5 h-[38px] px-4 rounded-full text-xs font-semibold shrink-0 cursor-pointer"
+                                      >
+                                        <Send
+                                          className="h-3.5 w-3.5"
+                                          aria-hidden="true"
+                                        />
+                                        <span>Reply</span>
+                                      </button>
+                                    </form>
+                                  ) : (
+                                    <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.1] bg-[#0b0e15] px-3.5 py-2.5">
+                                      <span className="text-xs text-[#b4bac6]">
+                                        Sign in to join the conversation and post a reply.
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={onOpenStudentAuth}
+                                        className="gemini-cta inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full text-xs font-semibold shrink-0 cursor-pointer"
+                                      >
+                                        <GraduationCap
+                                          className="h-3.5 w-3.5"
+                                          aria-hidden="true"
+                                        />
+                                        <span>Sign In</span>
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
                       </div>
-                    </button>
+                    </article>
                   );
                 })}
               </div>
+            )}
+          </div>
 
-              <div className="lg:col-span-7 lg:h-full min-h-0 flex flex-col">
-                {activeThread && (
-                  <div className="h-full min-h-0 flex flex-col rounded-2xl border border-white/[0.1] bg-[#121620] overflow-hidden">
-                    <div
-                      className="h-[2px] w-full shrink-0"
-                      style={{ backgroundColor: 'var(--ssc-green-bright)' }}
-                      aria-hidden="true"
-                    />
-
-                    <div className="shrink-0 px-6 pt-5 pb-4 border-b border-white/[0.08] bg-[#121620]">
-                      <div className="flex items-center justify-between gap-3 text-xs">
-                        <span className="font-semibold text-[#facc15]">
-                          {activeThread.topic}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5 text-[#949ba8] tabular-nums">
-                          <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-                          {activeThread.postedAt}
-                        </span>
-                      </div>
-
-                      <h2 className="mt-2 text-xl font-bold text-[#f5f4f0]">
-                        {activeThread.title}
-                      </h2>
-
-                      <div className="mt-1.5 flex items-center justify-between gap-3 text-xs text-[#b4bac6]">
-                        <span className="font-semibold text-[#f5f4f0]">
-                          {activeThread.author}
-                        </span>
-                        <span>{activeThread.yearLevel}</span>
-                      </div>
-
-                      <p className="mt-3 text-sm text-[#e2e5eb] leading-relaxed max-w-[65ch] max-h-[140px] overflow-y-auto overscroll-contain break-words pr-1">
-                        {activeThread.body}
-                      </p>
-
-                      <div className="mt-4 flex items-center justify-between gap-3">
-                        <button
-                          type="button"
-                          onClick={() => toggleSupport(activeThread.id)}
-                          className={`inline-flex items-center gap-2 min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-lg border active:scale-[0.98] transition-transform tabular-nums cursor-pointer ${
-                            supportedIds[activeThread.id]
-                              ? 'bg-[#facc15]/15 border-[#facc15]/40 text-[#facc15]'
-                              : 'bg-[#181d29] border-white/[0.12] text-[#f5f4f0] hover:border-white/[0.24]'
-                          }`}
-                        >
-                          <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
-                          <span>
-                            {supportedIds[activeThread.id]
-                              ? 'Supported'
-                              : 'Support Proposal'}{' '}
-                            ({activeThread.supportCount})
-                          </span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!canPost) {
-                              onOpenStudentAuth();
-                              return;
-                            }
-                            desktopReplyInputRef.current?.focus();
-                          }}
-                          className="inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-lg text-[#3ddc97] bg-[#3ddc97]/10 border border-[#3ddc97]/30 hover:bg-[#3ddc97]/15 cursor-pointer"
-                        >
-                          <MessageSquare
-                            className="h-3.5 w-3.5"
-                            aria-hidden="true"
-                          />
-                          <span>Write a Reply</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div
-                      ref={desktopRepliesBoxRef}
-                      className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4 space-y-3 bg-[#0b0e15]"
-                    >
-                      <h3 className="text-xs font-semibold uppercase tracking-wider text-[#949ba8] tabular-nums">
-                        Replies ({activeThread.replies.length})
-                      </h3>
-
-                      {activeThread.replies.length === 0 ? (
-                        <p className="text-sm text-[#949ba8] py-4">
-                          No replies yet. Be the first to respond below.
-                        </p>
-                      ) : (
-                        activeThread.replies.map((reply) => (
-                          <div
-                            key={reply.id}
-                            className="rounded-xl border border-white/[0.08] bg-[#121620] p-4"
-                          >
-                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                              <div className="flex flex-wrap items-baseline gap-2 min-w-0">
-                                <span className="font-semibold text-[#f5f4f0] break-words">
-                                  {reply.author}
-                                </span>
-                                <span className="font-medium text-[#3ddc97] break-words">
-                                  {reply.yearLevel}
-                                </span>
-                              </div>
-                              <span className="text-[#949ba8] tabular-nums shrink-0">
-                                {reply.time}
-                              </span>
-                            </div>
-                            <p className="mt-2 text-sm text-[#e2e5eb] leading-relaxed break-words">
-                              {reply.message}
-                            </p>
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    {canPost ? (
-                      <form
-                        onSubmit={handleReplySubmit}
-                        className="shrink-0 border-t border-white/[0.08] bg-[#121620] px-6 py-3.5 space-y-2.5"
-                      >
-                        {official ? (
-                          <div className="flex items-center justify-between gap-2 rounded-lg border border-[#3ddc97]/25 bg-[#0b0e15] px-3 py-2 text-xs">
-                            <span className="inline-flex items-center gap-1.5 font-semibold text-[#f5f4f0]">
-                              <ShieldCheck
-                                className="h-3.5 w-3.5 text-[#3ddc97]"
-                                aria-hidden="true"
-                              />
-                              Replying as {official.name}
-                            </span>
-                            <span className="font-semibold text-[#3ddc97]">
-                              {official.position}
-                            </span>
-                          </div>
-                        ) : (
-                          student && (
-                            <div className="flex items-center justify-between gap-2 rounded-lg border border-[#facc15]/25 bg-[#0b0e15] px-3 py-2 text-xs">
-                              <span className="inline-flex items-center gap-1.5 font-semibold text-[#f5f4f0]">
-                                <GraduationCap
-                                  className="h-3.5 w-3.5 text-[#facc15]"
-                                  aria-hidden="true"
-                                />
-                                {student.name}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={onOpenStudentAuth}
-                                className="font-semibold text-[#facc15] hover:underline cursor-pointer"
-                              >
-                                {student.yearCourse || 'Student Profile'}
-                              </button>
-                            </div>
-                          )
-                        )}
-
-                        <div className="flex gap-2">
-                          <input
-                            ref={desktopReplyInputRef}
-                            type="text"
-                            required
-                            value={replyMessage}
-                            onChange={(e) => setReplyMessage(e.target.value)}
-                            placeholder="Write a reply to this thread..."
-                            aria-label="Write a reply"
-                            className="flex-1 min-h-[44px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3.5 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
-                          />
-                          <button
-                            type="submit"
-                            className="gemini-cta inline-flex items-center gap-1.5 min-h-[44px] px-4 py-2 text-sm font-semibold rounded-lg active:scale-[0.98] transition-transform whitespace-nowrap shrink-0 cursor-pointer"
-                          >
-                            <Send className="h-4 w-4" aria-hidden="true" />
-                            <span>Post Reply</span>
-                          </button>
-                        </div>
-                      </form>
-                    ) : (
-                      <div className="shrink-0 border-t border-white/[0.08] bg-[#121620] px-6 py-4 flex items-center justify-between gap-3">
-                        <p className="text-xs sm:text-sm text-[#b4bac6]">
-                          Sign in with your student or officer account to post replies.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={onOpenStudentAuth}
-                          className="gemini-cta inline-flex items-center gap-1.5 min-h-[40px] px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg whitespace-nowrap shrink-0 cursor-pointer"
-                        >
-                          <GraduationCap className="h-4 w-4" aria-hidden="true" />
-                          <span>Sign In to Reply</span>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
+          {/* RIGHT COLUMN (lg:col-span-4): Reddit-Style Community Info & Rules Card */}
+          <aside className="lg:col-span-4 space-y-4 lg:sticky lg:top-20">
+            <div className="card-elevated rounded-2xl p-5 space-y-4">
+              <div className="flex items-center gap-3 pb-3 border-b border-white/[0.1]">
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#3ddc97]/15 border border-[#3ddc97]/35 text-[#3ddc97]">
+                  <MessageSquare className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-bold text-[#f5f4f0]">
+                    c/SLACSmartCouncil
+                  </h2>
+                  <p className="text-xs text-[#949ba8]">
+                    Official SLAC Student Community
+                  </p>
+                </div>
               </div>
+
+              <p className="text-xs text-[#b4bac6] leading-relaxed">
+                A text-first forum where SLAC students share campus proposals, ask academic questions, and receive verified responses from Supreme Student Council officers.
+              </p>
+
+              {/* Community Metrics */}
+              <div className="grid grid-cols-2 gap-2.5 pt-1">
+                <div className="rounded-xl border border-white/[0.1] bg-[#0b0e15] p-3">
+                  <p className="text-lg font-bold text-[#f5f4f0] tabular-nums">
+                    {threads.length}
+                  </p>
+                  <p className="text-[11px] text-[#949ba8]">Active Threads</p>
+                </div>
+                <div className="rounded-xl border border-white/[0.1] bg-[#0b0e15] p-3">
+                  <p className="text-lg font-bold text-[#3ddc97] tabular-nums">
+                    {totalRepliesCount}
+                  </p>
+                  <p className="text-[11px] text-[#949ba8]">Total Replies</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (!canPost) {
+                    onOpenStudentAuth();
+                    return;
+                  }
+                  setShowDiscardConfirm(false);
+                  setShowNewForm(true);
+                }}
+                className="gemini-cta w-full min-h-[40px] rounded-xl text-xs font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                <span>Create Text Thread</span>
+              </button>
             </div>
-          </>
-        )}
+
+            {/* Forum Guidelines */}
+            <div className="card-elevated rounded-2xl p-5 space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#f5f4f0]">
+                Forum Guidelines
+              </h3>
+              <ol className="space-y-2 text-xs text-[#b4bac6] list-decimal list-inside">
+                <li>Keep discussions respectful and constructive.</li>
+                <li>Text-only posts — focus on clear ideas and questions.</li>
+                <li>Upvote existing proposals to help SSC prioritize action.</li>
+              </ol>
+            </div>
+          </aside>
+        </div>
       </div>
 
-      {/* MOBILE FOCUSED THREAD SHEET */}
-      {typeof document !== 'undefined' &&
-        createPortal(
-          <AnimatePresence>
-            {mobileSheetOpen && activeThread && (
-              <motion.div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="mobile-thread-title"
-                initial={{ opacity: 0, y: '100%' }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: '100%' }}
-                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                className="fixed inset-0 z-50 h-[100dvh] lg:hidden flex flex-col bg-[#0b0e15]"
-              >
-                <div className="shrink-0 border-b border-white/[0.08] bg-[#07090e] px-4 py-2.5 flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setMobileSheetOpen(false)}
-                    className="inline-flex items-center gap-1.5 min-h-[44px] px-2 text-sm font-semibold text-[#3ddc97] cursor-pointer"
-                  >
-                    <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                    <span>Back to Threads</span>
-                  </button>
-
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs font-semibold text-[#facc15] truncate">
-                      {activeThread.topic}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label="Close discussion"
-                      onClick={() => setMobileSheetOpen(false)}
-                      className="inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-lg text-[#b4bac6] hover:bg-[#181d29] hover:text-[#f5f4f0] cursor-pointer shrink-0"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-
-                <div
-                  ref={mobileRepliesBoxRef}
-                  className="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar px-4 py-5 space-y-5"
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-3 text-xs text-[#b4bac6]">
-                      <span className="font-semibold text-[#f5f4f0] truncate">
-                        {activeThread.author}
-                      </span>
-                      <span className="inline-flex items-center gap-1 shrink-0 text-[#949ba8] tabular-nums">
-                        <Clock className="h-3 w-3" aria-hidden="true" />
-                        {activeThread.postedAt}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-xs text-[#949ba8]">
-                      {activeThread.yearLevel}
-                    </p>
-
-                    <h2
-                      id="mobile-thread-title"
-                      className="mt-2.5 text-xl font-bold text-[#f5f4f0] leading-snug break-words"
-                    >
-                      {activeThread.title}
-                    </h2>
-
-                    <p className="mt-3 text-[15px] text-[#e2e5eb] leading-relaxed break-words">
-                      {activeThread.body}
-                    </p>
-
-                    <div className="mt-4 flex flex-wrap items-center gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => toggleSupport(activeThread.id)}
-                        className={`inline-flex items-center gap-2 min-h-[44px] px-4 py-2 text-xs font-semibold rounded-lg border active:scale-[0.98] transition-transform tabular-nums cursor-pointer ${
-                          supportedIds[activeThread.id]
-                            ? 'bg-[#facc15]/15 border-[#facc15]/40 text-[#facc15]'
-                            : 'bg-[#121620] border-white/[0.12] text-[#f5f4f0]'
-                        }`}
-                      >
-                        <ThumbsUp className="h-4 w-4" aria-hidden="true" />
-                        <span>
-                          {supportedIds[activeThread.id]
-                            ? 'Supported'
-                            : 'Support Proposal'}{' '}
-                          ({activeThread.supportCount})
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!canPost) {
-                            onOpenStudentAuth();
-                            return;
-                          }
-                          mobileReplyInputRef.current?.focus();
-                        }}
-                        className="inline-flex items-center gap-1.5 min-h-[44px] px-4 py-2 text-xs font-semibold rounded-lg bg-[#3ddc97]/10 border border-[#3ddc97]/30 text-[#3ddc97] cursor-pointer"
-                      >
-                        <MessageSquare className="h-4 w-4" aria-hidden="true" />
-                        <span>Focus Reply Box</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="pt-4 border-t border-white/[0.08] space-y-3">
-                    <h3 className="text-xs font-semibold uppercase tracking-wider text-[#949ba8] tabular-nums">
-                      Replies ({activeThread.replies.length})
-                    </h3>
-
-                    {activeThread.replies.length === 0 ? (
-                      <p className="text-sm text-[#949ba8]">
-                        No replies yet. Write a reply in the bar below.
-                      </p>
-                    ) : (
-                      activeThread.replies.map((reply) => (
-                        <div
-                          key={reply.id}
-                          className="rounded-xl border border-white/[0.08] bg-[#121620] p-4"
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                            <div className="flex flex-wrap items-baseline gap-2 min-w-0">
-                              <span className="font-semibold text-[#f5f4f0] break-words">
-                                {reply.author}
-                              </span>
-                              <span className="font-medium text-[#3ddc97] break-words">
-                                {reply.yearLevel}
-                              </span>
-                            </div>
-                            <span className="text-[#949ba8] tabular-nums shrink-0">
-                              {reply.time}
-                            </span>
-                          </div>
-                          <p className="mt-2 text-sm text-[#e2e5eb] leading-relaxed break-words">
-                            {reply.message}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {canPost ? (
-                  <form
-                    onSubmit={handleReplySubmit}
-                    className="shrink-0 border-t border-white/[0.08] bg-[#121620] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] space-y-2"
-                  >
-                    <div className="flex gap-2">
-                      <input
-                        ref={mobileReplyInputRef}
-                        type="text"
-                        required
-                        value={replyMessage}
-                        onChange={(e) => setReplyMessage(e.target.value)}
-                        placeholder="Write a reply..."
-                        aria-label="Write a reply"
-                        className="flex-1 min-h-[44px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3.5 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
-                      />
-                      <button
-                        type="submit"
-                        className="gemini-cta inline-flex items-center justify-center gap-1.5 min-h-[44px] px-4 py-2 text-sm font-semibold rounded-lg active:scale-[0.98] transition-transform whitespace-nowrap shrink-0 cursor-pointer"
-                      >
-                        <Send className="h-4 w-4" aria-hidden="true" />
-                        <span>Reply</span>
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <div className="shrink-0 border-t border-white/[0.08] bg-[#121620] px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center justify-between gap-3">
-                    <span className="text-xs text-[#b4bac6]">
-                      Sign in as a student or officer to reply.
-                    </span>
-                    <button
-                      type="button"
-                      onClick={onOpenStudentAuth}
-                      className="gemini-cta inline-flex items-center gap-1.5 min-h-[40px] px-3.5 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap shrink-0 cursor-pointer"
-                    >
-                      <GraduationCap className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span>Sign In</span>
-                    </button>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>,
-          document.body
-        )}
-
-      {/* NEW DISCUSSION POP-UP MODAL (Protected by Discard / Keep Editing Guard) */}
+      {/* TEXT-ONLY NEW THREAD COMPOSER MODAL */}
       {typeof document !== 'undefined' &&
         createPortal(
           <AnimatePresence>
@@ -867,38 +976,38 @@ export function ForumPage({
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.14 }}
                 onClick={() => setShowDiscardConfirm(true)}
-                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80"
+                className="fixed inset-0 z-[85] overflow-y-auto overscroll-contain flex items-center justify-center p-4 bg-black/60"
               >
                 <motion.form
-                  initial={{ opacity: 0, scale: 0.97, y: 10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.97, y: 8 }}
-                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 6 }}
+                  transition={{ duration: 0.16, ease: 'easeOut' }}
                   onClick={(e) => e.stopPropagation()}
                   onSubmit={handleCreateThread}
-                  className="w-full max-w-xl max-h-[90dvh] overflow-y-auto rounded-2xl border border-white/[0.12] bg-[#131519] shadow-2xl overflow-hidden"
+                  className="my-auto w-full max-w-xl rounded-2xl border border-white/[0.16] bg-[#131519] shadow-2xl overflow-hidden"
                 >
-                  <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08]">
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.1]">
                     <div>
                       <h2
                         id="new-discussion-title"
                         className="text-lg font-bold text-[#f5f4f0]"
                       >
-                        Start a Student Discussion
+                        New Campus Thread
                       </h2>
                       <p className="mt-0.5 text-xs text-[#949ba8]">
                         {official
-                          ? `Posting verified update as ${official.name}`
-                          : `Signed in as ${student?.name ?? 'SLAC Student'}`}
+                          ? `Posting verified thread as ${official.name}`
+                          : `Posting as ${student?.name ?? 'SLAC Student'}`}
                       </p>
                     </div>
                     <button
                       type="button"
-                      aria-label="Close discussion form"
+                      aria-label="Close thread composer"
                       onClick={() => setShowDiscardConfirm(true)}
-                      className="inline-flex min-h-[42px] min-w-[42px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
+                      className="inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
                     >
-                      <X className="h-5 w-5" />
+                      <X className="h-4.5 w-4.5" />
                     </button>
                   </div>
 
@@ -917,23 +1026,23 @@ export function ForumPage({
                             aria-hidden="true"
                           />
                           <span className="text-xs font-bold text-[#f5f4f0]">
-                            Discard ongoing discussion draft?
+                            Discard this thread draft?
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
                             onClick={() => setShowDiscardConfirm(false)}
-                            className="min-h-[34px] px-3 py-1 rounded-lg bg-[#3ddc97] text-xs font-semibold text-[#042412] cursor-pointer"
+                            className="min-h-[32px] px-3 py-1 rounded-lg bg-[#3ddc97] text-xs font-semibold text-[#042412] cursor-pointer"
                           >
                             Keep Editing
                           </button>
                           <button
                             type="button"
                             onClick={handleDiscardNewForm}
-                            className="min-h-[34px] px-3 py-1 rounded-lg border border-[#ef4444]/40 bg-[#ef4444]/15 text-xs font-semibold text-[#fca5a5] cursor-pointer"
+                            className="min-h-[32px] px-3 py-1 rounded-lg border border-[#ef4444]/40 bg-[#ef4444]/15 text-xs font-semibold text-[#fca5a5] cursor-pointer"
                           >
-                            Discard Changes
+                            Discard
                           </button>
                         </div>
                       </motion.div>
@@ -941,10 +1050,10 @@ export function ForumPage({
                   </AnimatePresence>
 
                   <div className="p-6 space-y-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                       {official ? (
-                        <div className="sm:col-span-2 rounded-xl border border-[#3ddc97]/25 bg-[#0b0e15] px-4 py-3 flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-[#f5f4f0]">
+                        <div className="sm:col-span-2 rounded-xl border border-[#3ddc97]/25 bg-[#0b0e15] px-3.5 py-2.5 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 text-xs font-semibold text-[#f5f4f0]">
                             <ShieldCheck
                               className="h-4 w-4 text-[#3ddc97]"
                               aria-hidden="true"
@@ -957,24 +1066,17 @@ export function ForumPage({
                         </div>
                       ) : (
                         student && (
-                          <div className="sm:col-span-2 rounded-xl border border-[#facc15]/25 bg-[#0b0e15] px-4 py-3 flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-[#f5f4f0]">
+                          <div className="sm:col-span-2 rounded-xl border border-[#facc15]/25 bg-[#0b0e15] px-3.5 py-2.5 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 text-xs font-semibold text-[#f5f4f0]">
                               <GraduationCap
                                 className="h-4 w-4 text-[#facc15]"
                                 aria-hidden="true"
                               />
                               <span>{student.name}</span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowNewForm(false);
-                                onOpenStudentAuth();
-                              }}
-                              className="text-xs font-semibold text-[#facc15] hover:underline cursor-pointer"
-                            >
-                              Change
-                            </button>
+                            <span className="text-xs text-[#949ba8] truncate">
+                              {student.yearCourse || 'SLAC Student'}
+                            </span>
                           </div>
                         )
                       )}
@@ -984,13 +1086,13 @@ export function ForumPage({
                           htmlFor="forum-topic"
                           className="block text-xs font-semibold text-[#b4bac6] mb-1"
                         >
-                          Topic
+                          Topic Tag
                         </label>
                         <select
                           id="forum-topic"
                           value={newTopic}
                           onChange={(e) => setNewTopic(e.target.value)}
-                          className="w-full min-h-[44px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
+                          className="w-full min-h-[42px] rounded-xl border border-white/[0.14] bg-[#0b0e15] px-3 py-2 text-xs sm:text-sm text-[#f5f4f0]"
                         >
                           {dynamicTopics.map((opt) => (
                             <option key={opt} value={opt}>
@@ -998,7 +1100,7 @@ export function ForumPage({
                             </option>
                           ))}
                           <option value={CUSTOM_TOPIC_VALUE}>
-                            Others (Custom Topic)
+                            Custom Topic...
                           </option>
                         </select>
                       </div>
@@ -1011,7 +1113,7 @@ export function ForumPage({
                             htmlFor="forum-custom-topic"
                             className="block text-xs font-semibold text-[#facc15]"
                           >
-                            State Custom Topic
+                            Custom Topic Name
                           </label>
                           <span className="text-[11px] font-medium text-[#949ba8] tabular-nums">
                             {customTopic.length}/{MAX_CUSTOM_TOPIC_LEN}
@@ -1028,8 +1130,8 @@ export function ForumPage({
                               e.target.value.slice(0, MAX_CUSTOM_TOPIC_LEN)
                             )
                           }
-                          placeholder="State custom topic (max 32 characters)..."
-                          className="w-full min-h-[44px] rounded-lg border border-[#facc15]/35 bg-[#0b0e15] px-3.5 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                          placeholder="e.g. Library Hours"
+                          className="w-full min-h-[42px] rounded-xl border border-[#facc15]/35 bg-[#0b0e15] px-3.5 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
                         />
                       </div>
                     )}
@@ -1039,7 +1141,7 @@ export function ForumPage({
                         htmlFor="forum-title"
                         className="block text-xs font-semibold text-[#b4bac6] mb-1"
                       >
-                        Discussion Title
+                        Title
                       </label>
                       <input
                         id="forum-title"
@@ -1047,8 +1149,8 @@ export function ForumPage({
                         required
                         value={newTitle}
                         onChange={(e) => setNewTitle(e.target.value)}
-                        placeholder="Write a clear, specific topic title..."
-                        className="w-full min-h-[44px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3.5 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                        placeholder="Give your thread a clear, specific headline..."
+                        className="w-full min-h-[42px] rounded-xl border border-white/[0.14] bg-[#0b0e15] px-3.5 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
                       />
                     </div>
 
@@ -1057,7 +1159,7 @@ export function ForumPage({
                         htmlFor="forum-body"
                         className="block text-xs font-semibold text-[#b4bac6] mb-1"
                       >
-                        Details
+                        Message
                       </label>
                       <textarea
                         id="forum-body"
@@ -1065,24 +1167,24 @@ export function ForumPage({
                         required
                         value={newBody}
                         onChange={(e) => setNewBody(e.target.value)}
-                        placeholder="Explain your idea or question for fellow students and SSC officers..."
-                        className="w-full rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3.5 py-2.5 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                        placeholder="Write your message, question, or proposal..."
+                        className="w-full rounded-xl border border-white/[0.14] bg-[#0b0e15] px-3.5 py-2.5 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
                       />
                     </div>
 
-                    <div className="pt-2 flex justify-end gap-3">
+                    <div className="pt-2 flex justify-end gap-2.5">
                       <button
                         type="button"
                         onClick={() => setShowDiscardConfirm(true)}
-                        className="min-h-[44px] px-4 py-2 text-sm font-medium text-[#b4bac6] rounded-lg border border-white/[0.12] bg-[#181d29] hover:text-[#f5f4f0] cursor-pointer"
+                        className="min-h-[40px] px-4 py-2 text-xs sm:text-sm font-medium text-[#b4bac6] rounded-xl border border-white/[0.14] bg-[#181d29] hover:text-[#f5f4f0] cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="gemini-cta min-h-[44px] px-5 py-2 text-sm font-semibold rounded-lg active:scale-[0.98] transition-transform cursor-pointer"
+                        className="gemini-cta min-h-[40px] px-5 py-2 text-xs sm:text-sm font-semibold rounded-xl active:scale-[0.98] transition-transform cursor-pointer"
                       >
-                        Publish Discussion
+                        Post Thread
                       </button>
                     </div>
                   </div>
