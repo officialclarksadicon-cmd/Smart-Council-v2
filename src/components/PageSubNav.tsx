@@ -12,7 +12,7 @@ const PAGE_LABELS: Record<Exclude<PageRoute, 'home'>, string> = {
   officers: 'Council Officers Archive',
   forum: 'Student Assembly Forum',
   faq: 'Student Handbook & FAQ',
-  admin: 'SSC Admin Console',
+  admin: 'SSC Suite',
 };
 
 /**

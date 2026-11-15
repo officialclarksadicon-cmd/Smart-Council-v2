@@ -173,11 +173,11 @@ export function HeroSection({
               </p>
             </div>
 
-            <div className="pt-1 flex flex-row flex-wrap items-center gap-2.5 sm:gap-3">
+            <div className="pt-1 flex flex-row flex-wrap items-center gap-2.5">
               <button
                 type="button"
                 onClick={() => onNavigate('announcements')}
-                className="gemini-cta min-h-[42px] sm:min-h-[46px] px-4 sm:px-6 py-2 sm:py-2.5 rounded-full inline-flex items-center justify-center gap-2 text-xs sm:text-sm font-bold uppercase tracking-[0.06em] active:scale-[0.99] transition-transform cursor-pointer"
+                className="gemini-cta min-h-[40px] sm:min-h-[42px] px-4 sm:px-5 py-2 rounded-lg inline-flex items-center justify-center gap-2 text-xs sm:text-sm font-semibold active:scale-[0.99] transition-transform cursor-pointer"
               >
                 <span>{primaryCtaText}</span>
                 {annBadge > 0 && (
@@ -192,12 +192,15 @@ export function HeroSection({
                 type="button"
                 onClick={() => onNavigate('forum')}
                 style={secondaryButtonStyle}
-                className="min-h-[42px] sm:min-h-[46px] px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold text-[#f5f4f0] hover:opacity-90 inline-flex items-center justify-center gap-2 transition-opacity cursor-pointer shrink-0"
+                className="min-h-[40px] sm:min-h-[42px] px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold text-[#f5f4f0] hover:opacity-90 inline-flex items-center justify-center gap-1.5 transition-opacity cursor-pointer shrink-0"
               >
-                <span>
-                  {secondaryCtaText} ({forumThreads.length})
-                </span>
-                <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span>{secondaryCtaText}</span>
+                {forumThreads.length > 0 && (
+                  <span className="text-xs opacity-75 tabular-nums">
+                    ({forumThreads.length})
+                  </span>
+                )}
+                <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -207,12 +210,12 @@ export function HeroSection({
       {/* 2. KARST BOXY OUTLINED HIGHLIGHTS GRID (Positioned BELOW the 3D Scene Stage with z-10) */}
       <div className="relative z-10 mx-auto max-w-[1440px] border-x border-t border-white/[0.14] bg-[#121620]">
         {/* FULL-WIDTH BOXY SECTION TITLE BAR */}
-        <div className="border-b border-white/[0.14] px-6 sm:px-10 lg:px-12 py-6 sm:py-7 flex flex-wrap items-baseline justify-between gap-4">
+        <div className="border-b border-white/[0.14] px-6 sm:px-10 lg:px-12 py-5 sm:py-6 flex flex-wrap items-baseline justify-between gap-4">
           <WordRevealText
             as="h2"
             text="Campus highlights"
             className="font-bold tracking-[-0.025em] text-[#f5f4f0]"
-            style={{ fontSize: 'clamp(1.75rem, 3vw, 2.5rem)' }}
+            style={{ fontSize: 'clamp(1.5rem, 2.5vw, 2.15rem)' }}
             y={20}
             stagger={0.08}
           />
@@ -225,13 +228,13 @@ export function HeroSection({
             <button
               type="button"
               onClick={() => onNavigate('announcements')}
-              className="group w-full rounded-none p-6 sm:p-8 lg:p-10 text-left flex flex-col justify-between gap-6 bg-[#121620] hover:bg-[#181d29]/70 transition-colors cursor-pointer"
+              className="group w-full rounded-none p-6 sm:p-8 text-left flex flex-col justify-between gap-5 bg-[#121620] hover:bg-[#181d29]/70 transition-colors cursor-pointer"
             >
-              <div className="space-y-4">
+              <div className="space-y-3.5">
                 <div className="flex items-center justify-between gap-3">
                   <span className="inline-flex items-center gap-2 text-xs font-semibold text-[#3ddc97]">
                     <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span>Latest Advisory</span>
+                    <span>Announcements</span>
                   </span>
                   <div className="flex items-center gap-2">
                     {annBadge > 0 && (
@@ -247,22 +250,24 @@ export function HeroSection({
                 </div>
 
                 {/* Rounded Inner Card Inside Boxy Cell */}
-                <div className="card-elevated rounded-2xl p-5 space-y-2">
-                  <p className="text-xs font-medium text-[#949ba8]">
-                    {latestAnnouncement?.category ?? 'Official Notice'}
-                  </p>
-                  <p className="font-display text-lg sm:text-xl font-bold text-[#f5f4f0] leading-snug line-clamp-2">
-                    {latestAnnouncement?.title ?? 'Official SLAC SSC Advisories'}
+                <div className="card-elevated rounded-xl p-4 sm:p-5 space-y-1.5">
+                  {latestAnnouncement?.category && (
+                    <p className="text-xs font-medium text-[#949ba8]">
+                      {latestAnnouncement.category}
+                    </p>
+                  )}
+                  <p className="font-display text-base sm:text-lg font-bold text-[#f5f4f0] leading-snug line-clamp-2">
+                    {latestAnnouncement?.title ?? 'No advisories published yet'}
                   </p>
                   <p className="text-xs sm:text-sm text-[#b4bac6] line-clamp-2 leading-relaxed">
                     {latestAnnouncement?.summary ??
-                      'Read the latest campus-wide announcements and memoranda from the Supreme Student Council.'}
+                      'Latest memos and deadlines appear here.'}
                   </p>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-white/[0.1] flex items-center justify-between gap-3 text-xs text-[#949ba8] tabular-nums">
-                <span>{latestAnnouncement?.date ?? 'Updated'}</span>
+              <div className="pt-3.5 border-t border-white/[0.1] flex items-center justify-between gap-3 text-xs text-[#949ba8] tabular-nums">
+                <span>{latestAnnouncement?.date ?? 'Advisories'}</span>
                 <span>{announcements.length} published</span>
               </div>
             </button>
@@ -271,13 +276,13 @@ export function HeroSection({
             <button
               type="button"
               onClick={() => onNavigate('events')}
-              className="group w-full rounded-none p-6 sm:p-8 lg:p-10 text-left flex flex-col justify-between gap-6 bg-[#121620] hover:bg-[#181d29]/70 transition-colors cursor-pointer"
+              className="group w-full rounded-none p-6 sm:p-8 text-left flex flex-col justify-between gap-5 bg-[#121620] hover:bg-[#181d29]/70 transition-colors cursor-pointer"
             >
-              <div className="space-y-4">
+              <div className="space-y-3.5">
                 <div className="flex items-center justify-between gap-3">
                   <span className="inline-flex items-center gap-2 text-xs font-semibold text-[#f87171]">
                     <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span>Next Event</span>
+                    <span>Events</span>
                   </span>
                   <div className="flex items-center gap-2">
                     {evtBadge > 0 && (
@@ -293,24 +298,26 @@ export function HeroSection({
                 </div>
 
                 {/* Rounded Inner Card Inside Boxy Cell */}
-                <div className="card-elevated rounded-2xl p-5 space-y-2">
-                  <p className="text-xs font-medium text-[#949ba8]">
-                    {nextEvent?.category ?? 'Campus Activity'}
-                  </p>
-                  <p className="font-display text-lg sm:text-xl font-bold text-[#f5f4f0] leading-snug line-clamp-2">
-                    {nextEvent?.title ?? 'SLAC Campus Activities'}
+                <div className="card-elevated rounded-xl p-4 sm:p-5 space-y-1.5">
+                  {nextEvent?.category && (
+                    <p className="text-xs font-medium text-[#949ba8]">
+                      {nextEvent.category}
+                    </p>
+                  )}
+                  <p className="font-display text-base sm:text-lg font-bold text-[#f5f4f0] leading-snug line-clamp-2">
+                    {nextEvent?.title ?? 'No upcoming events scheduled'}
                   </p>
                   <p className="text-xs sm:text-sm text-[#b4bac6] line-clamp-2 leading-relaxed">
                     {nextEvent?.description ??
-                      'Check schedules, venues, and registration details for upcoming student activities.'}
+                      'Schedules and venues for upcoming activities.'}
                   </p>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-white/[0.1] flex items-center justify-between gap-3 text-xs text-[#949ba8] tabular-nums">
-                <span>{nextEvent?.date ?? 'Upcoming'}</span>
+              <div className="pt-3.5 border-t border-white/[0.1] flex items-center justify-between gap-3 text-xs text-[#949ba8] tabular-nums">
+                <span>{nextEvent?.date ?? 'Calendar'}</span>
                 <span className="truncate max-w-[160px]">
-                  {nextEvent?.location ?? 'SLAC Campus'}
+                  {nextEvent?.location ?? `${events.length} scheduled`}
                 </span>
               </div>
             </button>
@@ -319,9 +326,9 @@ export function HeroSection({
             <button
               type="button"
               onClick={() => onNavigate('forum')}
-              className="group w-full rounded-none p-6 sm:p-8 lg:p-10 text-left flex flex-col justify-between gap-6 bg-[#121620] hover:bg-[#181d29]/70 transition-colors cursor-pointer"
+              className="group w-full rounded-none p-6 sm:p-8 text-left flex flex-col justify-between gap-5 bg-[#121620] hover:bg-[#181d29]/70 transition-colors cursor-pointer"
             >
-              <div className="space-y-4">
+              <div className="space-y-3.5">
                 <div className="flex items-center justify-between gap-3">
                   <span className="inline-flex items-center gap-2 text-xs font-semibold text-[#facc15]">
                     <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
@@ -341,23 +348,25 @@ export function HeroSection({
                 </div>
 
                 {/* Rounded Inner Card Inside Boxy Cell */}
-                <div className="card-elevated rounded-2xl p-5 space-y-2">
-                  <p className="text-xs font-medium text-[#949ba8]">
-                    {latestThread?.topic ?? 'Open Discussion'}
-                  </p>
-                  <p className="font-display text-lg sm:text-xl font-bold text-[#f5f4f0] leading-snug line-clamp-2">
-                    {latestThread?.title ?? 'Share Campus Ideas & Proposals'}
+                <div className="card-elevated rounded-xl p-4 sm:p-5 space-y-1.5">
+                  {latestThread?.topic && (
+                    <p className="text-xs font-medium text-[#949ba8]">
+                      {latestThread.topic}
+                    </p>
+                  )}
+                  <p className="font-display text-base sm:text-lg font-bold text-[#f5f4f0] leading-snug line-clamp-2">
+                    {latestThread?.title ?? 'Start a campus discussion'}
                   </p>
                   <p className="text-xs sm:text-sm text-[#b4bac6] line-clamp-2 leading-relaxed">
                     {latestThread?.body ??
-                      'Join fellow SLACians in constructive dialogue and propose student initiatives.'}
+                      'Share proposals, feedback, and questions with peers.'}
                   </p>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-white/[0.1] flex items-center justify-between gap-3 text-xs text-[#949ba8] tabular-nums">
+              <div className="pt-3.5 border-t border-white/[0.1] flex items-center justify-between gap-3 text-xs text-[#949ba8] tabular-nums">
                 <span className="truncate font-medium text-[#f5f4f0]">
-                  {latestThread?.author ?? 'SLAC Student Body'}
+                  {latestThread?.author ?? 'Open Forum'}
                 </span>
                 <span>
                   {latestThread

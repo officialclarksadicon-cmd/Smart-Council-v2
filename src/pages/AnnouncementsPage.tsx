@@ -206,17 +206,17 @@ export function AnnouncementsPage({
           </div>
 
           {official && (
-            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => onNavigate('admin')}
-                className="inline-flex items-center gap-1.5 min-h-[42px] px-4 py-2 text-xs sm:text-sm font-semibold rounded-full border border-white/[0.16] bg-[#0b0e15] text-[#f5f4f0] hover:bg-[#181d29] cursor-pointer"
+                className="inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-lg border border-white/[0.14] bg-[#0b0e15] text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
               >
                 <LayoutDashboard
-                  className="h-4 w-4 text-[#3ddc97]"
+                  className="h-3.5 w-3.5 text-[#3ddc97]"
                   aria-hidden="true"
                 />
-                <span>Edit in Admin</span>
+                <span>SSC Suite</span>
               </button>
               <button
                 type="button"
@@ -224,10 +224,10 @@ export function AnnouncementsPage({
                   setShowDiscardConfirm(false);
                   setShowPostForm(true);
                 }}
-                className="gemini-cta inline-flex items-center gap-1.5 min-h-[42px] px-5 py-2 text-xs sm:text-sm font-bold uppercase tracking-wider rounded-full active:scale-[0.98] transition-transform whitespace-nowrap cursor-pointer"
+                className="gemini-cta inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-lg active:scale-[0.98] transition-transform whitespace-nowrap cursor-pointer"
               >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                <span>Post Announcement</span>
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>New Announcement</span>
               </button>
             </div>
           )}

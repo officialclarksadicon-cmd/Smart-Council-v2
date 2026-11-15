@@ -254,43 +254,43 @@ export const siteConfig = {
     eyebrow: 'SLAC Student Council',
     headline: 'Campus updates and student voice in one place.',
     introduction:
-      'Official advisories, events, council archive, and open student discussions for SLAC.',
-    primaryCtaText: 'Check Announcements',
-    secondaryCtaText: 'Student Forum',
+      'Advisories, schedules, and open student discussions.',
+    primaryCtaText: 'Announcements',
+    secondaryCtaText: 'Forum',
   },
 
   /* --------------------------------------------------------------------------
    * 7. BODY SECTION 2: COUNCIL HERITAGE & UNIFIED STUDENT SUPPORT
    * -------------------------------------------------------------------------- */
   councilSection: {
-    eyebrow: 'About SLAC SSC',
+    eyebrow: 'About the Council',
     heading: 'Serving the SLAC student body since 2019.',
     description:
-      'We represent SLAC students, support campus organizations, and share verified council updates.',
+      'Representing students, supporting campus organizations, and publishing verified advisories.',
     image: IMAGEKIT_COUNCIL_OFFICE,
     imageAlt:
       'Supreme Student Council officers and students collaborating around campus study tables',
     pillars: [
       {
-        title: 'Established 2019',
-        detail: 'Official student council of St. Louis Anne Colleges.',
-      },
-      {
         title: 'Student Representation',
         detail: 'Bringing student concerns to school administration.',
       },
       {
+        title: 'Campus Organizations',
+        detail: 'Coordinating accredited clubs and student initiatives.',
+      },
+      {
         title: 'Verified Updates',
-        detail: 'Campus memos synced with our official Facebook page.',
+        detail: 'Official advisories synced with our Facebook page.',
       },
     ],
     supportCard: {
       title: 'Student Support Desk',
       description:
-        'Need help with permits, concerns, or club records? Reach us online anytime.',
+        'Questions about permits, clearances, or club records? Reach us directly.',
       emailButtonLabel: 'Email Support',
       copyButtonLabel: 'Copy',
-      onlineFormLabel: 'Send Online Message',
+      onlineFormLabel: 'Message Online',
     },
   },
 
@@ -340,7 +340,7 @@ export const siteConfig = {
       category: 'SSC Officials',
       question: 'How do SSC Official and Admin accounts work?',
       answer:
-        'Official accounts are pre-provisioned directly in the portal database by the Web Admin. Signed-in officials and admins can access the Admin Dashboard to publish announcements, events, officer rosters, and AI-assisted custom filters.',
+        'Official accounts are pre-provisioned directly in the portal database by the Web Admin. Signed-in officials and admins can access SSC Suite to publish announcements, events, officer rosters, and custom filters.',
     },
     {
       id: 'faq-5',
@@ -348,7 +348,7 @@ export const siteConfig = {
       question:
         'How can students reach the SSC Support Desk when the office is closed?',
       answer:
-        'Use the Send Online Message form on the home page or email counciltechsupport@gmail.com directly for permits, clearances, or club records. You can also start a discussion thread in the Student Forum anytime.',
+        'Use the Message Online form on the home page or email counciltechsupport@gmail.com directly for permits, clearances, or club records. You can also start a discussion thread in the Student Forum anytime.',
     },
   ] as FaqItem[],
 
@@ -362,9 +362,9 @@ export const siteConfig = {
    * -------------------------------------------------------------------------- */
   footer: {
     description:
-      'Official student portal of the St. Louis Anne Colleges Supreme Student Council.',
-    copyright: '© 2026 Smart Council — SLAC SSC (Est. 2019).',
+      'St. Louis Anne Colleges Supreme Student Council.',
+    copyright: '© 2026 Smart Council — SLAC SSC',
     bottomNote:
-      'Official Student Governance & Campus Services Portal — San Pedro, Laguna',
+      'San Pedro, Laguna',
   },
 };

@@ -92,17 +92,17 @@ function parseYear(yearCourse?: string): string {
 
 /**
  * HEADER SECTION
- * - Fixed top bar that always stays visible (never collapses when scrolling in either direction).
- * - Glassmorphic over the hero section, then fills with the solid website color once scrolled well past the hero.
- * - Non-overlapping 3-zone flex architecture so navigation items never collide with the right-side profile pill.
- * - Portaled GPU-accelerated Burger Menu with Claude Window Bar, Karst boxy outer frame, and rounded inner cards.
+ * - Consistently blurred frosted glass surface at all scroll depths.
+ * - Folds upward (hides) when scrolling down, unfolds (shows) when scrolling up.
+ * - Clean, organized 3-zone flex layout: Brand on left, centered nav links on desktop, Menu Drawer button on right.
+ * - Theme toggle and signed-in user profile live inside the Menu Drawer so the top bar never clips nav links.
+ * - Mobile inner-page section switcher is detached from <header> and rendered as a separate floating pill bar below.
  */
 export function Header({
   currentPage,
   official,
   student,
   theme,
-  customLogoUrl,
   unreadCounts,
   onToggleTheme,
   onNavigate,
@@ -111,11 +111,13 @@ export function Header({
   onSignOutOfficial,
   onSignOutStudent,
 }: HeaderProps) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [menuDrawerOpen, setMenuDrawerOpen] = useState(false);
   const [identityModalOpen, setIdentityModalOpen] = useState(false);
   const [isFilled, setIsFilled] = useState(false);
+  const [isFolded, setIsFolded] = useState(false);
 
   const scrollTickingRef = useRef(false);
+  const lastScrollYRef = useRef(0);
 
   const [editStudentName, setEditStudentName] = useState(student?.name ?? '');
   const [editMode, setEditMode] = useState<'picker' | 'custom' | 'skip'>(
@@ -167,37 +169,56 @@ export function Header({
     setIdentityModalOpen(false);
   };
 
-  // Glass over the hero, solid fill once the page has scrolled well past the hero section.
-  // On pages without a hero stage, the fill kicks in after a short scroll.
+  // Track scroll position for frosted elevation and directional fold/unfold
   useEffect(() => {
     const HEADER_HEIGHT = 64;
     const PAST_HERO_BUFFER = 72;
     const NO_HERO_THRESHOLD = 24;
 
-    const updateHeaderFill = () => {
+    lastScrollYRef.current = Math.max(
+      0,
+      window.scrollY || document.documentElement.scrollTop || 0
+    );
+    setIsFolded(false);
+
+    const updateHeaderState = () => {
       scrollTickingRef.current = false;
       const currentScrollY = Math.max(
         0,
         window.scrollY || document.documentElement.scrollTop || 0
       );
-      const heroStage = document.getElementById('hero-stage');
+      const prevScrollY = lastScrollYRef.current;
+      const deltaY = currentScrollY - prevScrollY;
 
+      const heroStage = document.getElementById('hero-stage');
       if (heroStage) {
         const heroBottom = heroStage.getBoundingClientRect().bottom;
         setIsFilled(heroBottom <= HEADER_HEIGHT - PAST_HERO_BUFFER);
       } else {
         setIsFilled(currentScrollY > NO_HERO_THRESHOLD);
       }
+
+      if (currentScrollY <= 56) {
+        setIsFolded(false);
+      } else if (deltaY > 8 && currentScrollY > 72) {
+        // Scrolling down -> fold header upward
+        setIsFolded(true);
+      } else if (deltaY < -5) {
+        // Scrolling up -> unfold header
+        setIsFolded(false);
+      }
+
+      lastScrollYRef.current = currentScrollY;
     };
 
     const handleScroll = () => {
       if (!scrollTickingRef.current) {
         scrollTickingRef.current = true;
-        window.requestAnimationFrame(updateHeaderFill);
+        window.requestAnimationFrame(updateHeaderState);
       }
     };
 
-    updateHeaderFill();
+    updateHeaderState();
     window.addEventListener('scroll', handleScroll, { passive: true });
     window.addEventListener('resize', handleScroll);
     return () => {
@@ -206,15 +227,15 @@ export function Header({
     };
   }, [currentPage]);
 
-  // Lock background page scroll & listen for Escape when Burger Menu is open
+  // Lock background page scroll & listen for Escape when Menu Drawer is open
   useEffect(() => {
-    if (!mobileMenuOpen) return;
+    if (!menuDrawerOpen) return;
 
     const prevBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMobileMenuOpen(false);
+      if (e.key === 'Escape') setMenuDrawerOpen(false);
     };
     window.addEventListener('keydown', handleKeyDown);
 
@@ -222,10 +243,10 @@ export function Header({
       document.body.style.overflow = prevBodyOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [mobileMenuOpen]);
+  }, [menuDrawerOpen]);
 
-  const handleMobileNavigate = (page: PageRoute) => {
-    setMobileMenuOpen(false);
+  const handleNavigateSelect = (page: PageRoute) => {
+    setMenuDrawerOpen(false);
     onNavigate(page);
   };
 
@@ -260,9 +281,9 @@ export function Header({
       ? [
           {
             value: 'admin' as PageRoute,
-            label: 'Admin',
+            label: 'SSC Suite',
             badgeCount: 0,
-            rawLabel: 'Admin',
+            rawLabel: 'SSC Suite',
             tone: 'green' as const,
             icon: <LayoutDashboard className="h-3.5 w-3.5" aria-hidden="true" />,
           },
@@ -270,231 +291,146 @@ export function Header({
       : []),
   ];
 
-  // Glass morphism over the hero; solid fill (with a hairline + soft shadow) once past the hero.
-  // While the burger menu is open the bar is always solid so the drawer reads as one surface.
+  // When SSC Suite (Admin) is active, it renders its own full-screen Strapi-style workspace shell
+  if (currentPage === 'admin') {
+    return null;
+  }
+
   const headerFillClass =
-    isFilled || mobileMenuOpen ? 'karst-header-solid' : 'karst-header-glass';
+    isFilled || menuDrawerOpen ? 'karst-header-solid' : 'karst-header-glass';
+  const foldTransformClass =
+    isFolded && !menuDrawerOpen ? '-translate-y-full' : 'translate-y-0';
 
   return (
     <>
       <header
-        className={`fixed top-0 left-0 right-0 z-50 w-full ${headerFillClass}`}
+        className={`fixed top-0 left-0 right-0 z-50 w-full ${headerFillClass} ${foldTransformClass}`}
       >
-        <div className="mx-auto max-w-[1440px] px-4 sm:px-8 h-16 grid grid-cols-[1fr_auto_1fr] items-center gap-3 xl:gap-6">
-          {/* Zone 1 (Left): Desktop Single-Line Navigation */}
-          <div className="min-w-0 flex items-center justify-start">
-            <nav
-              aria-label="Main navigation"
-              className="hidden lg:flex min-w-0 items-center justify-start gap-3 xl:gap-5 overflow-x-auto no-scrollbar"
-            >
-              {siteConfig.header.navItems.map((item) => {
-                const isActive = currentPage === item.page;
-                const badge = getBadgeCount(item.page);
-                const tone = NAV_TONE_BY_PAGE[item.page];
-                const indicatorColor =
-                  tone === 'amber'
-                    ? 'bg-[#e8985e]'
-                    : tone === 'red'
-                      ? 'bg-[#ef4444]'
-                      : tone === 'yellow'
-                        ? 'bg-[#facc15]'
-                        : 'bg-[#3ddc97]';
-                return (
-                  <button
-                    key={item.label}
-                    type="button"
-                    aria-current={isActive ? 'page' : undefined}
-                    onClick={() => onNavigate(item.page)}
-                    className={`relative inline-flex items-center gap-1.5 py-2 px-1 text-sm font-medium transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
-                      isActive
-                        ? 'text-[#f5f4f0] font-semibold'
-                        : 'text-[#b4bac6] hover:text-[#f5f4f0]'
-                    }`}
-                  >
-                    <span>{item.label}</span>
-                    {badge > 0 && (
-                      <span
-                        aria-label={`${badge} new`}
-                        className="inline-flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#ef4444] px-1.5 text-[10px] font-bold text-white leading-none tabular-nums shadow-xs"
-                      >
-                        {badge}
-                      </span>
-                    )}
-                    {isActive && (
-                      <motion.span
-                        layoutId="active-nav-indicator"
-                        aria-hidden="true"
-                        className={`absolute left-0 right-0 bottom-0 h-[2px] rounded-full ${indicatorColor}`}
-                        transition={{
-                          type: 'spring',
-                          stiffness: 460,
-                          damping: 34,
-                        }}
-                      />
-                    )}
-                  </button>
-                );
-              })}
-
-              {official && (
-                <button
-                  type="button"
-                  aria-current={currentPage === 'admin' ? 'page' : undefined}
-                  onClick={() => onNavigate('admin')}
-                  className={`relative inline-flex items-center gap-1.5 py-2 px-1 text-sm font-medium transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
-                    currentPage === 'admin'
-                      ? 'text-[#3ddc97] font-semibold'
-                      : 'text-[#b4bac6] hover:text-[#f5f4f0]'
-                  }`}
-                >
-                  <LayoutDashboard className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Admin</span>
-                  {currentPage === 'admin' && (
-                    <motion.span
-                      layoutId="active-nav-indicator"
-                      aria-hidden="true"
-                      className="absolute left-0 right-0 bottom-0 h-[2px] rounded-full bg-[#3ddc97]"
-                      transition={{ type: 'spring', stiffness: 460, damping: 34 }}
-                    />
-                  )}
-                </button>
-              )}
-            </nav>
-          </div>
-
-          {/* Zone 2 (Middle): Centered Smart Council Text (No Logo) */}
-          <div className="shrink-0 flex items-center justify-center">
+        <div className="mx-auto max-w-[1440px] px-4 sm:px-8 h-16 flex items-center justify-between gap-4">
+          {/* Zone 1 (Left): Smart Council Wordmark */}
+          <div className="shrink-0 flex items-center">
             <button
               type="button"
-              onClick={() => handleMobileNavigate('home')}
-              className="inline-flex items-center justify-center whitespace-nowrap shrink-0 cursor-pointer focus-visible:rounded-md px-2 py-1"
+              onClick={() => handleNavigateSelect('home')}
+              className="inline-flex items-center justify-start whitespace-nowrap shrink-0 cursor-pointer focus-visible:rounded-md py-1"
             >
-              <span
-                className="karst-wordmark text-[#f5f4f0]"
-              >
+              <span className="karst-wordmark text-[#f5f4f0]">
                 {siteConfig.brand.name}
               </span>
             </button>
           </div>
 
-          {/* Zone 3 (Right): Desktop Controls (Theme + Auth) & Burger Button */}
-          <div className="min-w-0 flex items-center justify-end gap-2">
-            {/* Desktop-Only Theme Toggle */}
-            <button
-              type="button"
-              aria-label={
-                theme === 'dark'
-                  ? 'Switch to light theme'
-                  : 'Switch to dark theme'
-              }
-              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
-              onClick={onToggleTheme}
-              className="hidden lg:inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all cursor-pointer"
-            >
-              {theme === 'dark' ? (
-                <Sun className="h-4 w-4 text-[#facc15]" aria-hidden="true" />
-              ) : (
-                <Moon className="h-4 w-4 text-[#3ddc97]" aria-hidden="true" />
-              )}
-            </button>
-
-            {/* Desktop-Only Account & Quick Sign-Out */}
-            <div className="hidden lg:flex items-center shrink-0">
-              {official ? (
-                <div className="flex items-center gap-2 rounded-xl px-2.5 py-1 shrink-0">
-                  <ShieldCheck
-                    className="h-4 w-4 text-[#3ddc97] shrink-0"
-                    aria-hidden="true"
-                  />
-                  <div className="text-left leading-tight max-w-[132px] xl:max-w-[168px]">
-                    <p className="text-xs font-semibold text-[#f5f4f0] truncate">
-                      {official.name}
-                    </p>
-                    <p className="text-[10px] text-[#949ba8] truncate">
-                      {official.position}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    aria-label="Sign out of SSC Official session"
-                    title="Sign out"
-                    onClick={onSignOutOfficial}
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f87171] hover:bg-black/5 dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
-                  >
-                    <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                </div>
-              ) : student ? (
-                <div className="flex items-center gap-1 rounded-xl pl-1.5 pr-1 py-1 shrink-0">
-                  <button
-                    type="button"
-                    aria-label="Edit student identity in settings"
-                    title="Edit Identity Settings"
-                    onClick={openIdentityEditor}
-                    className="flex items-center gap-2 rounded-lg px-1.5 py-0.5 text-left hover:bg-black/5 dark:hover:bg-white/[0.05] transition-colors cursor-pointer max-w-[140px] xl:max-w-[175px]"
-                  >
-                    <GraduationCap
-                      className="h-4 w-4 text-[#facc15] shrink-0"
-                      aria-hidden="true"
-                    />
-                    <div className="min-w-0 leading-tight">
-                      <p className="text-xs font-semibold text-[#f5f4f0] truncate">
-                        {student.name}
-                      </p>
-                      <p className="text-[10px] text-[#949ba8] truncate">
-                        {student.yearCourse || 'SLAC Student'}
-                      </p>
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Sign out of student profile"
-                    title="Sign out"
-                    onClick={onSignOutStudent}
-                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f87171] hover:bg-black/5 dark:hover:bg-white/[0.06] transition-colors cursor-pointer"
-                  >
-                    <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
-                  </button>
-                </div>
-              ) : (
+          {/* Zone 2 (Center): Desktop Navigation Links (Never clipped) */}
+          <nav
+            aria-label="Main navigation"
+            className="hidden lg:flex items-center justify-center gap-5 xl:gap-7 shrink-0"
+          >
+            {siteConfig.header.navItems.map((item) => {
+              const isActive = currentPage === item.page;
+              const badge = getBadgeCount(item.page);
+              const tone = NAV_TONE_BY_PAGE[item.page];
+              const indicatorColor =
+                tone === 'amber'
+                  ? 'bg-[#e8985e]'
+                  : tone === 'red'
+                    ? 'bg-[#ef4444]'
+                    : tone === 'yellow'
+                      ? 'bg-[#facc15]'
+                      : 'bg-[#3ddc97]';
+              return (
                 <button
+                  key={item.label}
                   type="button"
-                  aria-label="Sign in as Student or SSC Official"
-                  onClick={() => onOpenAuth('student')}
-                  className="gemini-cta inline-flex items-center justify-center gap-1.5 h-10 px-4 text-xs font-bold uppercase tracking-[0.06em] rounded-full active:scale-[0.98] transition-transform duration-150 whitespace-nowrap shrink-0 cursor-pointer"
+                  aria-current={isActive ? 'page' : undefined}
+                  onClick={() => onNavigate(item.page)}
+                  className={`relative inline-flex items-center gap-1.5 py-2 px-0.5 text-sm font-medium transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
+                    isActive
+                      ? 'text-[#f5f4f0] font-semibold'
+                      : 'text-[#b4bac6] hover:text-[#f5f4f0]'
+                  }`}
                 >
-                  <LogIn className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span>{siteConfig.header.primaryButtonText}</span>
+                  <span>{item.label}</span>
+                  {badge > 0 && (
+                    <span
+                      aria-label={`${badge} new`}
+                      className="inline-flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#ef4444] px-1.5 text-[10px] font-bold text-white leading-none tabular-nums shadow-xs"
+                    >
+                      {badge}
+                    </span>
+                  )}
+                  {isActive && (
+                    <motion.span
+                      layoutId="active-nav-indicator"
+                      aria-hidden="true"
+                      className={`absolute left-0 right-0 bottom-0 h-[2px] rounded-full ${indicatorColor}`}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 460,
+                        damping: 34,
+                      }}
+                    />
+                  )}
                 </button>
-              )}
-            </div>
+              );
+            })}
 
-            {/* Burger Menu Toggle (< lg) */}
+            {official && (
+              <button
+                type="button"
+                onClick={() => onNavigate('admin')}
+                className="relative inline-flex items-center gap-1.5 py-2 px-1 text-sm font-medium text-[#b4bac6] hover:text-[#f5f4f0] transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <LayoutDashboard
+                  className="h-3.5 w-3.5 text-[#3ddc97]"
+                  aria-hidden="true"
+                />
+                <span>SSC Suite</span>
+              </button>
+            )}
+          </nav>
+
+          {/* Zone 3 (Right): Sign In CTA (when signed out) + Menu Drawer Toggle */}
+          <div className="shrink-0 flex items-center justify-end gap-2.5">
+            {!official && !student && (
+              <button
+                type="button"
+                aria-label="Sign in as Student or SSC Official"
+                onClick={() => onOpenAuth('student')}
+                className="hidden sm:inline-flex items-center justify-center gap-1.5 h-9 px-3.5 text-xs font-semibold rounded-lg border border-white/[0.16] bg-[#121620] text-[#f5f4f0] hover:border-white/[0.28] active:scale-[0.98] transition-all whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <LogIn className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
+                <span>{siteConfig.header.primaryButtonText}</span>
+              </button>
+            )}
+
+            {/* Menu Drawer Button (Available on all screen sizes; houses Theme Toggle & User Profile) */}
             <button
               type="button"
               aria-label={
-                mobileMenuOpen
-                  ? 'Close navigation menu'
-                  : 'Open navigation menu'
+                menuDrawerOpen ? 'Close menu drawer' : 'Open menu drawer'
               }
-              aria-expanded={mobileMenuOpen}
-              aria-controls="mobile-nav-drawer"
-              onClick={() => setMobileMenuOpen((prev) => !prev)}
-              className="relative inline-flex lg:hidden h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[#f5f4f0] hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-transform duration-150 cursor-pointer"
+              aria-expanded={menuDrawerOpen}
+              aria-controls="portal-menu-drawer"
+              onClick={() => setMenuDrawerOpen((prev) => !prev)}
+              className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/[0.14] bg-[#121620]/70 text-[#f5f4f0] hover:border-white/[0.28] active:scale-95 transition-all duration-150 cursor-pointer"
             >
-              {mobileMenuOpen ? (
-                <X className="h-5 w-5" aria-hidden="true" />
+              {menuDrawerOpen ? (
+                <X className="h-4.5 w-4.5" aria-hidden="true" />
               ) : (
-                <Menu className="h-5 w-5" aria-hidden="true" />
+                <Menu className="h-4.5 w-4.5" aria-hidden="true" />
               )}
-              {!mobileMenuOpen && totalUnread > 0 && (
+              {!menuDrawerOpen && (official || student) && totalUnread === 0 && (
+                <span
+                  aria-hidden="true"
+                  className={`absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-[#0d1017] ${
+                    official ? 'bg-[#3ddc97]' : 'bg-[#facc15]'
+                  }`}
+                />
+              )}
+              {!menuDrawerOpen && totalUnread > 0 && (
                 <span
                   aria-label={`${totalUnread} new notifications`}
-                  className="
-                    absolute -top-1 -right-1 inline-flex h-4.5 min-w-[18px]
-                    items-center justify-center rounded-full bg-[#ef4444] px-1
-                    text-[10px] font-bold text-white tabular-nums shadow-sm
-                  "
+                  className="absolute -top-1.5 -right-1.5 inline-flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#ef4444] px-1 text-[10px] font-bold text-white tabular-nums shadow-sm"
                 >
                   {totalUnread}
                 </span>
@@ -502,43 +438,41 @@ export function Header({
             </button>
           </div>
         </div>
-
-        {/* Aligned Color-Coded Sub-Navigation Bar Below Header on Inner Pages (< lg) */}
-        {currentPage !== 'home' && !mobileMenuOpen && (
-          <div className="lg:hidden bg-transparent">
-            <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-1.5">
-              <nav aria-label="Mobile quick navigation" className="w-full">
-                <ResistiveFilterBar
-                  surface="nav"
-                  compact
-                  ariaLabel="Mobile quick navigation"
-                  value={currentPage}
-                  onChange={(page) => handleMobileNavigate(page)}
-                  options={mobileNavOptions}
-                  className="w-full"
-                />
-              </nav>
-            </div>
-          </div>
-        )}
       </header>
 
       {/* In-Flow Spacer Matching Fixed Header Height on Inner Pages */}
       <div
         aria-hidden="true"
         className={
-          currentPage !== 'home'
-            ? 'h-[112px] lg:h-16 shrink-0'
-            : 'h-0 shrink-0'
+          currentPage !== 'home' ? 'h-16 shrink-0' : 'h-0 shrink-0'
         }
       />
 
-      {/* Portaled Burger Menu Backdrop + Clean GPU-Accelerated Dropdown Sheet */}
+      {/* Separate In-Page Mobile Section Switcher Pill Bar (< lg) */}
+      {currentPage !== 'home' && (
+        <div className="lg:hidden mx-auto w-full max-w-[1440px] px-4 sm:px-8 pt-3.5 pb-1.5">
+          <div className="rounded-xl border border-white/[0.14] bg-[#121620]/90 backdrop-blur-md p-1.5 shadow-sm">
+            <nav aria-label="Mobile section switcher" className="w-full">
+              <ResistiveFilterBar
+                surface="nav"
+                compact
+                ariaLabel="Mobile section switcher"
+                value={currentPage}
+                onChange={(page) => handleNavigateSelect(page)}
+                options={mobileNavOptions}
+                className="w-full"
+              />
+            </nav>
+          </div>
+        </div>
+      )}
+
+      {/* Portaled Menu Drawer (Houses Navigation, Theme Toggle, and User Profile) */}
       {typeof document !== 'undefined' &&
         createPortal(
           <AnimatePresence>
-            {mobileMenuOpen && (
-              <div className="fixed inset-0 z-40 lg:hidden">
+            {menuDrawerOpen && (
+              <div className="fixed inset-0 z-40">
                 {/* Blurred Background Overlay */}
                 <motion.div
                   aria-hidden="true"
@@ -546,29 +480,200 @@ export function Header({
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.16, ease: 'easeOut' }}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="fixed inset-0 bg-black/60 backdrop-blur-sm will-change-[opacity] touch-none select-none"
+                  onClick={() => setMenuDrawerOpen(false)}
+                  className="fixed inset-0 bg-black/50 backdrop-blur-xs will-change-[opacity] touch-none select-none"
                 />
 
-                {/* Fixed GPU-Composited Karst Boxy Outer Sheet with Clean Rounded Inner Cards */}
+                {/* Menu Sheet: Full width below header on mobile, right-aligned floating panel on desktop */}
                 <motion.div
-                  id="mobile-nav-drawer"
+                  id="portal-menu-drawer"
                   role="dialog"
                   aria-modal="true"
-                  aria-label="Mobile navigation menu"
-                  initial={{ opacity: 0, y: -8, scaleY: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scaleY: 1 }}
-                  exit={{ opacity: 0, y: -6, scaleY: 0.98 }}
+                  aria-label="Portal menu and account settings"
+                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
                   transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                  style={{ transformOrigin: 'top center' }}
-                  className="fixed top-16 left-0 right-0 z-50 overflow-hidden border-b border-white/[0.16] bg-[#0d1017] shadow-2xl will-change-[transform,opacity]"
+                  style={{ transformOrigin: 'top right' }}
+                  className="fixed top-[68px] left-3 right-3 sm:left-auto sm:right-6 lg:right-8 z-50 sm:w-[380px] rounded-2xl overflow-hidden border border-white/[0.16] bg-[#0d1017] shadow-2xl will-change-[transform,opacity]"
                 >
-                  <div className="mx-auto max-w-[1440px] px-4 sm:px-8 py-4 space-y-5 max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain no-scrollbar touch-pan-y">
-                    {/* Section 1: Portal Navigation Pages */}
+                  <div className="p-4 sm:p-5 space-y-4 max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain no-scrollbar touch-pan-y">
+                    {/* Section 1: Signed-In User Profile or Sign-In Action */}
                     <div className="space-y-2.5">
-                      <div className="flex items-center justify-between px-1 text-xs text-[#949ba8]">
+                      <div className="flex items-center justify-between px-0.5 text-xs text-[#949ba8]">
                         <span className="font-semibold text-[#f5f4f0]">
-                          Navigation
+                          Account
+                        </span>
+                        <span>
+                          {official
+                            ? 'Council Official'
+                            : student
+                              ? 'Student'
+                              : 'Guest'}
+                        </span>
+                      </div>
+
+                      {official ? (
+                        <div className="rounded-xl border border-white/[0.14] bg-[#121620] p-3.5 space-y-3">
+                          <div className="flex items-start justify-between gap-2.5">
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <ShieldCheck
+                                className="h-5 w-5 text-[#3ddc97] shrink-0 mt-0.5"
+                                aria-hidden="true"
+                              />
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-[#f5f4f0] break-words">
+                                  {official.name}
+                                </p>
+                                <p className="text-xs text-[#949ba8] break-words">
+                                  {official.position}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleNavigateSelect('admin')}
+                              className="inline-flex w-full min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-white/[0.16] bg-[#181d29] px-3 py-1.5 text-xs font-semibold text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
+                            >
+                              <LayoutDashboard
+                                className="h-3.5 w-3.5 text-[#3ddc97]"
+                                aria-hidden="true"
+                              />
+                              <span>SSC Suite</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMenuDrawerOpen(false);
+                                onSignOutOfficial();
+                              }}
+                              className="inline-flex w-full min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-[#fca5a5] hover:bg-red-500/20 transition-colors cursor-pointer"
+                            >
+                              <LogOut
+                                className="h-3.5 w-3.5 shrink-0"
+                                aria-hidden="true"
+                              />
+                              <span>Sign Out</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : student ? (
+                        <div className="rounded-xl border border-white/[0.14] bg-[#121620] p-3.5 space-y-3">
+                          <div className="flex items-start justify-between gap-2.5">
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <GraduationCap
+                                className="h-5 w-5 text-[#facc15] shrink-0 mt-0.5"
+                                aria-hidden="true"
+                              />
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-[#f5f4f0] break-words">
+                                  {student.name}
+                                </p>
+                                <p className="text-xs text-[#949ba8] break-words">
+                                  {student.yearCourse || 'SLAC Student'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMenuDrawerOpen(false);
+                                openIdentityEditor();
+                              }}
+                              className="inline-flex w-full min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-white/[0.16] bg-[#181d29] px-3 py-1.5 text-xs font-semibold text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
+                            >
+                              <Edit3
+                                className="h-3.5 w-3.5 text-[#3ddc97]"
+                                aria-hidden="true"
+                              />
+                              <span>Edit Profile</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMenuDrawerOpen(false);
+                                onSignOutStudent();
+                              }}
+                              className="inline-flex w-full min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-[#fca5a5] hover:bg-red-500/20 transition-colors cursor-pointer"
+                            >
+                              <LogOut
+                                className="h-3.5 w-3.5 shrink-0"
+                                aria-hidden="true"
+                              />
+                              <span>Sign Out</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuDrawerOpen(false);
+                            onOpenAuth('student');
+                          }}
+                          className="gemini-cta inline-flex w-full min-h-[42px] items-center justify-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold cursor-pointer"
+                        >
+                          <LogIn
+                            className="h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          />
+                          <span>{siteConfig.header.primaryButtonText}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Section 2: Appearance / Theme Toggle */}
+                    <div className="pt-3 border-t border-white/[0.12] space-y-2">
+                      <div className="flex items-center justify-between px-0.5 text-xs text-[#949ba8]">
+                        <div className="flex items-center gap-1.5 font-semibold text-[#f5f4f0]">
+                          <Settings
+                            className="h-3.5 w-3.5 text-[#3ddc97]"
+                            aria-hidden="true"
+                          />
+                          <span>Appearance</span>
+                        </div>
+                        <span>
+                          {theme === 'dark' ? 'Dark Theme' : 'Light Theme'}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={onToggleTheme}
+                        className="flex w-full min-h-[42px] items-center justify-between gap-2 rounded-xl border border-white/[0.14] bg-[#121620] px-3.5 py-2 text-xs font-semibold text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
+                      >
+                        <span className="text-[#b4bac6]">Theme Mode</span>
+                        <span className="inline-flex items-center gap-2 text-[#f5f4f0]">
+                          {theme === 'dark' ? (
+                            <>
+                              <Sun
+                                className="h-4 w-4 text-[#facc15]"
+                                aria-hidden="true"
+                              />
+                              <span>Switch to Light</span>
+                            </>
+                          ) : (
+                            <>
+                              <Moon
+                                className="h-4 w-4 text-[#3ddc97]"
+                                aria-hidden="true"
+                              />
+                              <span>Switch to Dark</span>
+                            </>
+                          )}
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* Section 3: Portal Navigation Pages */}
+                    <div className="pt-3 border-t border-white/[0.12] space-y-2.5">
+                      <div className="flex items-center justify-between px-0.5 text-xs text-[#949ba8]">
+                        <span className="font-semibold text-[#f5f4f0]">
+                          Pages
                         </span>
                         <span className="tabular-nums">
                           {mobileNavOptions.length} sections
@@ -576,8 +681,8 @@ export function Header({
                       </div>
 
                       <nav
-                        aria-label="Mobile menu pages"
-                        className="grid grid-cols-1 sm:grid-cols-2 gap-2"
+                        aria-label="Menu drawer navigation"
+                        className="grid grid-cols-1 gap-1.5"
                       >
                         {mobileNavOptions.map((option) => {
                           const isActive = currentPage === option.value;
@@ -595,8 +700,8 @@ export function Header({
                               key={option.value}
                               type="button"
                               aria-current={isActive ? 'page' : undefined}
-                              onClick={() => handleMobileNavigate(option.value)}
-                              className={`flex w-full min-h-[46px] items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all cursor-pointer ${
+                              onClick={() => handleNavigateSelect(option.value)}
+                              className={`flex w-full min-h-[42px] items-center justify-between gap-3 rounded-xl px-3.5 py-2 text-sm font-medium transition-all cursor-pointer ${
                                 isActive
                                   ? 'bg-[#181d29] text-[#f5f4f0] border border-white/[0.24]'
                                   : 'bg-[#121620] text-[#b4bac6] hover:text-[#f5f4f0] border border-white/[0.1]'
@@ -619,7 +724,7 @@ export function Header({
                                 )}
                                 {isActive && (
                                   <span className={`font-semibold ${accentText}`}>
-                                    Current
+                                    Active
                                   </span>
                                 )}
                               </span>
@@ -627,156 +732,6 @@ export function Header({
                           );
                         })}
                       </nav>
-                    </div>
-
-                    {/* Section 2: Appearance & Account */}
-                    <div className="pt-4 border-t border-white/[0.12] space-y-3">
-                      <div className="flex items-center justify-between px-1 text-xs text-[#949ba8]">
-                        <div className="flex items-center gap-1.5 font-semibold text-[#f5f4f0]">
-                          <Settings
-                            className="h-3.5 w-3.5 text-[#3ddc97]"
-                            aria-hidden="true"
-                          />
-                          <span>Appearance &amp; Account</span>
-                        </div>
-                        <span>
-                          {theme === 'dark' ? 'Night Mode' : 'Daylight Mode'}
-                        </span>
-                      </div>
-
-                      {/* Theme Toggle Control (Clean Plain Text) */}
-                      <button
-                        type="button"
-                        onClick={onToggleTheme}
-                        className="flex w-full min-h-[46px] items-center justify-between gap-2 rounded-xl border border-white/[0.14] bg-[#121620] px-4 py-2.5 text-xs font-semibold text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
-                      >
-                        <span className="text-[#b4bac6]">Portal Theme</span>
-                        <span className="inline-flex items-center gap-2 text-[#f5f4f0]">
-                          {theme === 'dark' ? (
-                            <>
-                              <Sun
-                                className="h-4 w-4 text-[#facc15]"
-                                aria-hidden="true"
-                              />
-                              <span>Switch to Light (Day)</span>
-                            </>
-                          ) : (
-                            <>
-                              <Moon
-                                className="h-4 w-4 text-[#3ddc97]"
-                                aria-hidden="true"
-                              />
-                              <span>Switch to Dark (Night)</span>
-                            </>
-                          )}
-                        </span>
-                      </button>
-
-                      {/* Account & Identity Settings */}
-                      {official ? (
-                        <div className="rounded-xl border border-white/[0.14] bg-[#121620] p-4 space-y-3">
-                          <div className="flex items-start justify-between gap-2.5">
-                            <div className="flex items-start gap-2.5 min-w-0">
-                              <ShieldCheck
-                                className="h-5 w-5 text-[#3ddc97] shrink-0 mt-0.5"
-                                aria-hidden="true"
-                              />
-                              <div className="min-w-0">
-                                <p className="text-sm font-bold text-[#f5f4f0] break-words">
-                                  {official.name}
-                                </p>
-                                <p className="text-xs text-[#949ba8] break-words">
-                                  {official.position}
-                                </p>
-                              </div>
-                            </div>
-                            <span className="text-xs font-medium text-[#3ddc97] shrink-0">
-                              Official
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMobileMenuOpen(false);
-                              onSignOutOfficial();
-                            }}
-                            className="inline-flex w-full min-h-[42px] items-center justify-center gap-2 rounded-full border border-red-500/35 bg-red-500/10 px-4 py-2 text-xs font-semibold text-[#fca5a5] hover:bg-red-500/20 transition-colors cursor-pointer"
-                          >
-                            <LogOut
-                              className="h-4 w-4 shrink-0"
-                              aria-hidden="true"
-                            />
-                            <span>Sign Out</span>
-                          </button>
-                        </div>
-                      ) : student ? (
-                        <div className="rounded-xl border border-white/[0.14] bg-[#121620] p-4 space-y-3">
-                          <div className="flex items-start justify-between gap-2.5">
-                            <div className="flex items-start gap-2.5 min-w-0">
-                              <GraduationCap
-                                className="h-5 w-5 text-[#facc15] shrink-0 mt-0.5"
-                                aria-hidden="true"
-                              />
-                              <div className="min-w-0">
-                                <p className="text-sm font-bold text-[#f5f4f0] break-words">
-                                  {student.name}
-                                </p>
-                                <p className="text-xs text-[#949ba8] break-words">
-                                  {student.yearCourse || 'SLAC Student'}
-                                </p>
-                              </div>
-                            </div>
-                            <span className="text-xs font-medium text-[#949ba8] shrink-0">
-                              Student
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileMenuOpen(false);
-                                openIdentityEditor();
-                              }}
-                              className="inline-flex w-full min-h-[42px] items-center justify-center gap-1.5 rounded-full border border-white/[0.16] bg-[#181d29] px-3 py-2 text-xs font-semibold text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
-                            >
-                              <Edit3
-                                className="h-3.5 w-3.5 text-[#3ddc97]"
-                                aria-hidden="true"
-                              />
-                              <span>Edit Identity</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setMobileMenuOpen(false);
-                                onSignOutStudent();
-                              }}
-                              className="inline-flex w-full min-h-[42px] items-center justify-center gap-2 rounded-full border border-red-500/35 bg-red-500/10 px-3 py-2 text-xs font-semibold text-[#fca5a5] hover:bg-red-500/20 transition-colors cursor-pointer"
-                            >
-                              <LogOut
-                                className="h-4 w-4 shrink-0"
-                                aria-hidden="true"
-                              />
-                              <span>Sign Out</span>
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMobileMenuOpen(false);
-                            onOpenAuth('student');
-                          }}
-                          className="gemini-cta inline-flex w-full min-h-[46px] items-center justify-center gap-2 rounded-full px-5 py-2.5 text-xs font-bold uppercase tracking-[0.08em] cursor-pointer"
-                        >
-                          <LogIn
-                            className="h-4 w-4 shrink-0"
-                            aria-hidden="true"
-                          />
-                          <span>{siteConfig.header.primaryButtonText}</span>
-                        </button>
-                      )}
                     </div>
                   </div>
                 </motion.div>
@@ -944,13 +899,13 @@ export function Header({
                       <button
                         type="button"
                         onClick={() => setIdentityModalOpen(false)}
-                        className="min-h-[40px] px-4 py-2 rounded-full border border-white/[0.14] bg-[#181d29] text-xs font-medium text-[#b4bac6] cursor-pointer"
+                        className="min-h-[38px] px-4 py-1.5 rounded-lg border border-white/[0.14] bg-[#181d29] text-xs font-medium text-[#b4bac6] cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="gemini-cta min-h-[40px] px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wider cursor-pointer"
+                        className="gemini-cta min-h-[38px] px-4 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
                       >
                         Save Identity
                       </button>

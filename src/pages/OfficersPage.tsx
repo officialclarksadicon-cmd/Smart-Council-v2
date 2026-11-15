@@ -346,13 +346,13 @@ export function OfficersPage({
             <button
               type="button"
               onClick={() => onNavigate('admin')}
-              className="inline-flex items-center gap-1.5 min-h-[42px] px-4 py-2 text-xs sm:text-sm font-semibold rounded-full border border-white/[0.16] bg-[#0b0e15] text-[#f5f4f0] hover:bg-[#181d29] whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-lg border border-white/[0.14] bg-[#0b0e15] text-[#f5f4f0] hover:border-white/[0.28] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <LayoutDashboard
-                className="h-4 w-4 text-[#3ddc97]"
+                className="h-3.5 w-3.5 text-[#3ddc97]"
                 aria-hidden="true"
               />
-              <span>Manage Officers in Admin</span>
+              <span>Manage Officers</span>
             </button>
           )}
         </ScrollReveal>

@@ -72,9 +72,9 @@ export function FaqPage({ faqs, official, onNavigate }: FaqPageProps) {
                 <button
                   type="button"
                   onClick={() => onNavigate('admin')}
-                  className="gemini-cta inline-flex items-center gap-2 min-h-[44px] px-5 py-2.5 text-xs sm:text-sm font-bold uppercase tracking-wider rounded-full active:scale-[0.98] transition-transform shrink-0 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-lg border border-white/[0.14] bg-[#0b0e15] text-[#f5f4f0] hover:border-white/[0.28] transition-colors shrink-0 cursor-pointer"
                 >
-                  <Edit3 className="h-4 w-4" aria-hidden="true" />
+                  <Edit3 className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
                   <span>Edit FAQs</span>
                 </button>
               )}

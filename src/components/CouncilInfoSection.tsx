@@ -131,10 +131,10 @@ export function CouncilInfoSection({
                   <button
                     type="button"
                     onClick={openEditor}
-                    className="inline-flex items-center gap-1.5 rounded-none border border-[#3ddc97]/35 bg-[#3ddc97]/12 px-3 py-1.5 text-xs font-semibold text-[#3ddc97] hover:bg-[#3ddc97]/20 transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.16] bg-[#0b0e15] px-2.5 py-1.5 text-xs font-medium text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
                   >
-                    <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span>Edit About Photo &amp; Logo</span>
+                    <Edit3 className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
+                    <span>Edit Photo &amp; Logo</span>
                   </button>
                 )}
               </div>
@@ -222,21 +222,21 @@ export function CouncilInfoSection({
                   <button
                     type="button"
                     onClick={openEditor}
-                    className="photo-overlay absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-none bg-[#0b0e15]/90 border border-white/[0.2] px-3 py-1.5 text-xs font-semibold text-[#f5f4f0] hover:border-[#3ddc97] hover:text-[#3ddc97] shadow-lg transition-colors cursor-pointer"
+                    className="photo-overlay absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-lg bg-[#0b0e15]/90 border border-white/[0.18] px-2.5 py-1.5 text-xs font-medium text-[#f5f4f0] hover:border-white/[0.32] shadow-md transition-colors cursor-pointer"
                   >
                     <Camera
                       className="h-3.5 w-3.5 text-[#3ddc97]"
                       aria-hidden="true"
                     />
-                    <span>Change Photo</span>
+                    <span>Photo</span>
                   </button>
                 )}
               </div>
-              <div className="px-6 py-4 border-t border-white/[0.14] flex items-center justify-between text-xs text-[#b4bac6] bg-[#121620]">
-                <span className="font-semibold text-[#f5f4f0]">
+              <div className="px-6 py-3.5 border-t border-white/[0.14] flex items-center justify-between text-xs text-[#b4bac6] bg-[#121620]">
+                <span className="font-medium text-[#f5f4f0]">
                   {siteConfig.brand.institution}
                 </span>
-                <span className="tabular-nums font-semibold text-[#facc15]">
+                <span className="tabular-nums font-medium text-[#949ba8]">
                   Est. {councilInfo.establishedYear}
                 </span>
               </div>
@@ -264,7 +264,7 @@ export function CouncilInfoSection({
 
                 <div className="flex flex-col gap-3">
                   {/* Office Room Notice */}
-                  <div className="rounded-none border border-white/[0.14] bg-[#0b0e15] px-4 py-3.5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-5 text-xs sm:text-sm">
+                  <div className="rounded-lg border border-white/[0.14] bg-[#0b0e15] px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-5 text-xs sm:text-sm">
                     <span className="inline-flex items-center gap-1.5 font-semibold text-[#f5f4f0]">
                       <MapPin
                         className="h-4 w-4 text-[#3ddc97] shrink-0"
@@ -272,8 +272,8 @@ export function CouncilInfoSection({
                       />
                       {councilInfo.officeLocation}
                     </span>
-                    <span className="inline-flex items-center gap-1.5 text-[#facc15] font-medium">
-                      <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span className="inline-flex items-center gap-1.5 text-[#b4bac6] font-medium">
+                      <Clock className="h-4 w-4 text-[#facc15] shrink-0" aria-hidden="true" />
                       {councilInfo.availabilityTitle}
                     </span>
                   </div>
@@ -283,16 +283,16 @@ export function CouncilInfoSection({
                     href={councilInfo.facebookPageUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="group inline-flex items-center justify-between gap-3 rounded-none border border-white/[0.14] bg-[#0b0e15] hover:border-white/[0.28] hover:bg-[#181d29] px-4 py-3.5 transition-colors"
+                    className="group inline-flex items-center justify-between gap-3 rounded-lg border border-white/[0.14] bg-[#0b0e15] hover:border-white/[0.28] hover:bg-[#181d29] px-4 py-3 transition-colors"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <span
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-none bg-[#1877F2] text-white shrink-0"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[#1877F2] text-white shrink-0"
                         aria-hidden="true"
                       >
                         <svg
-                          width="18"
-                          height="18"
+                          width="16"
+                          height="16"
                           viewBox="0 0 24 24"
                           fill="currentColor"
                         >
@@ -301,7 +301,7 @@ export function CouncilInfoSection({
                       </span>
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-[#f5f4f0] group-hover:text-[#3ddc97] truncate transition-colors">
-                          Follow {councilInfo.facebookPageName} on Facebook
+                          {councilInfo.facebookPageName}
                         </p>
                         <p className="text-xs text-[#949ba8] truncate">
                           {councilInfo.facebookPathLabel}
@@ -316,8 +316,8 @@ export function CouncilInfoSection({
                 </div>
               </div>
 
-              <div className="lg:col-span-5 p-6 sm:p-10 lg:p-12 flex flex-col justify-center gap-4 bg-[#0b0e15]">
-                <div className="flex items-center justify-between gap-3 rounded-none border border-white/[0.14] bg-[#121620] px-4 py-3.5">
+              <div className="lg:col-span-5 p-6 sm:p-10 lg:p-12 flex flex-col justify-center gap-3.5 bg-[#0b0e15]">
+                <div className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.14] bg-[#121620] px-3.5 py-2.5">
                   <span className="text-sm font-medium text-[#f5f4f0] truncate">
                     {councilInfo.supportEmail}
                   </span>
@@ -325,7 +325,7 @@ export function CouncilInfoSection({
                   <button
                     type="button"
                     onClick={handleCopyEmail}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 min-h-[40px] text-xs font-semibold rounded-none border border-white/[0.14] bg-[#181d29] text-[#f5f4f0] hover:border-white/[0.28] active:scale-95 transition-transform whitespace-nowrap shrink-0 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 min-h-[34px] text-xs font-medium rounded-md border border-white/[0.14] bg-[#181d29] text-[#f5f4f0] hover:border-white/[0.28] active:scale-95 transition-transform whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     {copied ? (
                       <>
@@ -344,10 +344,10 @@ export function CouncilInfoSection({
                   </button>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2.5">
                   <a
                     href={`mailto:${councilInfo.supportEmail}`}
-                    className="gemini-cta flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[48px] text-xs sm:text-sm font-bold uppercase tracking-[0.06em] rounded-full active:scale-[0.98] transition-transform whitespace-nowrap shrink-0"
+                    className="gemini-cta flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[42px] text-xs sm:text-sm font-semibold rounded-lg active:scale-[0.98] transition-transform whitespace-nowrap shrink-0"
                   >
                     <Mail className="h-4 w-4" aria-hidden="true" />
                     <span>{councilSection.supportCard.emailButtonLabel}</span>
@@ -356,7 +356,7 @@ export function CouncilInfoSection({
                   <button
                     type="button"
                     onClick={onOpenContact}
-                    className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[48px] text-xs sm:text-sm font-bold uppercase tracking-[0.06em] rounded-full border border-white/[0.18] text-[#f5f4f0] bg-[#121620] hover:border-white/[0.32] active:scale-[0.98] transition-transform whitespace-nowrap shrink-0 cursor-pointer"
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[42px] text-xs sm:text-sm font-semibold rounded-lg border border-white/[0.16] text-[#f5f4f0] bg-[#121620] hover:border-white/[0.3] active:scale-[0.98] transition-transform whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     <MessageSquare className="h-4 w-4" aria-hidden="true" />
                     <span>{councilSection.supportCard.onlineFormLabel}</span>

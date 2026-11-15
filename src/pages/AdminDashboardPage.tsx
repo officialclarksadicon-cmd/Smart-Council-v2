@@ -1,21 +1,36 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  Activity,
   AlertTriangle,
-  ArrowLeft,
+  ArrowUpRight,
   Calendar,
   Check,
+  CheckCircle2,
+  ChevronRight,
+  Circle,
   Copy,
   Edit3,
+  ExternalLink,
   Eye,
   EyeOff,
+  FileText,
+  HelpCircle,
+  Home,
   Image as ImageIcon,
   KeyRound,
+  LayoutDashboard,
+  LogOut,
   Megaphone,
+  Menu,
   MessageSquare,
+  Moon,
   Plus,
   RefreshCw,
+  Settings,
   ShieldCheck,
+  Sparkles,
+  Sun,
   Tag,
   Trash2,
   Users,
@@ -36,13 +51,13 @@ import {
   PortalFilters,
   siteConfig,
 } from '../siteConfig';
+import type { ThemeMode } from '../App';
 import {
   CalendarDatePicker,
   ClockTimePicker,
 } from '../components/DateTimePicker';
 import { ImageKitUploader } from '../components/ImageKitUploader';
 import { ResistiveFilterBar } from '../components/ResistiveFilterBar';
-import { PageSubNav } from '../components/PageSubNav';
 import {
   deleteAnnouncementFromFirestore,
   deleteCouncilAccountFromFirestore,
@@ -69,6 +84,12 @@ import {
   stripImageFramingHash,
 } from '../utils/imagekit';
 
+export interface PortalVisitStats {
+  totalVisits: number;
+  todayVisits: number;
+  pageViews: number;
+}
+
 interface AdminDashboardPageProps {
   official: OfficialProfile;
   announcements: AnnouncementItem[];
@@ -79,6 +100,10 @@ interface AdminDashboardPageProps {
   faqs: FaqItem[];
   filters: PortalFilters;
   branding: PortalBranding;
+  visitStats?: PortalVisitStats;
+  theme?: ThemeMode;
+  onToggleTheme?: () => void;
+  onSignOutOfficial?: () => void;
   onNavigate: (page: PageRoute) => void;
   onSetAnnouncements: (items: AnnouncementItem[]) => void;
   onSetEvents: (items: GalleryEventItem[]) => void;
@@ -93,6 +118,7 @@ interface AdminDashboardPageProps {
 }
 
 type AdminTab =
+  | 'overview'
   | 'branding'
   | 'filters'
   | 'announcements'
@@ -136,6 +162,13 @@ function createPasscode(role: 'admin' | 'official'): string {
   return role === 'admin' ? `SLAC-ADM-${suffix}` : `SLAC-SSC-${suffix}`;
 }
 
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'SC';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
 export function AdminDashboardPage({
   official,
   announcements,
@@ -146,6 +179,10 @@ export function AdminDashboardPage({
   faqs,
   filters,
   branding,
+  visitStats = { totalVisits: 1, todayVisits: 1, pageViews: 1 },
+  theme = 'dark',
+  onToggleTheme,
+  onSignOutOfficial,
   onNavigate,
   onSetAnnouncements,
   onSetEvents,
@@ -155,12 +192,10 @@ export function AdminDashboardPage({
   onSetFaqs,
   onSetFilters,
   onUpdateBranding,
-  onResetDefaults,
   onNotify,
 }: AdminDashboardPageProps) {
-  const [activeTab, setActiveTab] = useState<AdminTab>('branding');
-  const [backupNotice, setBackupNotice] = useState('');
-  const [backupError, setBackupError] = useState('');
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   // Discard / Keep Editing Confirmation State for Admin Editor Pop-Ups
   const [discardPromptTarget, setDiscardPromptTarget] =
@@ -247,6 +282,23 @@ export function AdminDashboardPage({
 
   const activeOfficerRoster =
     officerTerms.find((t) => t.term === selectedOfficerTerm) ?? officerTerms[0];
+
+  const totalOfficersCount = useMemo(
+    () =>
+      officerTerms.reduce(
+        (acc, roster) =>
+          acc +
+          roster.officers.filter((m) => m.name.trim().length > 0).length,
+        0
+      ),
+    [officerTerms]
+  );
+
+  const firstName = useMemo(() => {
+    const clean = official.name.trim();
+    if (!clean) return 'Official';
+    return clean.split(/\s+/)[0];
+  }, [official.name]);
 
   // Restore any ongoing persistent admin draft from sessionStorage on mount
   useEffect(() => {
@@ -480,24 +532,6 @@ export function AdminDashboardPage({
     faqFormOpen,
     brandingModalOpen,
   ]);
-
-  const tabs: Array<{ id: AdminTab; label: string }> = [
-    { id: 'branding', label: 'Branding & Photos' },
-    { id: 'announcements', label: `Announcements (${announcements.length})` },
-    { id: 'events', label: `Events (${events.length})` },
-    { id: 'officers', label: 'Officers Archive' },
-    ...(isWebAdmin
-      ? [
-          {
-            id: 'accounts' as AdminTab,
-            label: `Officer Accounts (${accounts.length})`,
-          },
-        ]
-      : []),
-    { id: 'forum', label: `Forum (${forumThreads.length})` },
-    { id: 'faqs', label: `FAQ (${faqs.length})` },
-    { id: 'filters', label: 'Custom Filters' },
-  ];
 
   // --- Branding & Stock Photos Save ---
   const openBrandingModal = () => {
@@ -1047,7 +1081,6 @@ export function AdminDashboardPage({
     const adminsCount = accounts.filter((a) => a.role === 'admin').length;
     if (target.role === 'admin' && adminsCount <= 1) return;
     onSetAccounts(accounts.filter((a) => a.id !== accId));
-    // Also remove any linked officer entry from local roster state
     onSetOfficerTerms(
       officerTerms
         .map((roster) => ({
@@ -1164,6 +1197,223 @@ export function AdminDashboardPage({
     void deleteFaqFromFirestore(faqId).catch(() => undefined);
   };
 
+  // --- Strapi-Style Overview Computed Tasks & Entries ---
+  const suiteTasks = useMemo(
+    () => [
+      {
+        id: 'task-ann',
+        label: 'Publish a campus announcement',
+        done: announcements.length > 0,
+        action: () => {
+          setActiveTab('announcements');
+          openNewAnnouncement();
+        },
+      },
+      {
+        id: 'task-evt',
+        label: 'Schedule an upcoming campus event',
+        done: events.length > 0,
+        action: () => {
+          setActiveTab('events');
+          openNewEvent();
+        },
+      },
+      {
+        id: 'task-off',
+        label: 'Add council officers to the roster',
+        done: totalOfficersCount > 0,
+        action: () => {
+          setActiveTab('officers');
+        },
+      },
+      {
+        id: 'task-brand',
+        label: 'Verify portal logo & About SLAC photo',
+        done: Boolean(branding.customLogoUrl && branding.aboutSlacImage),
+        action: () => {
+          setActiveTab('branding');
+        },
+      },
+    ],
+    [
+      announcements.length,
+      branding.aboutSlacImage,
+      branding.customLogoUrl,
+      events.length,
+      totalOfficersCount,
+    ]
+  );
+
+  const completedTasksCount = suiteTasks.filter((t) => t.done).length;
+
+  const recentEditedEntries = useMemo(() => {
+    const items: Array<{
+      id: string;
+      title: string;
+      collection: string;
+      meta: string;
+      onOpen: () => void;
+    }> = [];
+
+    announcements.slice(0, 2).forEach((a) =>
+      items.push({
+        id: `edit-ann-${a.id}`,
+        title: a.title,
+        collection: 'Announcement',
+        meta: a.date,
+        onOpen: () => {
+          setActiveTab('announcements');
+          openEditAnnouncement(a);
+        },
+      })
+    );
+    events.slice(0, 2).forEach((ev) =>
+      items.push({
+        id: `edit-evt-${ev.id}`,
+        title: ev.title,
+        collection: 'Event',
+        meta: ev.date,
+        onOpen: () => {
+          setActiveTab('events');
+          openEditEvent(ev);
+        },
+      })
+    );
+    faqs.slice(0, 2).forEach((f) =>
+      items.push({
+        id: `edit-faq-${f.id}`,
+        title: f.question,
+        collection: 'FAQ',
+        meta: f.category,
+        onOpen: () => {
+          setActiveTab('faqs');
+          openEditFaq(f);
+        },
+      })
+    );
+    return items.slice(0, 4);
+  }, [announcements, events, faqs]);
+
+  const recentPublishedEntries = useMemo(() => {
+    const items: Array<{
+      id: string;
+      title: string;
+      collection: string;
+      meta: string;
+      tab: AdminTab;
+    }> = [];
+
+    announcements.slice(0, 2).forEach((a) =>
+      items.push({
+        id: `pub-ann-${a.id}`,
+        title: a.title,
+        collection: a.category,
+        meta: a.date,
+        tab: 'announcements',
+      })
+    );
+    events.slice(0, 2).forEach((ev) =>
+      items.push({
+        id: `pub-evt-${ev.id}`,
+        title: ev.title,
+        collection: ev.category,
+        meta: ev.date,
+        tab: 'events',
+      })
+    );
+    forumThreads.slice(0, 2).forEach((t) =>
+      items.push({
+        id: `pub-forum-${t.id}`,
+        title: t.title,
+        collection: t.topic,
+        meta: t.postedAt,
+        tab: 'forum',
+      })
+    );
+    return items.slice(0, 4);
+  }, [announcements, events, forumThreads]);
+
+  const navSections = [
+    {
+      group: 'Workspace',
+      items: [
+        {
+          id: 'overview' as AdminTab,
+          label: 'Home',
+          icon: Home,
+          count: undefined as number | undefined,
+        },
+      ],
+    },
+    {
+      group: 'Content Manager',
+      items: [
+        {
+          id: 'announcements' as AdminTab,
+          label: 'Announcements',
+          icon: Megaphone,
+          count: announcements.length,
+        },
+        {
+          id: 'events' as AdminTab,
+          label: 'Events',
+          icon: Calendar,
+          count: events.length,
+        },
+        {
+          id: 'officers' as AdminTab,
+          label: 'Officers Archive',
+          icon: Users,
+          count: totalOfficersCount,
+        },
+        {
+          id: 'forum' as AdminTab,
+          label: 'Student Forum',
+          icon: MessageSquare,
+          count: forumThreads.length,
+        },
+        {
+          id: 'faqs' as AdminTab,
+          label: 'FAQ',
+          icon: HelpCircle,
+          count: faqs.length,
+        },
+      ],
+    },
+    {
+      group: 'Settings',
+      items: [
+        {
+          id: 'branding' as AdminTab,
+          label: 'Branding & Media',
+          icon: ImageIcon,
+          count: 3,
+        },
+        ...(isWebAdmin
+          ? [
+              {
+                id: 'accounts' as AdminTab,
+                label: 'Officer Accounts',
+                icon: KeyRound,
+                count: accounts.length,
+              },
+            ]
+          : []),
+        {
+          id: 'filters' as AdminTab,
+          label: 'Custom Filters',
+          icon: Tag,
+          count:
+            filters.announcements.length +
+            filters.events.length +
+            filters.forum.length,
+        },
+      ],
+    },
+  ];
+
+  const allTabsFlat = navSections.flatMap((g) => g.items);
+
   const renderDiscardBanner = (target: ActiveEditorModal, label: string) => (
     <AnimatePresence>
       {discardPromptTarget === target && (
@@ -1191,14 +1441,14 @@ export function AdminDashboardPage({
             <button
               type="button"
               onClick={() => setDiscardPromptTarget(null)}
-              className="min-h-[36px] px-3.5 py-1.5 rounded-lg bg-[#3ddc97] text-xs font-semibold text-[#042412] hover:bg-[#34c786] cursor-pointer"
+              className="min-h-[34px] px-3 py-1 rounded-lg bg-[#3ddc97] text-xs font-semibold text-[#042412] hover:bg-[#34c786] cursor-pointer"
             >
               Keep Editing
             </button>
             <button
               type="button"
               onClick={() => confirmDiscardEditor(target)}
-              className="min-h-[36px] px-3.5 py-1.5 rounded-lg border border-[#ef4444]/40 bg-[#ef4444]/15 text-xs font-semibold text-[#fca5a5] hover:bg-[#ef4444]/25 cursor-pointer"
+              className="min-h-[34px] px-3 py-1 rounded-lg border border-[#ef4444]/40 bg-[#ef4444]/15 text-xs font-semibold text-[#fca5a5] hover:bg-[#ef4444]/25 cursor-pointer"
             >
               Discard Changes
             </button>
@@ -1209,83 +1459,759 @@ export function AdminDashboardPage({
   );
 
   return (
-    <section className="w-full border-b border-white/[0.14]">
-      <div className="mx-auto max-w-[1440px] border-x border-white/[0.14] bg-[#121620]">
-        <div className="px-4 sm:px-8 lg:px-12 py-6 lg:py-8 space-y-6">
-          <PageSubNav currentPage="admin" onNavigate={onNavigate} />
+    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-[#0b0e15] text-[#f5f4f0]">
+      {/* ====================================================================
+          DESKTOP STRAPI-STYLE LEFT SIDEBAR (>= lg)
+         ==================================================================== */}
+      <aside
+        aria-label="SSC Suite navigation"
+        className="hidden lg:flex lg:w-64 xl:w-68 shrink-0 flex-col justify-between border-r border-white/[0.12] bg-[#121620] select-none"
+      >
+        <div className="p-4 space-y-6">
+          {/* Top Brand Identity */}
+          <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="h-9 w-9 rounded-lg bg-[#3ddc97] text-[#042412] flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
+                <LayoutDashboard className="h-4.5 w-4.5" aria-hidden="true" />
+              </div>
+              <div className="min-w-0 leading-tight">
+                <p className="text-sm font-bold text-[#f5f4f0] truncate">
+                  SSC Suite
+                </p>
+                <p className="text-[11px] text-[#949ba8] truncate">
+                  Administration Panel
+                </p>
+              </div>
+            </div>
+          </div>
 
-          {/* Header Banner (Karst Outlined Frame) */}
-          <div className="border-b border-white/[0.14] pb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <div>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-[#f5f4f0]">
-                SSC Admin Dashboard
-              </h1>
-              <p className="mt-1.5 inline-flex flex-wrap items-center gap-2 text-xs sm:text-sm font-medium text-[#949ba8]">
-                <ShieldCheck
-                  className="h-4 w-4 text-[#3ddc97]"
-                  aria-hidden="true"
-                />
-                <span className="font-semibold text-[#f5f4f0]">
+          {/* Grouped Navigation Links */}
+          <div className="space-y-5">
+            {navSections.map((section) => (
+              <div key={section.group} className="space-y-1">
+                <p className="px-2.5 text-[11px] font-semibold uppercase tracking-wider text-[#949ba8]">
+                  {section.group}
+                </p>
+                <nav
+                  aria-label={section.group}
+                  className="space-y-0.5"
+                >
+                  {section.items.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setActiveTab(item.id)}
+                        className={`w-full flex items-center justify-between gap-2.5 rounded-lg px-2.5 py-2 text-xs sm:text-[13px] font-medium transition-colors cursor-pointer ${
+                          isActive
+                            ? 'bg-[#181d29] text-[#3ddc97] font-semibold border border-white/[0.14]'
+                            : 'text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-white/[0.04] border border-transparent'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2.5 min-w-0">
+                          <Icon
+                            className={`h-4 w-4 shrink-0 ${
+                              isActive ? 'text-[#3ddc97]' : 'text-[#949ba8]'
+                            }`}
+                            aria-hidden="true"
+                          />
+                          <span className="truncate">{item.label}</span>
+                        </span>
+                        {typeof item.count === 'number' && (
+                          <span className="text-[11px] text-[#949ba8] tabular-nums">
+                            {item.count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Bottom Actions: Theme, Live Website Link & Signed-In User */}
+        <div className="p-4 border-t border-white/[0.12] space-y-2.5">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => onNavigate('home')}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-lg border border-white/[0.14] bg-[#0b0e15] text-xs font-medium text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
+            >
+              <ExternalLink className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
+              <span>Live Portal</span>
+            </button>
+
+            {onToggleTheme && (
+              <button
+                type="button"
+                aria-label="Toggle theme"
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                onClick={onToggleTheme}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.14] bg-[#0b0e15] text-[#b4bac6] hover:text-[#f5f4f0] transition-colors cursor-pointer"
+              >
+                {theme === 'dark' ? (
+                  <Sun className="h-4 w-4 text-[#facc15]" aria-hidden="true" />
+                ) : (
+                  <Moon className="h-4 w-4 text-[#3ddc97]" aria-hidden="true" />
+                )}
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between gap-2.5 rounded-lg border border-white/[0.1] bg-[#0b0e15] px-2.5 py-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="h-7 w-7 rounded-full bg-[#181d29] border border-white/[0.16] flex items-center justify-center text-[11px] font-bold text-[#3ddc97] shrink-0">
+                {getInitials(official.name)}
+              </div>
+              <div className="min-w-0 leading-tight">
+                <p className="text-xs font-semibold text-[#f5f4f0] truncate">
                   {official.name}
-                </span>
-                <span>({official.position})</span>
+                </p>
+                <p className="text-[10px] text-[#949ba8] truncate">
+                  {official.position}
+                </p>
+              </div>
+            </div>
+
+            {onSignOutOfficial && (
+              <button
+                type="button"
+                aria-label="Sign out of SSC Suite"
+                title="Sign out"
+                onClick={onSignOutOfficial}
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#949ba8] hover:text-[#f87171] transition-colors cursor-pointer shrink-0"
+              >
+                <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {/* ====================================================================
+          MOBILE TOP BAR + RIGHT-ALIGNED MENU DRAWER (< lg)
+          Burger menu stays on the right side so it never jumps to the left
+         ==================================================================== */}
+      <div className="lg:hidden sticky top-0 z-40 border-b border-white/[0.12] bg-[#121620]/90 backdrop-blur-md">
+        <div className="px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+          {/* Left: SSC Suite Brand */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="h-8 w-8 rounded-lg bg-[#3ddc97] text-[#042412] flex items-center justify-center font-bold text-xs shrink-0">
+              <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+            </div>
+            <div className="min-w-0 leading-tight">
+              <p className="text-sm font-bold text-[#f5f4f0] truncate">
+                SSC Suite
+              </p>
+              <p className="text-[10px] text-[#949ba8] truncate">
+                {allTabsFlat.find((t) => t.id === activeTab)?.label ?? 'Home'}
               </p>
             </div>
+          </div>
+
+          {/* Right: Live Portal Button + Right-Side Menu Button */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => onNavigate('home')}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-white/[0.14] bg-[#0b0e15] text-xs font-medium text-[#f5f4f0] cursor-pointer"
+            >
+              <ExternalLink className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
+              <span>Portal</span>
+            </button>
 
             <button
               type="button"
-              onClick={openBrandingModal}
-              className="gemini-cta inline-flex items-center gap-2 min-h-[44px] px-5 py-2.5 text-xs sm:text-sm font-bold uppercase tracking-wider rounded-full whitespace-nowrap shrink-0 cursor-pointer"
+              aria-label={
+                mobileDrawerOpen ? 'Close SSC Suite menu' : 'Open SSC Suite menu'
+              }
+              aria-expanded={mobileDrawerOpen}
+              onClick={() => setMobileDrawerOpen((prev) => !prev)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.14] bg-[#0b0e15] text-[#f5f4f0] cursor-pointer"
             >
-              <ImageIcon className="h-4 w-4" aria-hidden="true" />
-              <span>Edit Logo &amp; About SLAC Photo</span>
+              {mobileDrawerOpen ? (
+                <X className="h-4.5 w-4.5" aria-hidden="true" />
+              ) : (
+                <Menu className="h-4.5 w-4.5" aria-hidden="true" />
+              )}
             </button>
           </div>
+        </div>
+      </div>
 
-          {/* Resistive Admin Navigation Tabs */}
-          <div className="pb-4 border-b border-white/[0.14]">
-            <ResistiveFilterBar
-              ariaLabel="Admin management sections"
-              value={activeTab}
-              onChange={setActiveTab}
-              options={tabs.map((tab) => ({ value: tab.id, label: tab.label }))}
-            />
+      {/* Separate Floating Mobile Module Switcher Bar Below Top Bar (< lg) */}
+      <div className="lg:hidden px-4 sm:px-6 pt-3 pb-1">
+        <div className="rounded-xl border border-white/[0.12] bg-[#121620] p-1.5">
+          <ResistiveFilterBar
+            ariaLabel="SSC Suite modules"
+            compact
+            value={activeTab}
+            onChange={setActiveTab}
+            options={allTabsFlat.map((t) => ({
+              value: t.id,
+              label:
+                typeof t.count === 'number'
+                  ? `${t.label} (${t.count})`
+                  : t.label,
+            }))}
+          />
+        </div>
+      </div>
+
+      {/* Mobile Right-Aligned Drawer Sheet */}
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <AnimatePresence>
+            {mobileDrawerOpen && (
+              <div className="fixed inset-0 z-50 lg:hidden">
+                <motion.div
+                  aria-hidden="true"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={() => setMobileDrawerOpen(false)}
+                  className="fixed inset-0 bg-black/55 backdrop-blur-xs"
+                />
+                <motion.div
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="SSC Suite navigation drawer"
+                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                  style={{ transformOrigin: 'top right' }}
+                  className="fixed top-[60px] left-3 right-3 sm:left-auto sm:right-6 sm:w-[340px] z-50 rounded-2xl border border-white/[0.16] bg-[#121620] p-4 shadow-2xl space-y-4 max-h-[calc(100dvh-5rem)] overflow-y-auto"
+                >
+                  {navSections.map((section) => (
+                    <div key={section.group} className="space-y-1.5">
+                      <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-[#949ba8]">
+                        {section.group}
+                      </p>
+                      <div className="grid grid-cols-1 gap-1">
+                        {section.items.map((item) => {
+                          const Icon = item.icon;
+                          const isActive = activeTab === item.id;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                setActiveTab(item.id);
+                                setMobileDrawerOpen(false);
+                              }}
+                              className={`w-full flex items-center justify-between gap-2.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+                                isActive
+                                  ? 'bg-[#181d29] text-[#3ddc97] border border-white/[0.16]'
+                                  : 'bg-[#0b0e15] text-[#b4bac6] hover:text-[#f5f4f0] border border-white/[0.08]'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                                <span>{item.label}</span>
+                              </span>
+                              {typeof item.count === 'number' && (
+                                <span className="text-[11px] text-[#949ba8] tabular-nums">
+                                  {item.count}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="pt-3 border-t border-white/[0.12] space-y-2">
+                    {onToggleTheme && (
+                      <button
+                        type="button"
+                        onClick={onToggleTheme}
+                        className="w-full flex items-center justify-between rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-xs font-semibold text-[#f5f4f0] cursor-pointer"
+                      >
+                        <span className="text-[#b4bac6]">Theme</span>
+                        <span className="inline-flex items-center gap-1.5">
+                          {theme === 'dark' ? (
+                            <>
+                              <Sun className="h-3.5 w-3.5 text-[#facc15]" />
+                              <span>Light Mode</span>
+                            </>
+                          ) : (
+                            <>
+                              <Moon className="h-3.5 w-3.5 text-[#3ddc97]" />
+                              <span>Dark Mode</span>
+                            </>
+                          )}
+                        </span>
+                      </button>
+                    )}
+
+                    <div className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-[#f5f4f0] truncate">
+                          {official.name}
+                        </p>
+                        <p className="text-[11px] text-[#949ba8] truncate">
+                          {official.position}
+                        </p>
+                      </div>
+                      {onSignOutOfficial && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMobileDrawerOpen(false);
+                            onSignOutOfficial();
+                          }}
+                          className="inline-flex items-center gap-1 rounded-md border border-red-500/35 bg-red-500/10 px-2.5 py-1 text-xs font-semibold text-[#fca5a5] cursor-pointer"
+                        >
+                          <LogOut className="h-3 w-3" />
+                          <span>Sign Out</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
+
+      {/* ====================================================================
+          MAIN STRAPI-STYLE WORKSPACE CANVAS
+         ==================================================================== */}
+      <div className="flex-1 min-w-0 px-4 sm:px-8 lg:px-10 py-6 lg:py-9 max-w-6xl mx-auto w-full space-y-6">
+        {/* TAB: OVERVIEW (STRAPI-STYLE HOME PANEL) */}
+        {activeTab === 'overview' && (
+          <div className="space-y-6">
+            {/* Greeting Header */}
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#f5f4f0]">
+                  Hello {firstName}
+                </h1>
+                <p className="mt-1 text-sm text-[#949ba8]">
+                  Welcome to your SSC Suite administration panel
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openBrandingModal}
+                  className="inline-flex items-center gap-1.5 min-h-[36px] px-3.5 py-1.5 rounded-lg border border-white/[0.14] bg-[#121620] text-xs font-medium text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
+                >
+                  <ImageIcon className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
+                  <span>Edit Photo &amp; Logo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={openNewAnnouncement}
+                  className="gemini-cta inline-flex items-center gap-1.5 min-h-[36px] px-3.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>New Entry</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Row 1: Strapi 2-Column Hero Card (Website Visits & Traffic + Your Tasks) */}
+            <div className="rounded-xl border border-white/[0.12] bg-[#121620] overflow-hidden">
+              <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.12]">
+                {/* Left Column: Website Visits & Live Portal Analytics */}
+                <div className="lg:col-span-6 p-5 sm:p-6 flex flex-col justify-between gap-5">
+                  <div className="space-y-3">
+                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#3ddc97]/15 text-[#3ddc97]">
+                      <Activity className="h-4.5 w-4.5" aria-hidden="true" />
+                    </div>
+                    <div>
+                      <h2 className="text-base sm:text-lg font-bold text-[#f5f4f0]">
+                        Website Visits &amp; Portal Activity
+                      </h2>
+                      <p className="mt-1 text-xs sm:text-sm text-[#b4bac6] leading-relaxed">
+                        Live student and visitor traffic across the Smart Council portal, synced with your active collections.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Website Visits Metrics Strip */}
+                  <div className="grid grid-cols-3 gap-2.5">
+                    <div className="rounded-lg border border-white/[0.1] bg-[#0b0e15] p-3">
+                      <p className="text-[11px] font-medium text-[#949ba8]">
+                        Total Visits
+                      </p>
+                      <p className="mt-1 text-lg sm:text-xl font-bold text-[#f5f4f0] tabular-nums">
+                        {visitStats.totalVisits.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-white/[0.1] bg-[#0b0e15] p-3">
+                      <p className="text-[11px] font-medium text-[#949ba8]">
+                        Today
+                      </p>
+                      <p className="mt-1 text-lg sm:text-xl font-bold text-[#3ddc97] tabular-nums">
+                        {visitStats.todayVisits.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-white/[0.1] bg-[#0b0e15] p-3">
+                      <p className="text-[11px] font-medium text-[#949ba8]">
+                        Page Views
+                      </p>
+                      <p className="mt-1 text-lg sm:text-xl font-bold text-[#facc15] tabular-nums">
+                        {visitStats.pageViews.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Progress & Quick Action */}
+                  <div className="space-y-3 pt-1">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs text-[#949ba8] tabular-nums">
+                        <span>Portal setup progress</span>
+                        <span className="font-semibold text-[#f5f4f0]">
+                          {completedTasksCount}/{suiteTasks.length}
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-[#0b0e15] overflow-hidden">
+                        <div
+                          style={{
+                            width: `${Math.round(
+                              (completedTasksCount / suiteTasks.length) * 100
+                            )}%`,
+                          }}
+                          className="h-full bg-[#3ddc97] transition-all duration-300"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('announcements')}
+                        className="inline-flex items-center gap-1.5 min-h-[36px] px-3.5 py-1.5 rounded-lg bg-[#3ddc97] text-xs font-semibold text-[#042412] hover:opacity-95 transition-opacity cursor-pointer"
+                      >
+                        <span>Open Content Manager</span>
+                        <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('home')}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-[#949ba8] hover:text-[#f5f4f0] transition-colors cursor-pointer"
+                      >
+                        <span>View live website</span>
+                        <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Strapi "Your tasks" Checklist */}
+                <div className="lg:col-span-6 p-5 sm:p-6 flex flex-col justify-between gap-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-bold text-[#f5f4f0]">
+                      Your tasks
+                    </h2>
+                    <span className="text-xs text-[#949ba8] tabular-nums">
+                      {completedTasksCount}/{suiteTasks.length} completed
+                    </span>
+                  </div>
+
+                  <div className="divide-y divide-white/[0.08]">
+                    {suiteTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className="py-3 flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          {task.done ? (
+                            <CheckCircle2
+                              className="h-4 w-4 text-[#3ddc97] shrink-0"
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <Circle
+                              className="h-4 w-4 text-[#949ba8] shrink-0"
+                              aria-hidden="true"
+                            />
+                          )}
+                          <span
+                            className={`text-xs sm:text-sm truncate ${
+                              task.done
+                                ? 'text-[#949ba8] line-through'
+                                : 'text-[#f5f4f0] font-medium'
+                            }`}
+                          >
+                            {task.label}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={task.action}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#3ddc97] hover:underline shrink-0 cursor-pointer"
+                        >
+                          <span>{task.done ? 'Open' : 'Start'}</span>
+                          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Row 2: LAST EDITED ENTRIES & LAST PUBLISHED ENTRIES */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Last Edited Entries */}
+              <div className="rounded-xl border border-white/[0.12] bg-[#121620] p-5 sm:p-6 flex flex-col justify-between min-h-[230px]">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-[#949ba8]">
+                    Last edited entries
+                  </h2>
+                  <span className="text-xs text-[#949ba8] tabular-nums">
+                    {recentEditedEntries.length} items
+                  </span>
+                </div>
+
+                {recentEditedEntries.length === 0 ? (
+                  <div className="my-auto py-6 flex flex-col items-center justify-center text-center space-y-2">
+                    <div className="h-10 w-10 rounded-xl bg-[#0b0e15] border border-white/[0.1] flex items-center justify-center text-[#3ddc97]">
+                      <FileText className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <p className="text-xs text-[#949ba8]">
+                      There are no edited entries yet
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-white/[0.08]">
+                    {recentEditedEntries.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="py-2.5 flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs sm:text-sm font-semibold text-[#f5f4f0] truncate">
+                            {entry.title}
+                          </p>
+                          <p className="text-[11px] text-[#949ba8] tabular-nums">
+                            {entry.collection} · {entry.meta}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={entry.onOpen}
+                          className="inline-flex items-center gap-1 rounded-md border border-white/[0.12] bg-[#0b0e15] px-2.5 py-1 text-xs font-medium text-[#f5f4f0] hover:border-white/[0.24] shrink-0 cursor-pointer"
+                        >
+                          <Edit3 className="h-3 w-3 text-[#3ddc97]" aria-hidden="true" />
+                          <span>Edit</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Last Published Entries */}
+              <div className="rounded-xl border border-white/[0.12] bg-[#121620] p-5 sm:p-6 flex flex-col justify-between min-h-[230px]">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-[#949ba8]">
+                    Last published entries
+                  </h2>
+                  <span className="text-xs text-[#949ba8] tabular-nums">
+                    {recentPublishedEntries.length} items
+                  </span>
+                </div>
+
+                {recentPublishedEntries.length === 0 ? (
+                  <div className="my-auto py-6 flex flex-col items-center justify-center text-center space-y-2">
+                    <div className="h-10 w-10 rounded-xl bg-[#0b0e15] border border-white/[0.1] flex items-center justify-center text-[#3ddc97]">
+                      <FileText className="h-5 w-5" aria-hidden="true" />
+                    </div>
+                    <p className="text-xs text-[#949ba8]">
+                      There are no published entries
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-white/[0.08]">
+                    {recentPublishedEntries.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="py-2.5 flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs sm:text-sm font-semibold text-[#f5f4f0] truncate">
+                            {entry.title}
+                          </p>
+                          <p className="text-[11px] text-[#949ba8] tabular-nums">
+                            {entry.collection} · {entry.meta}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab(entry.tab)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#3ddc97] hover:underline shrink-0 cursor-pointer"
+                        >
+                          <span>View</span>
+                          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Row 3: PROFILE & ENTRIES SUMMARY */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Profile Card */}
+              <div className="rounded-xl border border-white/[0.12] bg-[#121620] p-5 sm:p-6 flex flex-col justify-between gap-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-[#949ba8]">
+                      Profile
+                    </h2>
+                    <p className="mt-0.5 text-xs text-[#949ba8]">
+                      Your public information in SSC Suite
+                    </p>
+                  </div>
+                  {isWebAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('accounts')}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[#3ddc97] hover:underline cursor-pointer"
+                    >
+                      <span>Account settings</span>
+                      <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="h-14 w-14 rounded-full bg-[#0b0e15] border border-white/[0.14] flex items-center justify-center text-base font-bold text-[#3ddc97] shrink-0">
+                    {getInitials(official.name)}
+                  </div>
+                  <div className="space-y-1 min-w-0">
+                    <p className="text-base font-bold text-[#f5f4f0] truncate">
+                      {official.name}
+                    </p>
+                    <p className="text-xs text-[#b4bac6] truncate">
+                      {official.email}
+                    </p>
+                    <div className="pt-1 flex flex-wrap items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1 rounded-md border border-white/[0.12] bg-[#0b0e15] px-2 py-0.5 text-[11px] font-medium text-[#3ddc97]">
+                        <ShieldCheck className="h-3 w-3" aria-hidden="true" />
+                        <span>{official.position}</span>
+                      </span>
+                      <span className="inline-flex items-center rounded-md border border-white/[0.1] bg-[#0b0e15] px-2 py-0.5 text-[11px] font-medium text-[#949ba8]">
+                        {isWebAdmin ? 'Web Admin' : 'SSC Official'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Entries Summary Card */}
+              <div className="rounded-xl border border-white/[0.12] bg-[#121620] p-5 sm:p-6 flex flex-col justify-between gap-4">
+                <div>
+                  <h2 className="text-xs font-bold uppercase tracking-wider text-[#949ba8]">
+                    Entries
+                  </h2>
+                  <p className="mt-0.5 text-xs text-[#949ba8]">
+                    Total items across portal collections
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  {[
+                    {
+                      label: 'Announcements',
+                      count: announcements.length,
+                      tab: 'announcements' as AdminTab,
+                    },
+                    {
+                      label: 'Events',
+                      count: events.length,
+                      tab: 'events' as AdminTab,
+                    },
+                    {
+                      label: 'Officers',
+                      count: totalOfficersCount,
+                      tab: 'officers' as AdminTab,
+                    },
+                    {
+                      label: 'Forum Threads',
+                      count: forumThreads.length,
+                      tab: 'forum' as AdminTab,
+                    },
+                    {
+                      label: 'FAQs',
+                      count: faqs.length,
+                      tab: 'faqs' as AdminTab,
+                    },
+                    {
+                      label: 'Accounts',
+                      count: accounts.length,
+                      tab: (isWebAdmin ? 'accounts' : 'overview') as AdminTab,
+                    },
+                  ].map((stat) => (
+                    <button
+                      key={stat.label}
+                      type="button"
+                      onClick={() => setActiveTab(stat.tab)}
+                      className="rounded-lg border border-white/[0.1] bg-[#0b0e15] hover:border-white/[0.24] p-3 text-left transition-colors cursor-pointer"
+                    >
+                      <p className="text-[11px] font-medium text-[#949ba8] truncate">
+                        {stat.label}
+                      </p>
+                      <p className="mt-1 text-lg font-bold text-[#f5f4f0] tabular-nums">
+                        {stat.count}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
+        )}
 
-        {/* TAB 0: BRANDING, LOGO & ABOUT SLAC CARD PHOTO */}
+        {/* TAB: BRANDING, LOGO & ABOUT SLAC CARD PHOTO */}
         {activeTab === 'branding' && (
           <div className="space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.12] pb-4">
               <div>
-                <h2 className="text-lg font-bold text-[#f5f4f0]">
-                  Website Logo, About SLAC Card Photo &amp; Stock Images
-                </h2>
-                <p className="text-xs sm:text-sm text-[#b4bac6]">
-                  All assets are synced with ImageKit (ik.imagekit.io/slacssc) and Cloud Firestore.
+                <h1 className="text-xl sm:text-2xl font-bold text-[#f5f4f0]">
+                  Branding &amp; Media Assets
+                </h1>
+                <p className="mt-0.5 text-xs sm:text-sm text-[#949ba8]">
+                  Synced with ImageKit (ik.imagekit.io/slacssc) and Cloud Firestore.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={openBrandingModal}
-                className="gemini-cta inline-flex items-center gap-1.5 min-h-[42px] px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer"
+                className="inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-lg border border-white/[0.16] bg-[#121620] text-[#f5f4f0] hover:border-white/[0.28] cursor-pointer"
               >
-                <Edit3 className="h-4 w-4" aria-hidden="true" />
-                <span>Open Photo &amp; Logo Editor</span>
+                <Edit3 className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
+                <span>Photo &amp; Logo Editor</span>
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {/* Card 1: Website Logo */}
-              <div className="rounded-2xl border border-white/[0.08] bg-[#121620] p-5 space-y-4 flex flex-col">
+              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-5 space-y-4 flex flex-col">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold text-[#f5f4f0]">
                     Website Seal / Logo
                   </span>
-                  <span className="text-xs font-semibold text-[#3ddc97]">
-                    1:1 Square
+                  <span className="text-xs font-medium text-[#949ba8] tabular-nums">
+                    1:1
                   </span>
                 </div>
-                <div className="aspect-square w-36 mx-auto rounded-xl border border-white/[0.1] bg-[#0b0e15] p-4 flex items-center justify-center overflow-hidden">
+                <div className="aspect-square w-32 mx-auto rounded-xl border border-white/[0.1] bg-[#0b0e15] p-3.5 flex items-center justify-center overflow-hidden">
                   <img
                     src={
                       resolveImageUrl(
@@ -1308,20 +2234,20 @@ export function AdminDashboardPage({
                     })
                   }
                   folder="logo"
-                  label="Upload or Adjust Logo"
+                  label="Logo"
                   aspect="square"
                   cardType="logo"
                 />
               </div>
 
               {/* Card 2: About SLAC Card Photo */}
-              <div className="rounded-2xl border border-white/[0.08] bg-[#121620] p-5 space-y-4 flex flex-col">
+              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-5 space-y-4 flex flex-col">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold text-[#f5f4f0]">
-                    About SLAC Card Photo
+                    About SLAC Photo
                   </span>
-                  <span className="text-xs font-semibold text-[#facc15]">
-                    4:3 Card
+                  <span className="text-xs font-medium text-[#949ba8] tabular-nums">
+                    4:3
                   </span>
                 </div>
                 <div className="aspect-[4/3] w-full rounded-xl border border-white/[0.1] bg-[#0b0e15] overflow-hidden">
@@ -1350,20 +2276,20 @@ export function AdminDashboardPage({
                     })
                   }
                   folder="council-stock"
-                  label="Upload or Adjust About SLAC Photo"
+                  label="About Photo"
                   aspect="landscape"
                   cardType="about"
                 />
               </div>
 
               {/* Card 3: Campus Stock / Fallback Photo */}
-              <div className="rounded-2xl border border-white/[0.08] bg-[#121620] p-5 space-y-4 flex flex-col">
+              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-5 space-y-4 flex flex-col">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold text-[#f5f4f0]">
                     Campus Stock Photo
                   </span>
-                  <span className="text-xs font-semibold text-[#38bdf8]">
-                    16:9 Banner
+                  <span className="text-xs font-medium text-[#949ba8] tabular-nums">
+                    16:9
                   </span>
                 </div>
                 <div className="aspect-[16/9] w-full rounded-xl border border-white/[0.1] bg-[#0b0e15] overflow-hidden">
@@ -1388,7 +2314,7 @@ export function AdminDashboardPage({
                     })
                   }
                   folder="council-stock"
-                  label="Upload or Adjust Stock Photo"
+                  label="Stock Photo"
                   aspect="landscape"
                   cardType="cover"
                 />
@@ -1397,10 +2323,19 @@ export function AdminDashboardPage({
           </div>
         )}
 
-        {/* TAB 1: CUSTOM FILTERS */}
+        {/* TAB: CUSTOM FILTERS */}
         {activeTab === 'filters' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="space-y-5">
+            <div className="border-b border-white/[0.12] pb-4">
+              <h1 className="text-xl sm:text-2xl font-bold text-[#f5f4f0]">
+                Custom Category Filters
+              </h1>
+              <p className="mt-0.5 text-xs sm:text-sm text-[#949ba8]">
+                Manage category tags across Announcements, Events, and the Student Forum.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
               {(
                 [
                   {
@@ -1435,22 +2370,22 @@ export function AdminDashboardPage({
                 return (
                   <div
                     key={section.key}
-                    className="rounded-2xl border border-white/[0.08] bg-[#121620] p-5 space-y-4 flex flex-col"
+                    className="rounded-xl border border-white/[0.1] bg-[#121620] p-5 space-y-4 flex flex-col"
                   >
                     <div className="flex items-center gap-2.5">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#181d29] text-[#3ddc97] border border-white/[0.1]">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#0b0e15] text-[#3ddc97] border border-white/[0.1]">
                         <Icon className="h-4 w-4" aria-hidden="true" />
                       </span>
-                      <h3 className="text-base font-bold text-[#f5f4f0]">
+                      <h2 className="text-sm font-bold text-[#f5f4f0]">
                         {section.title}
-                      </h3>
+                      </h2>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
                       {tags.map((tag) => (
                         <span
                           key={tag}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-[#0b0e15] px-2.5 py-1.5 text-xs font-medium text-[#f5f4f0]"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.1] bg-[#0b0e15] px-2.5 py-1 text-xs font-medium text-[#f5f4f0]"
                         >
                           <Tag
                             className="h-3 w-3 text-[#3ddc97]"
@@ -1485,11 +2420,11 @@ export function AdminDashboardPage({
                         onChange={(e) => section.setter(e.target.value)}
                         placeholder={section.placeholder}
                         aria-label={`Add custom filter for ${section.title}`}
-                        className="flex-1 min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-1.5 text-xs sm:text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                        className="flex-1 min-h-[38px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-1.5 text-xs text-[#f5f4f0] placeholder:text-[#949ba8]"
                       />
                       <button
                         type="submit"
-                        className="gemini-cta min-h-[40px] px-3.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer shrink-0"
+                        className="gemini-cta min-h-[38px] px-3.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer shrink-0"
                       >
                         Add
                       </button>
@@ -1501,149 +2436,194 @@ export function AdminDashboardPage({
           </div>
         )}
 
-        {/* TAB 2: MANAGE ANNOUNCEMENTS */}
+        {/* TAB: MANAGE ANNOUNCEMENTS */}
         {activeTab === 'announcements' && (
           <div className="space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <h2 className="text-lg font-bold text-[#f5f4f0]">
-                All Portal Announcements
-              </h2>
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.12] pb-4">
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-[#f5f4f0]">
+                  Announcements
+                </h1>
+                <p className="mt-0.5 text-xs sm:text-sm text-[#949ba8] tabular-nums">
+                  {announcements.length} published advisories
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={openNewAnnouncement}
-                className="gemini-cta inline-flex items-center gap-1.5 min-h-[42px] px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer"
+                className="gemini-cta inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
               >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                <span>Add Announcement</span>
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Create new entry</span>
               </button>
             </div>
 
-            <div className="space-y-3">
-              {announcements.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-xl border border-white/[0.08] bg-[#121620] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-4"
+            {announcements.length === 0 ? (
+              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-8 text-center space-y-3">
+                <p className="text-sm font-semibold text-[#f5f4f0]">
+                  No announcements published yet
+                </p>
+                <button
+                  type="button"
+                  onClick={openNewAnnouncement}
+                  className="gemini-cta inline-flex items-center gap-1.5 min-h-[36px] px-3.5 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
                 >
-                  <div className="space-y-1.5 flex-1">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <span className="font-semibold text-[#3ddc97]">
-                        {item.category}
-                      </span>
-                      <span className="text-[#949ba8] tabular-nums">
-                        {item.date}
-                      </span>
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Create first announcement</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {announcements.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-white/[0.1] bg-[#121620] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-4"
+                  >
+                    <div className="space-y-1.5 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <span className="font-semibold text-[#3ddc97]">
+                          {item.category}
+                        </span>
+                        <span className="text-[#949ba8] tabular-nums">
+                          {item.date}
+                        </span>
+                      </div>
+                      <h2 className="text-base font-bold text-[#f5f4f0]">
+                        {item.title}
+                      </h2>
+                      <p className="text-sm text-[#b4bac6] line-clamp-2 break-words">
+                        {item.summary}
+                      </p>
+                      <p className="text-xs text-[#949ba8]">{item.issuedBy}</p>
                     </div>
-                    <h3 className="text-base font-bold text-[#f5f4f0]">
-                      {item.title}
-                    </h3>
-                    <p className="text-sm text-[#b4bac6] line-clamp-2 break-words">
-                      {item.summary}
-                    </p>
-                    <p className="text-xs text-[#949ba8]">{item.issuedBy}</p>
-                  </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => openEditAnnouncement(item)}
-                      className="inline-flex items-center gap-1.5 min-h-[38px] px-3 py-1.5 text-xs font-semibold rounded-lg border border-white/[0.12] bg-[#181d29] text-[#f5f4f0] hover:border-white/[0.24] cursor-pointer"
-                    >
-                      <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span>Edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Delete ${item.title}`}
-                      onClick={() => deleteAnnouncement(item.id)}
-                      className="inline-flex items-center justify-center min-h-[38px] min-w-[38px] rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20 cursor-pointer"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openEditAnnouncement(item)}
+                        className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-lg border border-white/[0.12] bg-[#0b0e15] text-[#f5f4f0] hover:border-white/[0.24] cursor-pointer"
+                      >
+                        <Edit3 className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete ${item.title}`}
+                        onClick={() => deleteAnnouncement(item.id)}
+                        className="inline-flex items-center justify-center min-h-[36px] min-w-[36px] rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20 cursor-pointer"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* TAB 3: MANAGE EVENTS */}
+        {/* TAB: MANAGE EVENTS */}
         {activeTab === 'events' && (
           <div className="space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <h2 className="text-lg font-bold text-[#f5f4f0]">
-                Upcoming Events Gallery Items
-              </h2>
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.12] pb-4">
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-[#f5f4f0]">
+                  Events Gallery
+                </h1>
+                <p className="mt-0.5 text-xs sm:text-sm text-[#949ba8] tabular-nums">
+                  {events.length} scheduled events
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={openNewEvent}
-                className="gemini-cta inline-flex items-center gap-1.5 min-h-[42px] px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer"
+                className="gemini-cta inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
               >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                <span>Add Event</span>
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Create new entry</span>
               </button>
             </div>
 
-            <div className="space-y-3">
-              {events.map((evt) => (
-                <div
-                  key={evt.id}
-                  className="rounded-xl border border-white/[0.08] bg-[#121620] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-4"
+            {events.length === 0 ? (
+              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-8 text-center space-y-3">
+                <p className="text-sm font-semibold text-[#f5f4f0]">
+                  No upcoming events scheduled yet
+                </p>
+                <button
+                  type="button"
+                  onClick={openNewEvent}
+                  className="gemini-cta inline-flex items-center gap-1.5 min-h-[36px] px-3.5 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
                 >
-                  <div className="space-y-1.5 flex-1">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                      <span className="font-semibold text-[#38bdf8]">
-                        {evt.category}
-                      </span>
-                      <span className="text-[#949ba8] tabular-nums">
-                        {evt.date} ({evt.time})
-                      </span>
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Schedule first event</span>
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {events.map((evt) => (
+                  <div
+                    key={evt.id}
+                    className="rounded-xl border border-white/[0.1] bg-[#121620] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-4"
+                  >
+                    <div className="space-y-1.5 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <span className="font-semibold text-[#38bdf8]">
+                          {evt.category}
+                        </span>
+                        <span className="text-[#949ba8] tabular-nums">
+                          {evt.date} ({evt.time})
+                        </span>
+                      </div>
+                      <h2 className="text-base font-bold text-[#f5f4f0]">
+                        {evt.title}
+                      </h2>
+                      <p className="text-sm text-[#b4bac6] line-clamp-2 break-words">
+                        {evt.description}
+                      </p>
+                      <p className="text-xs text-[#949ba8]">{evt.location}</p>
                     </div>
-                    <h3 className="text-base font-bold text-[#f5f4f0]">
-                      {evt.title}
-                    </h3>
-                    <p className="text-sm text-[#b4bac6] line-clamp-2 break-words">
-                      {evt.description}
-                    </p>
-                    <p className="text-xs text-[#949ba8]">{evt.location}</p>
-                  </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => openEditEvent(evt)}
-                      className="inline-flex items-center gap-1.5 min-h-[38px] px-3 py-1.5 text-xs font-semibold rounded-lg border border-white/[0.12] bg-[#181d29] text-[#f5f4f0] hover:border-white/[0.24] cursor-pointer"
-                    >
-                      <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span>Edit</span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Delete ${evt.title}`}
-                      onClick={() => deleteEvent(evt.id)}
-                      className="inline-flex items-center justify-center min-h-[38px] min-w-[38px] rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20 cursor-pointer"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openEditEvent(evt)}
+                        className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-lg border border-white/[0.12] bg-[#0b0e15] text-[#f5f4f0] hover:border-white/[0.24] cursor-pointer"
+                      >
+                        <Edit3 className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete ${evt.title}`}
+                        onClick={() => deleteEvent(evt.id)}
+                        className="inline-flex items-center justify-center min-h-[36px] min-w-[36px] rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20 cursor-pointer"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* TAB 4: MANAGE CUSTOM OFFICER TIMELINE & ROSTER */}
+        {/* TAB: MANAGE CUSTOM OFFICER TIMELINE & ROSTER */}
         {activeTab === 'officers' && (
           <div className="space-y-5">
-            <div className="rounded-2xl border border-white/[0.08] bg-[#121620] p-5 sm:p-6 space-y-4">
+            <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-5 sm:p-6 space-y-4">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-bold text-[#f5f4f0] flex items-center gap-2">
+                  <h1 className="text-xl font-bold text-[#f5f4f0] flex items-center gap-2">
                     <Users
-                      className="h-4.5 w-4.5 text-[#38bdf8]"
+                      className="h-4.5 w-4.5 text-[#3ddc97]"
                       aria-hidden="true"
                     />
-                    <span>Officer Terms &amp; Roster</span>
-                  </h2>
+                    <span>Officers Archive &amp; Roster</span>
+                  </h1>
+                  <p className="mt-0.5 text-xs text-[#949ba8]">
+                    Create academic terms and manage council officer portraits.
+                  </p>
                 </div>
 
                 <form
@@ -1657,13 +2637,13 @@ export function AdminDashboardPage({
                     onChange={(e) => setNewTermInput(e.target.value)}
                     placeholder="e.g. 2025–2026"
                     aria-label="New academic term"
-                    className="w-40 sm:w-48 min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-xs sm:text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                    className="w-36 sm:w-44 min-h-[38px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-1.5 text-xs text-[#f5f4f0] placeholder:text-[#949ba8]"
                   />
                   <button
                     type="submit"
-                    className="gemini-cta inline-flex items-center gap-1.5 min-h-[42px] px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg whitespace-nowrap shrink-0 cursor-pointer"
+                    className="gemini-cta inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap shrink-0 cursor-pointer"
                   >
-                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                     <span>Add Term</span>
                   </button>
                 </form>
@@ -1689,17 +2669,17 @@ export function AdminDashboardPage({
                     <button
                       type="button"
                       onClick={openNewOfficerEntry}
-                      className="gemini-cta inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
+                      className="gemini-cta inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
                     >
                       <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span>Add Officer Entry</span>
+                      <span>Add Officer</span>
                     </button>
                     <button
                       type="button"
                       onClick={() =>
                         void handleDeleteTerm(activeOfficerRoster.term)
                       }
-                      className="inline-flex items-center gap-1.5 min-h-[38px] px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20 cursor-pointer"
                     >
                       <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                       <span>Remove Term</span>
@@ -1710,28 +2690,25 @@ export function AdminDashboardPage({
             </div>
 
             {!activeOfficerRoster ? (
-              <div className="rounded-2xl border border-white/[0.08] bg-[#121620] p-6 sm:p-8 text-center">
-                <p className="text-sm sm:text-base font-semibold text-[#f5f4f0]">
+              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-8 text-center">
+                <p className="text-sm font-semibold text-[#f5f4f0]">
                   No council terms created yet
                 </p>
-                <p className="mt-1 text-xs sm:text-sm text-[#b4bac6]">
-                  Enter a custom term above (such as 2025–2026) and click “Add Term” to start adding officers.
+                <p className="mt-1 text-xs text-[#949ba8]">
+                  Enter a term above (e.g. 2025–2026) and click Add Term.
                 </p>
               </div>
             ) : activeOfficerRoster.officers.length === 0 ? (
-              <div className="rounded-2xl border border-white/[0.08] bg-[#121620] p-6 sm:p-8 text-center space-y-3">
-                <p className="text-sm sm:text-base font-semibold text-[#f5f4f0]">
+              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-8 text-center space-y-3">
+                <p className="text-sm font-semibold text-[#f5f4f0]">
                   No officers added to {activeOfficerRoster.term} yet
-                </p>
-                <p className="text-xs sm:text-sm text-[#b4bac6]">
-                  Add officer positions and portraits to publish this term on the website.
                 </p>
                 <button
                   type="button"
                   onClick={openNewOfficerEntry}
-                  className="gemini-cta inline-flex items-center gap-1.5 min-h-[40px] px-4 py-2 text-xs sm:text-sm font-semibold rounded-lg cursor-pointer"
+                  className="gemini-cta inline-flex items-center gap-1.5 min-h-[36px] px-3.5 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
                 >
-                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>Add First Officer</span>
                 </button>
               </div>
@@ -1740,7 +2717,7 @@ export function AdminDashboardPage({
                 {activeOfficerRoster.officers.map((member) => (
                   <div
                     key={member.id}
-                    className="rounded-xl border border-white/[0.08] bg-[#121620] p-4 space-y-2"
+                    className="rounded-xl border border-white/[0.1] bg-[#121620] p-4 space-y-2"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -1763,16 +2740,16 @@ export function AdminDashboardPage({
                         <button
                           type="button"
                           onClick={() => startEditOfficer(member)}
-                          className="inline-flex items-center gap-1.5 min-h-[38px] px-3 py-1.5 text-xs font-semibold rounded-lg border border-white/[0.12] bg-[#181d29] text-[#f5f4f0] hover:border-white/[0.24] cursor-pointer"
+                          className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-lg border border-white/[0.12] bg-[#0b0e15] text-[#f5f4f0] hover:border-white/[0.24] cursor-pointer"
                         >
-                          <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
+                          <Edit3 className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
                           <span>Edit</span>
                         </button>
                         <button
                           type="button"
                           aria-label={`Remove ${member.name}`}
                           onClick={() => void deleteOfficerEntry(member.id)}
-                          className="inline-flex items-center justify-center min-h-[38px] min-w-[38px] rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20 cursor-pointer"
+                          className="inline-flex items-center justify-center min-h-[36px] min-w-[36px] rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20 cursor-pointer"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -1785,31 +2762,30 @@ export function AdminDashboardPage({
           </div>
         )}
 
-        {/* TAB 5: GENERATE & MANAGE OFFICER ACCOUNTS */}
+        {/* TAB: GENERATE & MANAGE OFFICER ACCOUNTS */}
         {activeTab === 'accounts' && isWebAdmin && (
           <div className="space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <h2 className="text-lg font-bold text-[#f5f4f0] flex items-center gap-2">
-                <KeyRound
-                  className="h-4.5 w-4.5 text-[#3ddc97]"
-                  aria-hidden="true"
-                />
-                <span>Officer Accounts</span>
-              </h2>
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDiscardPromptTarget(null);
-                    setAccError('');
-                    setAccFormOpen(true);
-                  }}
-                  className="gemini-cta inline-flex items-center gap-1.5 min-h-[42px] px-4 py-2 text-sm font-semibold rounded-lg whitespace-nowrap shrink-0 cursor-pointer"
-                >
-                  <Plus className="h-4 w-4" aria-hidden="true" />
-                  <span>Add Officer Account</span>
-                </button>
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.12] pb-4">
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-[#f5f4f0]">
+                  Officer Accounts
+                </h1>
+                <p className="mt-0.5 text-xs sm:text-sm text-[#949ba8]">
+                  Manage official sign-in credentials and role permissions.
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setDiscardPromptTarget(null);
+                  setAccError('');
+                  setAccFormOpen(true);
+                }}
+                className="gemini-cta inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Add Account</span>
+              </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1828,7 +2804,7 @@ export function AdminDashboardPage({
                 return (
                   <div
                     key={acc.id}
-                    className="card-elevated rounded-xl p-4 sm:p-5 space-y-3"
+                    className="rounded-xl border border-white/[0.1] bg-[#121620] p-4 sm:p-5 space-y-3"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -1859,9 +2835,9 @@ export function AdminDashboardPage({
                           )}
                           <span className="text-[#949ba8]">{acc.position}</span>
                         </div>
-                        <h3 className="mt-1 text-base font-bold text-[#f5f4f0] truncate">
+                        <h2 className="mt-1 text-base font-bold text-[#f5f4f0] truncate">
                           {acc.name}
-                        </h3>
+                        </h2>
                         <p className="text-xs text-[#b4bac6] truncate">
                           {acc.email}
                         </p>
@@ -1872,7 +2848,7 @@ export function AdminDashboardPage({
                           type="button"
                           aria-label={`Remove ${acc.email}`}
                           onClick={() => void deleteAccount(acc.id)}
-                          className="inline-flex items-center justify-center min-h-[36px] min-w-[36px] rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20 cursor-pointer"
+                          className="inline-flex items-center justify-center min-h-[34px] min-w-[34px] rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20 cursor-pointer"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -1897,7 +2873,7 @@ export function AdminDashboardPage({
                                 [acc.id]: !prev[acc.id],
                               }))
                             }
-                            className="inline-flex items-center justify-center min-h-[34px] min-w-[34px] rounded-lg border border-white/[0.1] bg-[#181d29] text-[#b4bac6] hover:text-[#f5f4f0] cursor-pointer"
+                            className="inline-flex items-center justify-center min-h-[32px] min-w-[32px] rounded-lg border border-white/[0.1] bg-[#0b0e15] text-[#b4bac6] hover:text-[#f5f4f0] cursor-pointer"
                           >
                             {isRevealed ? (
                               <EyeOff className="h-3.5 w-3.5" />
@@ -1911,7 +2887,7 @@ export function AdminDashboardPage({
                             onClick={() =>
                               rotateAccountPasscode(acc.id, acc.role)
                             }
-                            className="inline-flex items-center gap-1 min-h-[34px] px-2.5 py-1 text-xs font-medium rounded-lg border border-white/[0.1] bg-[#181d29] text-[#b4bac6] hover:text-[#f5f4f0] cursor-pointer"
+                            className="inline-flex items-center gap-1 min-h-[32px] px-2.5 py-1 text-xs font-medium rounded-lg border border-white/[0.1] bg-[#0b0e15] text-[#b4bac6] hover:text-[#f5f4f0] cursor-pointer"
                           >
                             <RefreshCw className="h-3 w-3" aria-hidden="true" />
                             <span>Rotate</span>
@@ -1920,7 +2896,7 @@ export function AdminDashboardPage({
                           <button
                             type="button"
                             onClick={() => void copyAccountLogin(acc)}
-                            className="inline-flex items-center gap-1 min-h-[34px] px-2.5 py-1 text-xs font-semibold rounded-lg border border-white/[0.1] bg-[#181d29] text-[#f5f4f0] hover:border-white/[0.24] cursor-pointer"
+                            className="inline-flex items-center gap-1 min-h-[32px] px-2.5 py-1 text-xs font-medium rounded-lg border border-white/[0.1] bg-[#0b0e15] text-[#f5f4f0] hover:border-white/[0.24] cursor-pointer"
                           >
                             {isCopied ? (
                               <>
@@ -1947,123 +2923,71 @@ export function AdminDashboardPage({
           </div>
         )}
 
-        {/* TAB 6: FORUM TOPIC MODERATION */}
+        {/* TAB: FORUM TOPIC MODERATION */}
         {activeTab === 'forum' && (
           <div className="space-y-4">
-            <h2 className="text-lg font-bold text-[#f5f4f0]">
-              Student Forum Discussions &amp; Topic Assignment
-            </h2>
-
-            <div className="space-y-3">
-              {forumThreads.map((thread) => (
-                <div
-                  key={thread.id}
-                  className="rounded-xl border border-white/[0.08] bg-[#121620] p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
-                >
-                  <div className="space-y-1 flex-1">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#949ba8] tabular-nums">
-                      <span className="font-semibold text-[#f5f4f0]">
-                        {thread.author}
-                      </span>
-                      <span>
-                        {thread.postedAt} ({thread.replies.length} replies)
-                      </span>
-                    </div>
-                    <h3 className="text-base font-bold text-[#f5f4f0]">
-                      {thread.title}
-                    </h3>
-                    <p className="text-sm text-[#b4bac6] line-clamp-2">
-                      {thread.body}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <select
-                      aria-label={`Topic filter for ${thread.title}`}
-                      value={thread.topic}
-                      onChange={(e) =>
-                        updateThreadTopic(thread.id, e.target.value)
-                      }
-                      className="min-h-[38px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-2.5 py-1.5 text-xs font-medium text-[#f5f4f0]"
-                    >
-                      {Array.from(
-                        new Set([...filters.forum, thread.topic])
-                      ).map((topic) => (
-                        <option key={topic} value={topic}>
-                          {topic}
-                        </option>
-                      ))}
-                    </select>
-
-                    <button
-                      type="button"
-                      aria-label={`Delete thread ${thread.title}`}
-                      onClick={() => deleteThread(thread.id)}
-                      className="inline-flex items-center justify-center min-h-[38px] min-w-[38px] rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20 cursor-pointer"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* TAB 7: MANAGE FAQs */}
-        {activeTab === 'faqs' && (
-          <div className="space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <h2 className="text-lg font-bold text-[#f5f4f0]">FAQ</h2>
-              <button
-                type="button"
-                onClick={openNewFaq}
-                className="gemini-cta inline-flex items-center gap-1.5 min-h-[42px] px-4 py-2 text-sm font-semibold rounded-lg cursor-pointer"
-              >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                <span>Add FAQ</span>
-              </button>
+            <div className="border-b border-white/[0.12] pb-4">
+              <h1 className="text-xl sm:text-2xl font-bold text-[#f5f4f0]">
+                Student Forum Discussions
+              </h1>
+              <p className="mt-0.5 text-xs sm:text-sm text-[#949ba8] tabular-nums">
+                {forumThreads.length} discussion threads
+              </p>
             </div>
 
-            {faqs.length === 0 ? (
-              <div className="rounded-2xl border border-white/[0.08] bg-[#121620] p-6 sm:p-8 text-center">
-                <p className="text-sm font-medium text-[#b4bac6]">
-                  No FAQ entries yet. Click “Add FAQ” above to publish your first question.
+            {forumThreads.length === 0 ? (
+              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-8 text-center">
+                <p className="text-sm font-medium text-[#949ba8]">
+                  No forum threads posted yet.
                 </p>
               </div>
             ) : (
               <div className="space-y-3">
-                {faqs.map((faq) => (
+                {forumThreads.map((thread) => (
                   <div
-                    key={faq.id}
-                    className="rounded-xl border border-white/[0.08] bg-[#121620] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-4"
+                    key={thread.id}
+                    className="rounded-xl border border-white/[0.1] bg-[#121620] p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"
                   >
-                    <div className="space-y-1.5 flex-1">
-                      <span className="inline-block text-xs font-semibold text-[#3ddc97]">
-                        {faq.category}
-                      </span>
-                      <h3 className="text-base font-bold text-[#f5f4f0]">
-                        {faq.question}
-                      </h3>
-                      <p className="text-sm text-[#b4bac6] leading-relaxed">
-                        {faq.answer}
+                    <div className="space-y-1 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[#949ba8] tabular-nums">
+                        <span className="font-semibold text-[#f5f4f0]">
+                          {thread.author}
+                        </span>
+                        <span>
+                          {thread.postedAt} ({thread.replies.length} replies)
+                        </span>
+                      </div>
+                      <h2 className="text-base font-bold text-[#f5f4f0]">
+                        {thread.title}
+                      </h2>
+                      <p className="text-sm text-[#b4bac6] line-clamp-2">
+                        {thread.body}
                       </p>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => openEditFaq(faq)}
-                        className="inline-flex items-center gap-1.5 min-h-[38px] px-3 py-1.5 text-xs font-semibold rounded-lg border border-white/[0.12] bg-[#181d29] text-[#f5f4f0] hover:border-white/[0.24] cursor-pointer"
+                      <select
+                        aria-label={`Topic filter for ${thread.title}`}
+                        value={thread.topic}
+                        onChange={(e) =>
+                          updateThreadTopic(thread.id, e.target.value)
+                        }
+                        className="min-h-[36px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-2.5 py-1.5 text-xs font-medium text-[#f5f4f0]"
                       >
-                        <Edit3 className="h-3.5 w-3.5" aria-hidden="true" />
-                        <span>Edit</span>
-                      </button>
+                        {Array.from(
+                          new Set([...filters.forum, thread.topic])
+                        ).map((topic) => (
+                          <option key={topic} value={topic}>
+                            {topic}
+                          </option>
+                        ))}
+                      </select>
+
                       <button
                         type="button"
-                        aria-label={`Delete ${faq.question}`}
-                        onClick={() => deleteFaq(faq.id)}
-                        className="inline-flex items-center justify-center min-h-[38px] min-w-[38px] rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20 cursor-pointer"
+                        aria-label={`Delete thread ${thread.title}`}
+                        onClick={() => deleteThread(thread.id)}
+                        className="inline-flex items-center justify-center min-h-[36px] min-w-[36px] rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20 cursor-pointer"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -2074,10 +2998,83 @@ export function AdminDashboardPage({
             )}
           </div>
         )}
-        </div>
+
+        {/* TAB: MANAGE FAQs */}
+        {activeTab === 'faqs' && (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.12] pb-4">
+              <div>
+                <h1 className="text-xl sm:text-2xl font-bold text-[#f5f4f0]">
+                  FAQ Entries
+                </h1>
+                <p className="mt-0.5 text-xs sm:text-sm text-[#949ba8] tabular-nums">
+                  {faqs.length} published questions
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={openNewFaq}
+                className="gemini-cta inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                <span>Add FAQ</span>
+              </button>
+            </div>
+
+            {faqs.length === 0 ? (
+              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-8 text-center">
+                <p className="text-sm font-medium text-[#949ba8]">
+                  No FAQ entries yet. Click Add FAQ above to publish your first question.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {faqs.map((faq) => (
+                  <div
+                    key={faq.id}
+                    className="rounded-xl border border-white/[0.1] bg-[#121620] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-4"
+                  >
+                    <div className="space-y-1.5 flex-1">
+                      <span className="inline-block text-xs font-semibold text-[#3ddc97]">
+                        {faq.category}
+                      </span>
+                      <h2 className="text-base font-bold text-[#f5f4f0]">
+                        {faq.question}
+                      </h2>
+                      <p className="text-sm text-[#b4bac6] leading-relaxed">
+                        {faq.answer}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openEditFaq(faq)}
+                        className="inline-flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-lg border border-white/[0.12] bg-[#0b0e15] text-[#f5f4f0] hover:border-white/[0.24] cursor-pointer"
+                      >
+                        <Edit3 className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete ${faq.question}`}
+                        onClick={() => deleteFaq(faq.id)}
+                        className="inline-flex items-center justify-center min-h-[36px] min-w-[36px] rounded-lg border border-[#ef4444]/30 bg-[#ef4444]/10 text-[#f87171] hover:bg-[#ef4444]/20 cursor-pointer"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* PORTALED ADMIN POP-UP MODALS (PROTECTED BY DISCARD & KEEP EDITING FEATURE) */}
+      {/* ====================================================================
+          PORTALED ADMIN POP-UP MODALS (PROTECTED BY DISCARD & KEEP EDITING)
+         ==================================================================== */}
       {typeof document !== 'undefined' &&
         createPortal(
           <AnimatePresence>
@@ -2107,13 +3104,13 @@ export function AdminDashboardPage({
                       id="admin-branding-modal-title"
                       className="text-lg font-bold text-[#f5f4f0]"
                     >
-                      Edit Logo, About SLAC Photo &amp; Stock Images
+                      Edit Logo &amp; Portal Photos
                     </h3>
                     <button
                       type="button"
                       aria-label="Close branding editor"
                       onClick={() => requestCloseEditor('branding')}
-                      className="inline-flex min-h-[42px] min-w-[42px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
+                      className="inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
                     >
                       <X className="h-5 w-5" />
                     </button>
@@ -2149,19 +3146,19 @@ export function AdminDashboardPage({
                       cardType="cover"
                     />
 
-                    <div className="pt-2 flex justify-end gap-3">
+                    <div className="pt-2 flex justify-end gap-2.5">
                       <button
                         type="button"
                         onClick={() => requestCloseEditor('branding')}
-                        className="min-h-[42px] px-4 py-2 text-sm font-medium text-[#b4bac6] rounded-lg border border-white/[0.12] bg-[#181d29] cursor-pointer"
+                        className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-[#b4bac6] rounded-lg border border-white/[0.12] bg-[#181d29] cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="gemini-cta min-h-[42px] px-5 py-2 text-sm font-semibold rounded-lg cursor-pointer"
+                        className="gemini-cta min-h-[38px] px-4 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
                       >
-                        Save Branding &amp; Photos
+                        Save Changes
                       </button>
                     </div>
                   </div>
@@ -2201,7 +3198,7 @@ export function AdminDashboardPage({
                       type="button"
                       aria-label="Close announcement form"
                       onClick={() => requestCloseEditor('ann')}
-                      className="inline-flex min-h-[42px] min-w-[42px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
+                      className="inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
                     >
                       <X className="h-5 w-5" />
                     </button>
@@ -2220,7 +3217,7 @@ export function AdminDashboardPage({
                           required
                           value={annTitle}
                           onChange={(e) => setAnnTitle(e.target.value)}
-                          className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
+                          className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
                         />
                       </div>
                       <div>
@@ -2230,7 +3227,7 @@ export function AdminDashboardPage({
                         <select
                           value={annCategory}
                           onChange={(e) => setAnnCategory(e.target.value)}
-                          className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
+                          className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
                         >
                           {Array.from(
                             new Set([...filters.announcements, annCategory])
@@ -2262,7 +3259,7 @@ export function AdminDashboardPage({
                           type="text"
                           value={annIssuedBy}
                           onChange={(e) => setAnnIssuedBy(e.target.value)}
-                          className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
+                          className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
                         />
                       </div>
                     </div>
@@ -2289,17 +3286,17 @@ export function AdminDashboardPage({
                       cardType="announcement"
                     />
 
-                    <div className="pt-2 flex justify-end gap-3">
+                    <div className="pt-2 flex justify-end gap-2.5">
                       <button
                         type="button"
                         onClick={() => requestCloseEditor('ann')}
-                        className="min-h-[42px] px-4 py-2 text-sm font-medium text-[#b4bac6] rounded-lg border border-white/[0.12] bg-[#181d29] cursor-pointer"
+                        className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-[#b4bac6] rounded-lg border border-white/[0.12] bg-[#181d29] cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="gemini-cta min-h-[42px] px-5 py-2 text-sm font-semibold rounded-lg cursor-pointer"
+                        className="gemini-cta min-h-[38px] px-4 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
                       >
                         Save Announcement
                       </button>
@@ -2335,13 +3332,13 @@ export function AdminDashboardPage({
                       id="admin-evt-modal-title"
                       className="text-lg font-bold text-[#f5f4f0]"
                     >
-                      {editingEvtId ? 'Edit Upcoming Event' : 'New Upcoming Event'}
+                      {editingEvtId ? 'Edit Event' : 'New Event'}
                     </h3>
                     <button
                       type="button"
                       aria-label="Close event form"
                       onClick={() => requestCloseEditor('evt')}
-                      className="inline-flex min-h-[42px] min-w-[42px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
+                      className="inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
                     >
                       <X className="h-5 w-5" />
                     </button>
@@ -2360,7 +3357,7 @@ export function AdminDashboardPage({
                           required
                           value={evtTitle}
                           onChange={(e) => setEvtTitle(e.target.value)}
-                          className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
+                          className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
                         />
                       </div>
                       <div>
@@ -2370,7 +3367,7 @@ export function AdminDashboardPage({
                         <select
                           value={evtCategory}
                           onChange={(e) => setEvtCategory(e.target.value)}
-                          className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
+                          className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
                         >
                           {Array.from(
                             new Set([...filters.events, evtCategory])
@@ -2414,7 +3411,7 @@ export function AdminDashboardPage({
                           value={evtLocation}
                           onChange={(e) => setEvtLocation(e.target.value)}
                           placeholder="e.g. College Auditorium"
-                          className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                          className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
                         />
                       </div>
                     </div>
@@ -2440,17 +3437,17 @@ export function AdminDashboardPage({
                       cardType="event"
                     />
 
-                    <div className="pt-2 flex justify-end gap-3">
+                    <div className="pt-2 flex justify-end gap-2.5">
                       <button
                         type="button"
                         onClick={() => requestCloseEditor('evt')}
-                        className="min-h-[42px] px-4 py-2 text-sm font-medium text-[#b4bac6] rounded-lg border border-white/[0.12] bg-[#181d29] cursor-pointer"
+                        className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-[#b4bac6] rounded-lg border border-white/[0.12] bg-[#181d29] cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="gemini-cta min-h-[42px] px-5 py-2 text-sm font-semibold rounded-lg cursor-pointer"
+                        className="gemini-cta min-h-[38px] px-4 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
                       >
                         Save Event
                       </button>
@@ -2487,9 +3484,7 @@ export function AdminDashboardPage({
                         id="admin-officer-modal-title"
                         className="text-lg font-bold text-[#f5f4f0]"
                       >
-                        {editingOfficerId
-                          ? 'Edit Officer Entry'
-                          : 'Add Officer Entry'}
+                        {editingOfficerId ? 'Edit Officer' : 'Add Officer'}
                       </h3>
                       <p className="mt-0.5 text-xs font-semibold text-[#3ddc97]">
                         Term {activeOfficerRoster.term}
@@ -2499,7 +3494,7 @@ export function AdminDashboardPage({
                       type="button"
                       aria-label="Close officer editor"
                       onClick={() => requestCloseEditor('officer')}
-                      className="inline-flex min-h-[42px] min-w-[42px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
+                      className="inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
                     >
                       <X className="h-5 w-5" />
                     </button>
@@ -2517,7 +3512,7 @@ export function AdminDashboardPage({
                         onChange={(e) =>
                           setOfficerPositionInput(e.target.value)
                         }
-                        className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
+                        className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
                       >
                         {SSC_POSITIONS.map((pos) => (
                           <option key={pos} value={pos}>
@@ -2537,7 +3532,7 @@ export function AdminDashboardPage({
                         value={officerNameInput}
                         onChange={(e) => setOfficerNameInput(e.target.value)}
                         placeholder="Full Name"
-                        className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
+                        className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
                       />
                     </div>
 
@@ -2545,22 +3540,22 @@ export function AdminDashboardPage({
                       value={officerImageInput}
                       onChange={setOfficerImageInput}
                       folder="officers"
-                      label="Team Portrait Photo"
+                      label="Portrait Photo"
                       aspect="portrait"
                       cardType="portrait"
                     />
 
-                    <div className="pt-2 flex justify-end gap-3">
+                    <div className="pt-2 flex justify-end gap-2.5">
                       <button
                         type="button"
                         onClick={() => requestCloseEditor('officer')}
-                        className="min-h-[42px] px-4 py-2 text-sm font-medium text-[#b4bac6] rounded-lg border border-white/[0.12] bg-[#181d29] cursor-pointer"
+                        className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-[#b4bac6] rounded-lg border border-white/[0.12] bg-[#181d29] cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="gemini-cta min-h-[42px] px-5 py-2 text-sm font-semibold rounded-lg cursor-pointer"
+                        className="gemini-cta min-h-[38px] px-4 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
                       >
                         Save Officer
                       </button>
@@ -2602,7 +3597,7 @@ export function AdminDashboardPage({
                       type="button"
                       aria-label="Close officer account generator"
                       onClick={() => requestCloseEditor('acc')}
-                      className="inline-flex min-h-[42px] min-w-[42px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
+                      className="inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
                     >
                       <X className="h-5 w-5" />
                     </button>
@@ -2622,7 +3617,7 @@ export function AdminDashboardPage({
                           value={newAccName}
                           onChange={(e) => setNewAccName(e.target.value)}
                           placeholder="e.g. Alyssa Dela Cruz"
-                          className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                          className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
                         />
                       </div>
 
@@ -2636,7 +3631,7 @@ export function AdminDashboardPage({
                           value={newAccEmail}
                           onChange={(e) => setNewAccEmail(e.target.value)}
                           placeholder="president@slacssc.org"
-                          className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                          className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
                         />
                       </div>
 
@@ -2647,7 +3642,7 @@ export function AdminDashboardPage({
                         <select
                           value={newAccPosition}
                           onChange={(e) => setNewAccPosition(e.target.value)}
-                          className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
+                          className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
                         >
                           {SSC_POSITIONS.map((pos) => (
                             <option key={pos} value={pos}>
@@ -2670,7 +3665,7 @@ export function AdminDashboardPage({
                             setNewAccRole(role);
                             setNewAccPasscode(createPasscode(role));
                           }}
-                          className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
+                          className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
                         >
                           <option value="admin">Web Admin</option>
                           <option value="official">SSC Official</option>
@@ -2689,7 +3684,7 @@ export function AdminDashboardPage({
                         value={newAccTerm}
                         onChange={(e) => setNewAccTerm(e.target.value)}
                         placeholder="e.g. 2025–2026"
-                        className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                        className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
                       />
                     </div>
 
@@ -2703,14 +3698,14 @@ export function AdminDashboardPage({
                           required
                           value={newAccPasscode}
                           onChange={(e) => setNewAccPasscode(e.target.value)}
-                          className="flex-1 min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm font-mono text-[#3ddc97]"
+                          className="flex-1 min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm font-mono text-[#3ddc97]"
                         />
                         <button
                           type="button"
                           onClick={() =>
                             setNewAccPasscode(createPasscode(newAccRole))
                           }
-                          className="inline-flex items-center gap-1.5 min-h-[42px] px-3.5 py-2 text-xs font-semibold rounded-lg border border-white/[0.12] bg-[#181d29] text-[#f5f4f0] hover:border-white/[0.24] whitespace-nowrap shrink-0 cursor-pointer"
+                          className="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-1.5 text-xs font-medium rounded-lg border border-white/[0.12] bg-[#181d29] text-[#f5f4f0] hover:border-white/[0.24] whitespace-nowrap shrink-0 cursor-pointer"
                         >
                           <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                           <span>New Code</span>
@@ -2727,20 +3722,20 @@ export function AdminDashboardPage({
                       </p>
                     )}
 
-                    <div className="pt-2 flex justify-end gap-3">
+                    <div className="pt-2 flex justify-end gap-2.5">
                       <button
                         type="button"
                         onClick={() => requestCloseEditor('acc')}
-                        className="min-h-[42px] px-4 py-2 text-sm font-medium text-[#b4bac6] rounded-lg border border-white/[0.12] bg-[#181d29] cursor-pointer"
+                        className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-[#b4bac6] rounded-lg border border-white/[0.12] bg-[#181d29] cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="gemini-cta inline-flex items-center gap-1.5 min-h-[42px] px-5 py-2 text-sm font-semibold rounded-lg cursor-pointer"
+                        className="gemini-cta inline-flex items-center gap-1.5 min-h-[38px] px-4 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
                       >
-                        <Plus className="h-4 w-4" aria-hidden="true" />
-                        <span>Create Officer Account</span>
+                        <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>Create Account</span>
                       </button>
                     </div>
                   </div>
@@ -2774,13 +3769,13 @@ export function AdminDashboardPage({
                       id="admin-faq-modal-title"
                       className="text-lg font-bold text-[#f5f4f0]"
                     >
-                      {editingFaqId ? 'Edit FAQ Entry' : 'Add FAQ Entry'}
+                      {editingFaqId ? 'Edit FAQ' : 'Add FAQ'}
                     </h3>
                     <button
                       type="button"
                       aria-label="Close FAQ editor"
                       onClick={() => requestCloseEditor('faq')}
-                      className="inline-flex min-h-[42px] min-w-[42px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
+                      className="inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
                     >
                       <X className="h-5 w-5" />
                     </button>
@@ -2800,7 +3795,7 @@ export function AdminDashboardPage({
                         value={faqCategory}
                         onChange={(e) => setFaqCategory(e.target.value)}
                         placeholder="e.g. Council Office, Campus Events, Clearances"
-                        className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                        className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
                       />
                     </div>
 
@@ -2815,7 +3810,7 @@ export function AdminDashboardPage({
                         value={faqQuestion}
                         onChange={(e) => setFaqQuestion(e.target.value)}
                         placeholder="Enter the student question..."
-                        className="w-full min-h-[42px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                        className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
                       />
                     </div>
 
@@ -2834,17 +3829,17 @@ export function AdminDashboardPage({
                       />
                     </div>
 
-                    <div className="pt-2 flex justify-end gap-3">
+                    <div className="pt-2 flex justify-end gap-2.5">
                       <button
                         type="button"
                         onClick={() => requestCloseEditor('faq')}
-                        className="min-h-[42px] px-4 py-2 text-sm font-medium text-[#b4bac6] rounded-lg border border-white/[0.12] bg-[#181d29] cursor-pointer"
+                        className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-[#b4bac6] rounded-lg border border-white/[0.12] bg-[#181d29] cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="gemini-cta min-h-[42px] px-5 py-2 text-sm font-semibold rounded-lg cursor-pointer"
+                        className="gemini-cta min-h-[38px] px-4 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
                       >
                         Save FAQ
                       </button>
@@ -2856,6 +3851,6 @@ export function AdminDashboardPage({
           </AnimatePresence>,
           document.body
         )}
-    </section>
+    </div>
   );
 }

@@ -266,15 +266,18 @@ export function CurrentOfficersSection({
       const totalDy = e.clientY - session.startY;
 
       if (!session.lockedHorizontal) {
-        if (Math.abs(totalDx) < 5 && Math.abs(totalDy) < 5) return;
-        if (Math.abs(totalDx) >= Math.abs(totalDy)) {
+        if (Math.abs(totalDx) < 10 && Math.abs(totalDy) < 10) return;
+        if (Math.abs(totalDx) > Math.abs(totalDy) * 1.65) {
           session.lockedHorizontal = true;
+          activeAnimRef.current?.stop();
+          activeAnimRef.current = null;
+          flickVelocityRef.current = 0;
+          glideSpeedRef.current = 0;
           didDragRef.current = true;
           isDraggingRef.current = true;
         } else {
           pointerSessionRef.current = null;
           isDraggingRef.current = false;
-          resumeAtRef.current = performance.now() + 250;
           return;
         }
       }
@@ -302,10 +305,7 @@ export function CurrentOfficersSection({
       isDraggingRef.current = false;
       glideSpeedRef.current = 0;
 
-      if (!wasHorizontal) {
-        flickVelocityRef.current = 0;
-        resumeAtRef.current = performance.now() + 250;
-      } else {
+      if (wasHorizontal) {
         flickVelocityRef.current = Math.max(
           -1400,
           Math.min(1400, flickVelocityRef.current)
@@ -336,12 +336,15 @@ export function CurrentOfficersSection({
         isMouseHoveredRef.current = false;
       }
 
-      activeAnimRef.current?.stop();
-      activeAnimRef.current = null;
-      flickVelocityRef.current = 0;
-      glideSpeedRef.current = 0;
       didDragRef.current = false;
-      isDraggingRef.current = true;
+      // On desktop mouse, pause immediately on mousedown; on touch, wait until horizontal swipe is confirmed
+      if (e.pointerType === 'mouse') {
+        activeAnimRef.current?.stop();
+        activeAnimRef.current = null;
+        flickVelocityRef.current = 0;
+        glideSpeedRef.current = 0;
+        isDraggingRef.current = true;
+      }
 
       pointerSessionRef.current = {
         pointerId: e.pointerId,
@@ -380,11 +383,6 @@ export function CurrentOfficersSection({
     });
   };
 
-  const handleCardClick = () => {
-    if (didDragRef.current) return;
-    onNavigate('officers');
-  };
-
   const renderOfficerCard = (member: OfficerMember, keySuffix: string) => {
     const imgKey = `${member.id}:${member.image || ''}`;
     const transformedUrl = resolveImageUrl(
@@ -396,11 +394,11 @@ export function CurrentOfficersSection({
     const showPhoto = Boolean(activeSrc) && !failedImages[imgKey];
 
     return (
-      <button
+      <div
         key={`${member.id}-${keySuffix}`}
-        type="button"
-        onClick={handleCardClick}
-        className="card-elevated group relative aspect-[3/4] w-[184px] sm:w-[206px] shrink-0 text-left rounded-xl overflow-hidden bg-[#0b0f18] cursor-pointer select-none"
+        role="group"
+        aria-label={`${member.name || 'Vacant'} — ${member.position}`}
+        className="card-elevated group relative aspect-[3/4] w-[184px] sm:w-[206px] shrink-0 text-left rounded-xl overflow-hidden bg-[#0b0f18] select-none touch-pan-y"
       >
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           {showPhoto ? (
@@ -448,7 +446,7 @@ export function CurrentOfficersSection({
             {member.name.trim() || 'Vacant'}
           </p>
         </div>
-      </button>
+      </div>
     );
   };
 

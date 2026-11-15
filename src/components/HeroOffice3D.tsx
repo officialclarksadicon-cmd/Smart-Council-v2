@@ -473,7 +473,10 @@ export function HeroOffice3D({
     };
     drawSmartBoard(0, themeRef.current === 'dark');
 
-    // OrbitControls for responsive mouse & touch dragging
+    // OrbitControls for desktop mouse dragging; on touch screens, let single-finger vertical scrolling pass through cleanly
+    const isCoarsePointer =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(pointer: coarse)').matches;
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.copy(defaultTarget);
     controls.enableDamping = !isSoftwareGl;
@@ -485,6 +488,13 @@ export function HeroOffice3D({
     controls.minAzimuthAngle = -Math.PI * 0.12;
     controls.maxAzimuthAngle = Math.PI * 0.62;
     controls.rotateSpeed = 0.72;
+    if (isCoarsePointer) {
+      controls.enabled = false;
+      renderer.domElement.style.touchAction = 'pan-y';
+      renderer.domElement.style.pointerEvents = 'none';
+    } else {
+      renderer.domElement.style.touchAction = 'pan-y';
+    }
 
     // Pendulum Lamp Physics state
     let lampAngleX = 0.06;
