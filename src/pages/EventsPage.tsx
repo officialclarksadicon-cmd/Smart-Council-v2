@@ -6,7 +6,6 @@ import {
   Clock,
   Eye,
   Image as ImageIcon,
-  LayoutDashboard,
   LayoutGrid,
   List,
   MapPin,
@@ -150,7 +149,7 @@ export function EventsPage({
     e.preventDefault();
     if (!newTitle.trim() || !newDate.trim() || !newLocation.trim()) return;
 
-    const fallbackImage = siteConfig.hero.backgroundImage;
+    const fallbackImage = siteConfig.councilSection.image;
     const resolvedImage = normalizeImageKitInput(newImage) || fallbackImage;
     const created: GalleryEventItem = {
       id: `evt-${Date.now()}`,
@@ -201,17 +200,6 @@ export function EventsPage({
 
             {official && (
               <div className="flex flex-wrap items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => onNavigate('admin')}
-                  className="inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-lg border border-white/[0.14] bg-[#0b0e15] text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
-                >
-                  <LayoutDashboard
-                    className="h-3.5 w-3.5 text-[#3ddc97]"
-                    aria-hidden="true"
-                  />
-                  <span>SSC Suite</span>
-                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -282,7 +270,9 @@ export function EventsPage({
               No upcoming events match your filter
             </p>
             <p className="mt-1 text-xs sm:text-sm text-[#b4bac6]">
-              Check back soon for new SSC campus activities or select “All” categories.
+              {official
+                ? 'Select “All” categories or use the “New Event” button in the section header above to schedule an event.'
+                : 'Check back soon for new SSC campus activities or select “All” categories.'}
             </p>
           </div>
         ) : viewMode === 'grid' ? (
@@ -313,8 +303,8 @@ export function EventsPage({
                     }}
                     className="card-elevated group rounded-2xl overflow-hidden flex flex-col h-full cursor-pointer"
                   >
-                    {/* 4:3 Gallery Image */}
-                    <div className="relative aspect-[4/3] w-full bg-[#181d29] overflow-hidden">
+                    {/* Shared Event Card Aspect Ratio */}
+                    <div className="relative aspect-event-card w-full bg-[#181d29] overflow-hidden">
                       {!hasFailed ? (
                         <img
                           src={activeSrc}

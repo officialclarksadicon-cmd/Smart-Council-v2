@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
+  CARD_ASPECT_CONFIG,
   CardFramePreset,
   DEFAULT_IMAGEKIT_ASSETS,
   ImageFraming,
@@ -50,64 +51,6 @@ interface ImageKitUploaderProps {
   cardType?: CardFramePreset;
 }
 
-const CARD_PRESETS: Array<{
-  id: CardFramePreset;
-  label: string;
-  ratio: string;
-  aspectClass: string;
-  stageWidthClass: string;
-  baseAspect: 'portrait' | 'landscape' | 'square';
-}> = [
-  {
-    id: 'portrait',
-    label: 'Team Portrait',
-    ratio: '3:4',
-    aspectClass: 'aspect-[3/4]',
-    stageWidthClass: 'w-52 sm:w-60',
-    baseAspect: 'portrait',
-  },
-  {
-    id: 'announcement',
-    label: 'Announcement',
-    ratio: '21:9',
-    aspectClass: 'aspect-[21/9]',
-    stageWidthClass: 'w-full max-w-lg',
-    baseAspect: 'landscape',
-  },
-  {
-    id: 'event',
-    label: 'Event Card',
-    ratio: '4:3',
-    aspectClass: 'aspect-[4/3]',
-    stageWidthClass: 'w-full max-w-md',
-    baseAspect: 'landscape',
-  },
-  {
-    id: 'about',
-    label: 'About SLAC',
-    ratio: '4:3',
-    aspectClass: 'aspect-[4/3]',
-    stageWidthClass: 'w-full max-w-md',
-    baseAspect: 'landscape',
-  },
-  {
-    id: 'cover',
-    label: 'Full Banner',
-    ratio: '16:9',
-    aspectClass: 'aspect-[16/9]',
-    stageWidthClass: 'w-full max-w-lg',
-    baseAspect: 'landscape',
-  },
-  {
-    id: 'logo',
-    label: 'Logo',
-    ratio: '1:1',
-    aspectClass: 'aspect-square',
-    stageWidthClass: 'w-48 sm:w-56',
-    baseAspect: 'square',
-  },
-];
-
 function inferDefaultCardPreset(
   folder: ImageKitFolder,
   aspect: 'landscape' | 'portrait' | 'square',
@@ -123,10 +66,10 @@ function inferDefaultCardPreset(
 }
 
 /**
- * INTUITIVE, MINIMAL-TEXT IMAGEKIT UPLOADER & POP-UP CARD FRAMING WINDOW
- * - Uploads directly to https://ik.imagekit.io/slacssc via ImageKit API
- * - Dedicated pop-up window to drag & zoom photos across exact card sizes
- * - Built-in Discard / Keep Editing outside-tap protection
+ * PURPOSEFUL IMAGE UPLOADER & FREE-ASPECT ADJUSTER
+ * - Clear Upload -> Adjust -> Apply workflow
+ * - Unlocked (free) aspect ratio adjustment: Fit (full uncropped image) vs Fill, free X/Y pan, zoom, and reset
+ * - Preview container uses the exact shared CSS aspect-ratio class of the destination card
  */
 export function ImageKitUploader({
   value,
@@ -151,11 +94,9 @@ export function ImageKitUploader({
 
   // Dedicated Pop-Up Adjustment Modal State
   const defaultPreset = inferDefaultCardPreset(folder, aspect, cardType);
+  const destinationMeta = CARD_ASPECT_CONFIG[defaultPreset];
   const savedFraming = parseImageFraming(value, aspect);
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
-  const [activePreset, setActivePreset] = useState<CardFramePreset>(
-    savedFraming.cardPreset ?? defaultPreset
-  );
   const [draftFraming, setDraftFraming] = useState<ImageFraming>(savedFraming);
   const [initialFramingSnapshot, setInitialFramingSnapshot] =
     useState<ImageFraming>(savedFraming);
@@ -170,7 +111,6 @@ export function ImageKitUploader({
     startY: number;
   } | null>(null);
 
-  // Always reset error state when value changes so newly uploaded photos display immediately
   useEffect(() => {
     setPreviewFailed(false);
     setUseRawFallback(false);
@@ -187,25 +127,19 @@ export function ImageKitUploader({
   const rawCleanUrl = stripImageFramingHash(value);
   const previewUrl = useRawFallback ? rawCleanUrl : transformedUrl;
 
-  const activePresetMeta =
-    CARD_PRESETS.find((p) => p.id === activePreset) ?? CARD_PRESETS[0];
-
   const isDraftDirty =
     draftFraming.fit !== initialFramingSnapshot.fit ||
     Math.round(draftFraming.x) !== Math.round(initialFramingSnapshot.x) ||
     Math.round(draftFraming.y) !== Math.round(initialFramingSnapshot.y) ||
-    Math.abs(draftFraming.zoom - initialFramingSnapshot.zoom) >= 0.02 ||
-    draftFraming.cardPreset !== initialFramingSnapshot.cardPreset;
+    Math.abs(draftFraming.zoom - initialFramingSnapshot.zoom) >= 0.02;
 
   const openAdjustmentModal = (targetUrl = value) => {
     if (!targetUrl.trim()) return;
     const parsed = parseImageFraming(targetUrl, aspect);
-    const resolvedPreset = parsed.cardPreset ?? defaultPreset;
     const snapshot: ImageFraming = {
       ...parsed,
-      cardPreset: resolvedPreset,
+      cardPreset: defaultPreset,
     };
-    setActivePreset(resolvedPreset);
     setDraftFraming(snapshot);
     setInitialFramingSnapshot(snapshot);
     setShowExitConfirm(false);
@@ -236,7 +170,7 @@ export function ImageKitUploader({
       value,
       {
         ...draftFraming,
-        cardPreset: activePreset,
+        cardPreset: defaultPreset,
       },
       aspect
     );
@@ -246,10 +180,10 @@ export function ImageKitUploader({
   };
 
   const resetDraftFraming = () => {
-    const defaults = getDefaultImageFraming(activePresetMeta.baseAspect);
+    const defaults = getDefaultImageFraming(destinationMeta.baseAspect);
     setDraftFraming({
       ...defaults,
-      cardPreset: activePreset,
+      cardPreset: defaultPreset,
     });
   };
 
@@ -305,7 +239,6 @@ export function ImageKitUploader({
         aspect
       );
       onChange(nextUrl);
-      setActivePreset(defaultPreset);
       setDraftFraming(initialFraming);
       setInitialFramingSnapshot(initialFraming);
       setShowExitConfirm(false);
@@ -379,8 +312,8 @@ export function ImageKitUploader({
 
   const draftPreviewUrl = buildFramedImageUrl(
     value,
-    { ...draftFraming, cardPreset: activePreset },
-    activePresetMeta.baseAspect
+    { ...draftFraming, cardPreset: defaultPreset },
+    destinationMeta.baseAspect
   );
 
   return (
@@ -402,7 +335,7 @@ export function ImageKitUploader({
 
       <div className="rounded-xl border border-white/[0.12] bg-[#0b0e15] p-3 space-y-2.5">
         <div className="flex items-center gap-3">
-          {/* Card-Proportional Thumbnail */}
+          {/* Destination Card-Proportional Thumbnail */}
           <button
             type="button"
             disabled={uploading}
@@ -414,14 +347,14 @@ export function ImageKitUploader({
               }
             }}
             aria-label={value.trim() ? 'Adjust picture' : 'Upload picture'}
-            className={`group relative shrink-0 rounded-lg border border-white/[0.12] bg-[#121620] overflow-hidden flex items-center justify-center cursor-pointer hover:border-[#3ddc97]/50 transition-all disabled:opacity-60 ${
+            className={`group relative shrink-0 rounded-lg border border-white/[0.12] bg-[#121620] overflow-hidden flex items-center justify-center cursor-pointer hover:border-[#3ddc97]/50 transition-all disabled:opacity-60 ${destinationMeta.aspectClass} ${
               defaultPreset === 'portrait'
-                ? 'w-14 aspect-[3/4]'
+                ? 'w-14'
                 : defaultPreset === 'logo'
-                  ? 'w-14 aspect-square p-1.5'
+                  ? 'w-14 p-1.5'
                   : defaultPreset === 'announcement'
-                    ? 'w-24 aspect-[21/9]'
-                    : 'w-20 aspect-[4/3]'
+                    ? 'w-24'
+                    : 'w-20'
             }`}
           >
             {previewUrl && !previewFailed ? (
@@ -452,7 +385,7 @@ export function ImageKitUploader({
             )}
           </button>
 
-          {/* Minimal Action Bar */}
+          {/* Purposeful Controls: Replace / Upload, Reposition & Zoom, Cloud Library, Reset */}
           <div className="flex-1 min-w-0 flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -469,7 +402,7 @@ export function ImageKitUploader({
                 <Upload className="h-3.5 w-3.5" aria-hidden="true" />
               )}
               <span>
-                {uploading ? 'Uploading...' : value.trim() ? 'Change' : 'Upload'}
+                {uploading ? 'Uploading...' : value.trim() ? 'Replace' : 'Upload'}
               </span>
             </button>
 
@@ -490,7 +423,7 @@ export function ImageKitUploader({
               className="inline-flex items-center gap-1.5 min-h-[36px] rounded-lg border border-white/[0.12] bg-[#121620] px-2.5 py-1.5 text-xs font-medium text-[#b4bac6] hover:text-[#f5f4f0] hover:border-white/[0.24] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <FolderOpen className="h-3.5 w-3.5 text-[#38bdf8]" aria-hidden="true" />
-              <span>ImageKit</span>
+              <span>Library</span>
             </button>
 
             {value.trim() && (
@@ -520,13 +453,13 @@ export function ImageKitUploader({
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-semibold text-[#b4bac6]">
-                  ImageKit Cloud Assets (ik.imagekit.io/slacssc)
+                  Official Media Library
                 </span>
                 {loadingLibrary && (
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-[#3ddc97]" />
                 )}
               </div>
-              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 max-h-36 overflow-y-auto no-scrollbar">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-36 overflow-y-auto no-scrollbar">
                 {libraryFiles.map((item) => (
                   <button
                     key={item.fileId || item.url}
@@ -544,7 +477,7 @@ export function ImageKitUploader({
                       setLibraryOpen(false);
                       openAdjustmentModal(next);
                     }}
-                    className="group relative aspect-[4/3] rounded-lg border border-white/[0.1] bg-[#121620] overflow-hidden hover:border-[#3ddc97] cursor-pointer"
+                    className="group relative aspect-about-card rounded-lg border border-white/[0.1] bg-[#121620] overflow-hidden hover:border-[#3ddc97] cursor-pointer"
                     title={item.name}
                   >
                     <img
@@ -570,7 +503,7 @@ export function ImageKitUploader({
         </p>
       )}
 
-      {/* DEDICATED POP-UP PICTURE ADJUSTMENT WINDOW (INTUITIVE & MINIMAL TEXT) */}
+      {/* DEDICATED POP-UP PICTURE ADJUSTMENT WINDOW (UPLOAD -> ADJUST -> APPLY) */}
       {typeof document !== 'undefined' &&
         createPortal(
           <AnimatePresence>
@@ -599,17 +532,22 @@ export function ImageKitUploader({
                 >
                   {/* Header */}
                   <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.08] bg-[#0d1017]">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5">
                       <Crop
                         className="h-4 w-4 text-[#3ddc97]"
                         aria-hidden="true"
                       />
-                      <h3
-                        id="pic-adjust-modal-title"
-                        className="text-sm sm:text-base font-bold text-[#f5f4f0]"
-                      >
-                        Adjust Picture
-                      </h3>
+                      <div>
+                        <h3
+                          id="pic-adjust-modal-title"
+                          className="text-sm sm:text-base font-bold text-[#f5f4f0]"
+                        >
+                          Adjust Placement — {destinationMeta.label}
+                        </h3>
+                        <p className="text-[11px] text-[#949ba8]">
+                          Free aspect ratio: drag to reposition, zoom, or toggle Fill / Fit.
+                        </p>
+                      </div>
                     </div>
 
                     <button
@@ -632,7 +570,7 @@ export function ImageKitUploader({
                         className="border-b border-[#facc15]/35 bg-[#facc15]/10 px-5 py-2.5 flex items-center justify-between gap-3"
                       >
                         <span className="text-xs font-semibold text-[#f5f4f0]">
-                          Unsaved changes
+                          Unsaved placement adjustments
                         </span>
                         <div className="flex items-center gap-2">
                           <button
@@ -655,37 +593,7 @@ export function ImageKitUploader({
                   </AnimatePresence>
 
                   <div className="p-4 sm:p-5 space-y-4">
-                    {/* Card Size Pills */}
-                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-                      {CARD_PRESETS.map((preset) => {
-                        const isSelected = preset.id === activePreset;
-                        return (
-                          <button
-                            key={preset.id}
-                            type="button"
-                            onClick={() => {
-                              setActivePreset(preset.id);
-                              setDraftFraming((prev) => ({
-                                ...prev,
-                                cardPreset: preset.id,
-                              }));
-                            }}
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border whitespace-nowrap shrink-0 transition-all cursor-pointer ${
-                              isSelected
-                                ? 'border-[#3ddc97] bg-[#3ddc97]/15 text-[#3ddc97]'
-                                : 'border-white/[0.1] bg-[#0b0e15] text-[#b4bac6] hover:text-[#f5f4f0]'
-                            }`}
-                          >
-                            <span>{preset.label}</span>
-                            <span className="text-[10px] opacity-75">
-                              {preset.ratio}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Interactive Drag Stage */}
+                    {/* Interactive Drag Stage Matching Exact Destination Card Aspect Ratio */}
                     <div className="flex flex-col items-center justify-center rounded-xl border border-white/[0.08] bg-[#080b12] p-4 min-h-[250px]">
                       <div
                         onPointerDown={handleStagePointerDown}
@@ -693,21 +601,21 @@ export function ImageKitUploader({
                         onPointerUp={handleStagePointerUp}
                         onPointerCancel={handleStagePointerUp}
                         onWheel={handleStageWheel}
-                        className={`relative overflow-hidden rounded-xl border-2 border-[#3ddc97]/60 bg-[#0d1017] shadow-2xl select-none touch-none cursor-grab active:cursor-grabbing transition-all ${activePresetMeta.aspectClass} ${activePresetMeta.stageWidthClass}`}
+                        className={`relative overflow-hidden rounded-xl border-2 border-[#3ddc97]/60 bg-[#0d1017] shadow-2xl select-none touch-none cursor-grab active:cursor-grabbing transition-all ${destinationMeta.aspectClass} ${destinationMeta.stageWidthClass}`}
                       >
                         <img
                           src={previewUrl}
-                          alt="Drag to frame"
+                          alt="Drag to reposition"
                           draggable={false}
                           referrerPolicy="no-referrer"
                           style={getImageFramingStyle(
                             draftPreviewUrl,
-                            activePresetMeta.baseAspect
+                            destinationMeta.baseAspect
                           )}
                           className="h-full w-full pointer-events-none"
                         />
 
-                        {/* Subtle 3x3 Grid When Dragging */}
+                        {/* Subtle 3x3 Alignment Grid When Dragging */}
                         <div
                           aria-hidden="true"
                           className={`pointer-events-none absolute inset-0 grid grid-cols-3 grid-rows-3 transition-opacity duration-150 ${
@@ -728,16 +636,16 @@ export function ImageKitUploader({
                         <div className="pointer-events-none absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between text-[11px] font-semibold text-[#f5f4f0]">
                           <span className="inline-flex items-center gap-1 rounded-md bg-black/65 px-2 py-0.5 text-[#3ddc97]">
                             <Move className="h-3 w-3" aria-hidden="true" />
-                            Drag
+                            Drag to Reposition
                           </span>
-                          <span className="rounded-md bg-black/65 px-2 py-0.5 text-[#b4bac6] tabular-nums">
-                            {activePresetMeta.ratio}
+                          <span className="rounded-md bg-black/65 px-2 py-0.5 text-[#b4bac6]">
+                            {destinationMeta.label}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Simple Zoom Bar + Quick Toggle Pills */}
+                    {/* Minimal Purposeful Controls: Replace, Zoom, Fit/Fill, Center, Reset */}
                     <div className="space-y-3">
                       <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-[#0b0e15] px-3.5 py-2.5">
                         <ZoomOut
@@ -772,6 +680,15 @@ export function ImageKitUploader({
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="inline-flex items-center gap-1.5 min-h-[34px] px-3 py-1 rounded-lg text-xs font-medium border border-white/[0.12] bg-[#121620] text-[#b4bac6] hover:text-[#f5f4f0] cursor-pointer"
+                          >
+                            <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>Replace</span>
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={() =>
                               setDraftFraming((prev) => ({
                                 ...prev,
@@ -786,7 +703,9 @@ export function ImageKitUploader({
                           >
                             <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
                             <span>
-                              {draftFraming.fit === 'contain' ? 'Fit' : 'Fill'}
+                              {draftFraming.fit === 'contain'
+                                ? 'Fit Full Photo'
+                                : 'Fill Frame'}
                             </span>
                           </button>
 
@@ -833,7 +752,7 @@ export function ImageKitUploader({
                       className="gemini-cta inline-flex items-center gap-1.5 min-h-[38px] px-5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
                     >
                       <Check className="h-4 w-4" aria-hidden="true" />
-                      <span>Done</span>
+                      <span>Apply</span>
                     </button>
                   </div>
                 </motion.div>

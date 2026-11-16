@@ -44,6 +44,53 @@ export interface ImageFraming {
   cardPreset?: CardFramePreset;
 }
 
+export const CARD_ASPECT_CONFIG: Record<
+  CardFramePreset,
+  {
+    label: string;
+    aspectClass: string;
+    stageWidthClass: string;
+    baseAspect: 'portrait' | 'landscape' | 'square';
+  }
+> = {
+  portrait: {
+    label: 'Officer Portrait Card',
+    aspectClass: 'aspect-officer-card',
+    stageWidthClass: 'w-52 sm:w-60',
+    baseAspect: 'portrait',
+  },
+  announcement: {
+    label: 'Announcement Card',
+    aspectClass: 'aspect-announcement-card',
+    stageWidthClass: 'w-full max-w-lg',
+    baseAspect: 'landscape',
+  },
+  event: {
+    label: 'Event Gallery Card',
+    aspectClass: 'aspect-event-card',
+    stageWidthClass: 'w-full max-w-md',
+    baseAspect: 'landscape',
+  },
+  about: {
+    label: 'About SLAC Card',
+    aspectClass: 'aspect-about-card',
+    stageWidthClass: 'w-full max-w-md',
+    baseAspect: 'landscape',
+  },
+  cover: {
+    label: 'Banner Card',
+    aspectClass: 'aspect-announcement-card',
+    stageWidthClass: 'w-full max-w-lg',
+    baseAspect: 'landscape',
+  },
+  logo: {
+    label: 'Website Seal / Logo',
+    aspectClass: 'aspect-logo-card',
+    stageWidthClass: 'w-48 sm:w-56',
+    baseAspect: 'square',
+  },
+};
+
 export const DEFAULT_IMAGEKIT_ASSETS: ImageKitCloudFile[] = [
   {
     fileId: 'ik-logo-main',
@@ -68,14 +115,6 @@ export const DEFAULT_IMAGEKIT_ASSETS: ImageKitCloudFile[] = [
     url: 'https://ik.imagekit.io/slacssc/smart-council/logo/ssc-logo-1024-dark_L-WgIDIvf.png',
     thumbnail:
       'https://ik.imagekit.io/slacssc/smart-council/logo/ssc-logo-1024-dark_L-WgIDIvf.png?tr=w-300',
-  },
-  {
-    fileId: 'ik-campus-hero',
-    name: 'SLAC Campus Auditorium',
-    filePath: '/smart-council/council-stock/campus-hero_JYs1mpnhd.jpg',
-    url: 'https://ik.imagekit.io/slacssc/smart-council/council-stock/campus-hero_JYs1mpnhd.jpg',
-    thumbnail:
-      'https://ik.imagekit.io/slacssc/smart-council/council-stock/campus-hero_JYs1mpnhd.jpg?tr=w-400',
   },
   {
     fileId: 'ik-council-office',

@@ -398,7 +398,7 @@ export function CurrentOfficersSection({
         key={`${member.id}-${keySuffix}`}
         role="group"
         aria-label={`${member.name || 'Vacant'} — ${member.position}`}
-        className="card-elevated group relative aspect-[3/4] w-[184px] sm:w-[206px] shrink-0 text-left rounded-xl overflow-hidden bg-[#0b0f18] select-none touch-pan-y"
+        className="card-elevated group relative aspect-officer-card w-[184px] sm:w-[206px] shrink-0 text-left rounded-xl overflow-hidden bg-[#0b0f18] select-none touch-pan-y"
       >
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           {showPhoto ? (

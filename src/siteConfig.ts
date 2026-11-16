@@ -8,8 +8,6 @@
  * and ImageKit Cloud Storage (https://ik.imagekit.io/slacssc).
  */
 
-export const IMAGEKIT_CAMPUS_HERO =
-  '/assets/aistudio/caroline-badran-xTmez98cqAM-unsplash_385fef1d.jpg';
 export const IMAGEKIT_COUNCIL_OFFICE =
   'https://ik.imagekit.io/slacssc/smart-council/council-stock/council-office_axkKY8UNt.jpg';
 export const IMAGEKIT_DEFAULT_LOGO =
@@ -72,6 +70,7 @@ export interface OfficialAccount {
   name: string;
   position: string;
   role: 'admin' | 'official';
+  authUid?: string;
 }
 
 export interface OfficialProfile {
@@ -80,6 +79,7 @@ export interface OfficialProfile {
   name: string;
   position: string;
   role: 'admin' | 'official';
+  authUid?: string;
 }
 
 export interface StudentProfile {
@@ -169,7 +169,21 @@ export interface PortalFilters {
 export interface PortalBranding {
   customLogoUrl: string;
   aboutSlacImage: string;
-  heroImage: string;
+}
+
+export interface CouncilTask {
+  id: string;
+  title: string;
+  description: string;
+  assignedToUid: string;
+  assignedToName: string;
+  assignedPosition?: string;
+  status: 'pending' | 'completed';
+  done?: boolean;
+  createdBy: string;
+  createdByName?: string;
+  createdAt?: string;
+  completedAt?: string | null;
 }
 
 export const siteConfig = {
@@ -248,9 +262,6 @@ export const siteConfig = {
    * 6. BODY SECTION 1: HERO
    * -------------------------------------------------------------------------- */
   hero: {
-    backgroundImage: IMAGEKIT_CAMPUS_HERO,
-    backgroundImageAlt:
-      'SLAC students gathered inside a modern college lecture auditorium',
     eyebrow: 'SLAC Student Council',
     headline: 'Campus updates and student voice in one place.',
     introduction:

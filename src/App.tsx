@@ -16,6 +16,7 @@ import { Check, LogOut, RefreshCw, X } from 'lucide-react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import {
   AnnouncementItem,
+  CouncilTask,
   FaqItem,
   ForumReply,
   ForumThread,
@@ -44,13 +45,19 @@ import { EdgeStretchShell } from './components/EdgeStretchShell';
 import { PageSkeleton } from './components/PageSkeleton';
 import {
   OperationType,
+  PRIMARY_ADMIN_UID,
+  SITE_VISITS_DOC_ID,
   auth,
   autoSeedPortalToFirestore,
   collection,
+  createAssignedTaskInFirestore,
   db,
+  deleteAssignedTaskFromFirestore,
+  deleteForumThreadFromFirestore,
   doc,
   getDoc,
   handleFirestoreError,
+  incrementSiteVisitsInFirestore,
   inferCommitteeFromPosition,
   isFirebaseAuthenticated,
   isLegacySeededOfficerId,
@@ -60,11 +67,12 @@ import {
   query,
   signOut,
   syncFullPortalStateToFirestore,
+  updateAssignedTaskStatusInFirestore,
+  updateStudentIdentityInFirestore,
   upsertAnnouncementToFirestore,
   upsertCouncilOfficerToFirestore,
   upsertEventToFirestore,
   upsertForumThreadToFirestore,
-  updateStudentIdentityInFirestore,
   upsertPortalSettingsToFirestore,
   where,
 } from './firebase';
@@ -169,7 +177,6 @@ interface StoredPortalState {
 const DEFAULT_BRANDING: PortalBranding = {
   customLogoUrl: siteConfig.brand.customLogoUrl,
   aboutSlacImage: siteConfig.councilSection.image,
-  heroImage: siteConfig.hero.backgroundImage,
 };
 
 function sanitizeStoredAnnouncements(
@@ -226,7 +233,7 @@ function hydrateOfficerTermsClean(
 
 function hydrateEventsClean(
   storedEvents: GalleryEventItem[],
-  fallbackHero = siteConfig.hero.backgroundImage
+  fallbackHero = siteConfig.councilSection.image
 ): GalleryEventItem[] {
   return storedEvents.map((evt) => ({
     ...evt,
@@ -262,18 +269,13 @@ function loadPortalState(): StoredPortalState {
             parsed.branding?.aboutSlacImage,
             DEFAULT_BRANDING.aboutSlacImage
           ) || DEFAULT_BRANDING.aboutSlacImage,
-        heroImage:
-          sanitizeImageKitUrl(
-            parsed.branding?.heroImage,
-            DEFAULT_BRANDING.heroImage
-          ) || DEFAULT_BRANDING.heroImage,
       };
       return {
         announcements: Array.isArray(parsed.announcements)
           ? sanitizeStoredAnnouncements(parsed.announcements)
           : siteConfig.announcements,
         events: Array.isArray(parsed.events)
-          ? hydrateEventsClean(parsed.events, resolvedBranding.heroImage)
+          ? hydrateEventsClean(parsed.events, resolvedBranding.aboutSlacImage)
           : siteConfig.upcomingEvents,
         forumThreads: Array.isArray(parsed.forumThreads)
           ? parsed.forumThreads
@@ -339,52 +341,14 @@ export default function App() {
   const [seenByAccount, setSeenByAccount] =
     useState<SeenByAccountState>(loadSeenByAccount);
 
-  // Website Visits & Page Views Analytics
-  const [visitStats, setVisitStats] = useState<{
-    totalVisits: number;
-    todayVisits: number;
-    pageViews: number;
-  }>(() => {
-    const todayKey = new Date().toISOString().slice(0, 10);
-    try {
-      const raw = window.localStorage.getItem('smart_council_visit_stats_v1');
-      const sessionCounted = window.sessionStorage.getItem(
-        'smart_council_session_counted_v1'
-      );
-      if (raw) {
-        const parsed = JSON.parse(raw) as {
-          totalVisits?: number;
-          todayVisits?: number;
-          pageViews?: number;
-          lastDate?: string;
-        };
-        const isSameDay = parsed.lastDate === todayKey;
-        const inc = sessionCounted ? 0 : 1;
-        const next = {
-          totalVisits: Math.max(1, (parsed.totalVisits ?? 124) + inc),
-          todayVisits: isSameDay
-            ? Math.max(1, (parsed.todayVisits ?? 12) + inc)
-            : Math.max(1, 8 + inc),
-          pageViews: Math.max(1, (parsed.pageViews ?? 310) + 1),
-        };
-        window.localStorage.setItem(
-          'smart_council_visit_stats_v1',
-          JSON.stringify({ ...next, lastDate: todayKey })
-        );
-        window.sessionStorage.setItem('smart_council_session_counted_v1', '1');
-        return next;
-      }
-      const starter = { totalVisits: 128, todayVisits: 14, pageViews: 342 };
-      window.localStorage.setItem(
-        'smart_council_visit_stats_v1',
-        JSON.stringify({ ...starter, lastDate: todayKey })
-      );
-      window.sessionStorage.setItem('smart_council_session_counted_v1', '1');
-      return starter;
-    } catch {
-      return { totalVisits: 128, todayVisits: 14, pageViews: 342 };
-    }
-  });
+  // Real-Time Total Website Visits Counter (/siteStats/visits)
+  const [totalVisits, setTotalVisits] = useState<number>(0);
+  const [authReadyUid, setAuthReadyUid] = useState<string | null>(
+    () => auth.currentUser?.uid ?? null
+  );
+
+  // Real-Time SSC Suite Assigned Tasks (/tasks)
+  const [councilTasks, setCouncilTasks] = useState<CouncilTask[]>([]);
 
   const showAuthNotification = useCallback(
     (message: string, type: 'login' | 'logout' | 'refresh' = 'login') => {
@@ -801,8 +765,8 @@ export default function App() {
           return;
         }
         const fallbackImg =
-          latestStateRef.current.branding.heroImage ||
-          siteConfig.hero.backgroundImage;
+          latestStateRef.current.branding.aboutSlacImage ||
+          siteConfig.councilSection.image;
         const docsWithTime = snapshot.docs.map((docSnap) => {
           const d = docSnap.data();
           const createdMillis =
@@ -942,10 +906,6 @@ export default function App() {
             !isCorruptedImageUrl(d.aboutSlacImage)
               ? sanitizeImageKitUrl(d.aboutSlacImage, prev.aboutSlacImage)
               : prev.aboutSlacImage,
-          heroImage:
-            typeof d.heroImage === 'string' && !isCorruptedImageUrl(d.heroImage)
-              ? sanitizeImageKitUrl(d.heroImage, prev.heroImage)
-              : prev.heroImage,
         }));
       },
       (error) => {
@@ -1101,6 +1061,7 @@ export default function App() {
       (snapshot) => {
         const primaryAdmin: OfficialAccount = {
           id: 'acc-admin-1',
+          authUid: PRIMARY_ADMIN_UID,
           email: 'official.clarksadicon@gmail.com',
           passcode: '123456',
           name: 'Clark Sadicon',
@@ -1117,8 +1078,15 @@ export default function App() {
             .trim()
             .toLowerCase();
           if (!email) continue;
+          const docId = String(d.id ?? docSnap.id);
+          const resolvedUid = isPrimaryAdminUser(email)
+            ? PRIMARY_ADMIN_UID
+            : typeof d.authUid === 'string' && d.authUid.trim()
+              ? d.authUid.trim()
+              : docId;
           map.set(email, {
-            id: String(d.id ?? docSnap.id),
+            id: docId,
+            authUid: resolvedUid,
             email,
             passcode: String(d.passcode ?? '123456'),
             name: String(d.name ?? 'SSC Official'),
@@ -1134,24 +1102,28 @@ export default function App() {
       }
     );
     return () => unsubscribe();
-  }, [refreshTriggerCount, official]);
+  }, [refreshTriggerCount, official, authReadyUid]);
 
   // 8. Listen to Firebase Auth state & sync unified councilAccounts
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (user) => {
+      setAuthReadyUid(user ? user.uid : null);
       if (!user) return;
 
       void autoSeedPortalToFirestore(latestStateRef.current);
 
       if (isPrimaryAdminUser(user.email)) {
         setOfficial((prev) =>
-          prev ?? {
-            id: 'acc-admin-1',
-            email: 'official.clarksadicon@gmail.com',
-            name: 'Clark Sadicon',
-            position: 'Head Of Technical',
-            role: 'admin',
-          }
+          prev
+            ? { ...prev, authUid: user.uid || PRIMARY_ADMIN_UID }
+            : {
+                id: 'acc-admin-1',
+                authUid: user.uid || PRIMARY_ADMIN_UID,
+                email: 'official.clarksadicon@gmail.com',
+                name: 'Clark Sadicon',
+                position: 'Head Of Technical',
+                role: 'admin',
+              }
         );
       } else {
         void getDoc(doc(db, 'councilAccounts', user.uid))
@@ -1161,13 +1133,16 @@ export default function App() {
               const resolvedRole: 'admin' | 'official' =
                 d.role === 'admin' ? 'admin' : 'official';
               setOfficial((prev) =>
-                prev ?? {
-                  id: String(d.id ?? user.uid),
-                  email: user.email ?? '',
-                  name: String(d.name ?? user.displayName ?? 'SSC Official'),
-                  position: String(d.position ?? 'SSC Officer'),
-                  role: resolvedRole,
-                }
+                prev
+                  ? { ...prev, authUid: user.uid }
+                  : {
+                      id: String(d.id ?? user.uid),
+                      authUid: user.uid,
+                      email: user.email ?? '',
+                      name: String(d.name ?? user.displayName ?? 'SSC Official'),
+                      position: String(d.position ?? 'SSC Officer'),
+                      role: resolvedRole,
+                    }
               );
             }
           })
@@ -1178,6 +1153,124 @@ export default function App() {
     return () => {
       unsubAuth();
     };
+  }, []);
+
+  // 9. Live Firestore Listener: /tasks (Assigned Tasks linked to Council Accounts)
+  useEffect(() => {
+    const activeUid =
+      authReadyUid ||
+      official?.authUid ||
+      (official && isPrimaryAdminUser(official.email)
+        ? PRIMARY_ADMIN_UID
+        : official?.id);
+
+    if (!official || !activeUid || !auth.currentUser) {
+      setCouncilTasks([]);
+      return;
+    }
+
+    const isAdminOfficer =
+      official.role === 'admin' || isPrimaryAdminUser(official.email);
+
+    const tasksQuery = isAdminOfficer
+      ? query(collection(db, 'tasks'))
+      : query(
+          collection(db, 'tasks'),
+          where('assignedToUid', '==', auth.currentUser.uid)
+        );
+
+    const unsubscribe = onSnapshot(
+      tasksQuery,
+      (snapshot) => {
+        if (snapshot.empty) {
+          setCouncilTasks([]);
+          return;
+        }
+        const docsWithTime = snapshot.docs.map((docSnap) => {
+          const d = docSnap.data();
+          const createdMillis =
+            typeof d.createdAt?.toMillis === 'function'
+              ? d.createdAt.toMillis()
+              : Date.now();
+          const completedIso =
+            typeof d.completedAt?.toDate === 'function'
+              ? d.completedAt.toDate().toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })
+              : null;
+          const createdIso =
+            typeof d.createdAt?.toDate === 'function'
+              ? d.createdAt.toDate().toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })
+              : 'Just now';
+
+          const item: CouncilTask = {
+            id: String(d.id ?? docSnap.id),
+            title: String(d.title ?? ''),
+            description: String(d.description ?? ''),
+            assignedToUid: String(d.assignedToUid ?? ''),
+            assignedToName: String(d.assignedToName ?? 'SSC Officer'),
+            status: d.status === 'completed' ? 'completed' : 'pending',
+            createdBy: String(d.createdBy ?? ''),
+            createdAt: createdIso,
+            completedAt: completedIso,
+          };
+          return { item, createdMillis };
+        });
+        docsWithTime.sort((a, b) => b.createdMillis - a.createdMillis);
+        setCouncilTasks(docsWithTime.map((entry) => entry.item));
+      },
+      (error) => {
+        try {
+          handleFirestoreError(error, OperationType.LIST, 'tasks');
+        } catch {
+          // Logged via handleFirestoreError
+        }
+      }
+    );
+    return () => unsubscribe();
+  }, [refreshTriggerCount, official, authReadyUid]);
+
+  // 10. Live Real-Time Firestore Listener: /siteStats/visits
+  useEffect(() => {
+    const visitsRef = doc(db, 'siteStats', SITE_VISITS_DOC_ID);
+    const unsubscribe = onSnapshot(
+      visitsRef,
+      (snap) => {
+        if (!snap.exists()) {
+          setTotalVisits(0);
+          return;
+        }
+        const d = snap.data();
+        setTotalVisits(Math.max(0, Number(d.visits) || 0));
+      },
+      (error) => {
+        try {
+          handleFirestoreError(error, OperationType.GET, 'siteStats/visits');
+        } catch {
+          // Logged via handleFirestoreError
+        }
+      }
+    );
+    return () => unsubscribe();
+  }, [refreshTriggerCount]);
+
+  // Record atomic +1 visit once per browser session via sessionStorage
+  useEffect(() => {
+    const sessionKey = 'smart_council_session_visit_v3';
+    try {
+      if (window.sessionStorage.getItem(sessionKey)) return;
+      window.sessionStorage.setItem(sessionKey, '1');
+    } catch {
+      return;
+    }
+
+    void incrementSiteVisitsInFirestore();
   }, []);
 
   const openAuthModal = useCallback((mode: AuthModalMode) => {
@@ -1198,21 +1291,6 @@ export default function App() {
         return;
       }
       setCurrentPage(page);
-      setVisitStats((prev) => {
-        const next = { ...prev, pageViews: prev.pageViews + 1 };
-        try {
-          window.localStorage.setItem(
-            'smart_council_visit_stats_v1',
-            JSON.stringify({
-              ...next,
-              lastDate: new Date().toISOString().slice(0, 10),
-            })
-          );
-        } catch {
-          // Ignore storage errors
-        }
-        return next;
-      });
       const nextUrl =
         page === 'home'
           ? window.location.pathname + window.location.search
@@ -1222,6 +1300,64 @@ export default function App() {
     },
     [currentPage, official, openAuthModal]
   );
+
+  const handleAddCouncilTask = useCallback(
+    (created: CouncilTask) => {
+      setCouncilTasks((prev) => [created, ...prev]);
+      void createAssignedTaskInFirestore(created).catch(() => undefined);
+      showAuthNotification(
+        `Task assigned to ${created.assignedToName}.`,
+        'login'
+      );
+    },
+    [showAuthNotification]
+  );
+
+  const handleToggleCouncilTask = useCallback(
+    (taskId: string) => {
+      const currentUid =
+        auth.currentUser?.uid ||
+        official?.authUid ||
+        (official && isPrimaryAdminUser(official.email)
+          ? PRIMARY_ADMIN_UID
+          : official?.id);
+      const target = councilTasks.find((t) => t.id === taskId);
+      if (!target || !currentUid || target.assignedToUid !== currentUid) {
+        showAuthNotification(
+          'Only the assigned council officer can update this task status.',
+          'logout'
+        );
+        return;
+      }
+      const nextStatus: 'pending' | 'completed' =
+        target.status === 'completed' ? 'pending' : 'completed';
+      const nowLabel =
+        nextStatus === 'completed'
+          ? new Date().toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            })
+          : null;
+
+      setCouncilTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? { ...t, status: nextStatus, completedAt: nowLabel }
+            : t
+        )
+      );
+      void updateAssignedTaskStatusInFirestore(taskId, nextStatus).catch(
+        () => undefined
+      );
+    },
+    [councilTasks, official, showAuthNotification]
+  );
+
+  const handleDeleteCouncilTask = useCallback((taskId: string) => {
+    setCouncilTasks((prev) => prev.filter((t) => t.id !== taskId));
+    void deleteAssignedTaskFromFirestore(taskId).catch(() => undefined);
+  }, []);
 
   const handleUpdateBranding = useCallback(
     (patch: Partial<PortalBranding>) => {
@@ -1316,6 +1452,32 @@ export default function App() {
         () => undefined
       );
     }
+  };
+
+  const handleDeleteForumThread = (threadId: string) => {
+    setForumThreads((prev) => prev.filter((t) => t.id !== threadId));
+    void deleteForumThreadFromFirestore(threadId).catch(() => undefined);
+    showAuthNotification('Thread removed.', 'logout');
+  };
+
+  const handleDeleteForumReply = (threadId: string, replyId: string) => {
+    let targetThread: ForumThread | null = null;
+    setForumThreads((prev) =>
+      prev.map((t) => {
+        if (t.id !== threadId) return t;
+        targetThread = {
+          ...t,
+          replies: t.replies.filter((r) => r.id !== replyId),
+        };
+        return targetThread;
+      })
+    );
+    if (targetThread) {
+      void upsertForumThreadToFirestore(targetThread, false).catch(
+        () => undefined
+      );
+    }
+    showAuthNotification('Reply removed.', 'logout');
   };
 
   const handleToggleForumSupport = (threadId: string, delta: number) => {
@@ -1545,6 +1707,8 @@ export default function App() {
                     onNavigate={navigateTo}
                     onAddThread={handleAddForumThread}
                     onAddReply={handleAddForumReply}
+                    onDeleteThread={handleDeleteForumThread}
+                    onDeleteReply={handleDeleteForumReply}
                     onToggleSupport={handleToggleForumSupport}
                   />
                 )}
@@ -1559,7 +1723,8 @@ export default function App() {
                     faqs={faqs}
                     filters={filters}
                     branding={branding}
-                    visitStats={visitStats}
+                    tasks={councilTasks}
+                    totalVisits={totalVisits}
                     theme={theme}
                     onToggleTheme={() =>
                       setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
@@ -1583,6 +1748,9 @@ export default function App() {
                     onSetFaqs={setFaqs}
                     onSetFilters={setFilters}
                     onUpdateBranding={handleUpdateBranding}
+                    onAddTask={handleAddCouncilTask}
+                    onToggleTask={handleToggleCouncilTask}
+                    onDeleteTask={handleDeleteCouncilTask}
                     onResetDefaults={handleResetDefaults}
                     onNotify={showAuthNotification}
                   />

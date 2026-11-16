@@ -640,6 +640,91 @@
         "createdAt",
         "updatedAt"
       ]
+    },
+    "CouncilTask": {
+      "title": "CouncilTask",
+      "description": "SSC Suite task item that can be a personal task for an officer or assigned to a specific SSC position.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique task ID.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Task title.",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "description": {
+          "type": "string",
+          "description": "Task details and instructions.",
+          "maxLength": 2000
+        },
+        "assignedToUid": {
+          "type": "string",
+          "description": "Firebase Auth UID / Council Account ID of the assigned officer.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "assignedToName": {
+          "type": "string",
+          "description": "Full name of the assigned Council Officer.",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "status": {
+          "type": "string",
+          "description": "Task completion status.",
+          "enum": ["pending", "completed"]
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "UID or email of the officer who created the task.",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Completion timestamp when marked completed by the assignee."
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "description",
+        "assignedToUid",
+        "assignedToName",
+        "status",
+        "createdBy",
+        "createdAt"
+      ]
+    },
+    "SiteVisits": {
+      "title": "SiteVisits",
+      "description": "Real-time total website visits counter stored at /siteStats/visits.",
+      "type": "object",
+      "properties": {
+        "visits": {
+          "type": "number",
+          "description": "Cumulative website visits incremented atomically by +1 per session."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": ["visits"]
     }
   },
   "firestore": {
@@ -673,11 +758,19 @@
     },
     "/portalSettings/{settingId}": {
       "schema": "PortalSettings",
-      "description": "Synchronized portal filter categories for announcements, events, and forum topics."
+      "description": "Synchronized portal filter categories and branding assets (customLogoUrl, aboutSlacImage)."
     },
     "/faqs/{faqId}": {
       "schema": "FaqDoc",
       "description": "Editable Frequently Asked Questions streamed live to guests, students, and officers."
+    },
+    "/tasks/{taskId}": {
+      "schema": "CouncilTask",
+      "description": "Assigned tasks linked to Council Accounts, completable strictly by the assigned officer."
+    },
+    "/siteStats/{statId}": {
+      "schema": "SiteVisits",
+      "description": "Real-time total website visit counter (/siteStats/visits)."
     }
   }
 }

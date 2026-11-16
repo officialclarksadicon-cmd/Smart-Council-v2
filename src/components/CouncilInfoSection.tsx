@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   ArrowUpRight,
-  Camera,
   Check,
   Clock,
   Copy,
@@ -188,8 +187,8 @@ export function CouncilInfoSection({
 
           {/* Right: Editable About SLAC Campus Council Boxy Photo Cell */}
           <ScrollReveal className="lg:col-span-5 flex" delay={0.06}>
-            <div className="group relative w-full min-h-[280px] rounded-none overflow-hidden flex flex-col bg-[#0b0e15]">
-              <div className="relative flex-1 min-h-[240px] bg-[#181d29] overflow-hidden">
+            <div className="group relative w-full rounded-none overflow-hidden flex flex-col bg-[#0b0e15]">
+              <div className="relative flex-1 aspect-about-card bg-[#181d29] overflow-hidden">
                 {displayAboutUrl && !imageError ? (
                   <img
                     src={displayAboutUrl}
@@ -216,20 +215,6 @@ export function CouncilInfoSection({
                       {siteConfig.brand.fullName}
                     </span>
                   </div>
-                )}
-
-                {official && onUpdateBranding && (
-                  <button
-                    type="button"
-                    onClick={openEditor}
-                    className="photo-overlay absolute top-3 right-3 inline-flex items-center gap-1.5 rounded-lg bg-[#0b0e15]/90 border border-white/[0.18] px-2.5 py-1.5 text-xs font-medium text-[#f5f4f0] hover:border-white/[0.32] shadow-md transition-colors cursor-pointer"
-                  >
-                    <Camera
-                      className="h-3.5 w-3.5 text-[#3ddc97]"
-                      aria-hidden="true"
-                    />
-                    <span>Photo</span>
-                  </button>
                 )}
               </div>
               <div className="px-6 py-3.5 border-t border-white/[0.14] flex items-center justify-between text-xs text-[#b4bac6] bg-[#121620]">

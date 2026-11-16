@@ -168,7 +168,7 @@ service cloud.firestore {
     // Validation Blueprint: PortalSettings (/portalSettings/{settingId})
     function isValidPortalSettings(data) {
       return data.keys().hasAll(['id', 'announcementFilters', 'eventFilters', 'forumFilters', 'aiAutoSync', 'visibility', 'createdAt', 'updatedAt']) &&
-        data.keys().hasOnly(['id', 'announcementFilters', 'eventFilters', 'forumFilters', 'aiAutoSync', 'customLogoUrl', 'aboutSlacImage', 'heroImage', 'visibility', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'announcementFilters', 'eventFilters', 'forumFilters', 'aiAutoSync', 'customLogoUrl', 'aboutSlacImage', 'visibility', 'createdAt', 'updatedAt']) &&
         data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
         data.announcementFilters is list && data.announcementFilters.size() >= 1 && data.announcementFilters.size() <= 25 && data.announcementFilters[0] is string &&
         data.eventFilters is list && data.eventFilters.size() >= 1 && data.eventFilters.size() <= 25 && data.eventFilters[0] is string &&
@@ -176,7 +176,6 @@ service cloud.firestore {
         data.aiAutoSync is bool &&
         (!('customLogoUrl' in data) || (data.customLogoUrl is string && data.customLogoUrl.size() <= 500)) &&
         (!('aboutSlacImage' in data) || (data.aboutSlacImage is string && data.aboutSlacImage.size() <= 500)) &&
-        (!('heroImage' in data) || (data.heroImage is string && data.heroImage.size() <= 500)) &&
         data.visibility is string && data.visibility == 'public' &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
@@ -194,6 +193,48 @@ service cloud.firestore {
         data.visibility is string && data.visibility == 'public' &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: AssignedTask (/tasks/{taskId})
+    function isValidAssignedTask(data) {
+      return data.keys().hasAll([
+          'id',
+          'title',
+          'description',
+          'assignedToUid',
+          'assignedToName',
+          'status',
+          'createdBy',
+          'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id',
+          'title',
+          'description',
+          'assignedToUid',
+          'assignedToName',
+          'assignedPosition',
+          'status',
+          'done',
+          'createdBy',
+          'createdByName',
+          'createdAt',
+          'completedAt',
+          'updatedAt'
+        ]) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 && data.id.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 300 &&
+        data.description is string && data.description.size() <= 2000 &&
+        data.assignedToUid is string && data.assignedToUid.size() >= 1 && data.assignedToUid.size() <= 128 &&
+        data.assignedToName is string && data.assignedToName.size() >= 1 && data.assignedToName.size() <= 160 &&
+        (!('assignedPosition' in data) || (data.assignedPosition is string && data.assignedPosition.size() <= 100)) &&
+        data.status in ['pending', 'completed'] &&
+        (!('done' in data) || data.done is bool) &&
+        data.createdBy is string && data.createdBy.size() >= 1 && data.createdBy.size() <= 160 &&
+        (!('createdByName' in data) || (data.createdByName is string && data.createdByName.size() <= 160)) &&
+        data.createdAt is timestamp &&
+        (!('completedAt' in data) || data.completedAt == null || data.completedAt is timestamp || data.completedAt is string) &&
+        (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
     // 1. Normal Student Users
@@ -322,10 +363,10 @@ service cloud.firestore {
           incoming().diff(existing()).affectedKeys().hasOnly(['replies', 'supportCount', 'updatedAt']) ||
           (isOfficialOrAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['topic', 'title', 'body', 'replies', 'supportCount', 'visibility', 'updatedAt']))
         );
-      allow delete: if isValidId(threadId) && isOfficialOrAdmin();
+      allow delete: if isValidId(threadId) && isForumParticipant();
     }
 
-    // 8. Synchronized Portal Category Filters & Branding Assets
+    // 8. Synchronized Portal Category Filters & Branding Assets (Two real assets: customLogoUrl & aboutSlacImage)
     match /portalSettings/{settingId} {
       allow get: if isValidId(settingId) && (resource == null || existing().visibility == 'public' || isOfficialOrAdmin());
       allow list: if existing().visibility == 'public';
@@ -341,7 +382,7 @@ service cloud.firestore {
         incoming().id == existing().id &&
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['announcementFilters', 'eventFilters', 'forumFilters', 'aiAutoSync', 'customLogoUrl', 'aboutSlacImage', 'heroImage', 'visibility', 'updatedAt']);
+        incoming().diff(existing()).affectedKeys().hasOnly(['announcementFilters', 'eventFilters', 'forumFilters', 'aiAutoSync', 'customLogoUrl', 'aboutSlacImage', 'visibility', 'updatedAt']);
       allow delete: if isValidId(settingId) && isAdmin();
     }
 
@@ -363,6 +404,55 @@ service cloud.firestore {
         incoming().updatedAt == request.time &&
         incoming().diff(existing()).affectedKeys().hasOnly(['category', 'question', 'answer', 'order', 'visibility', 'updatedAt']);
       allow delete: if isValidId(faqId) && isOfficialOrAdmin();
+    }
+
+    // 10. Assigned Council Tasks Linked to Council Accounts (/tasks/{taskId})
+    // - Read: Only Admin or the assigned officer (request.auth.uid == resource.data.assignedToUid)
+    // - Create: Any authenticated Council Official or Admin
+    // - Update: STRICTLY only the assigned officer (request.auth.uid == resource.data.assignedToUid)
+    //           and limited strictly to status, completedAt, done, and updatedAt
+    // - Delete: Admin or task creator
+    match /tasks/{taskId} {
+      allow get, list: if isAdmin() || (request.auth != null && existing().assignedToUid == request.auth.uid);
+      allow create: if isOfficialOrAdmin() &&
+        isValidId(taskId) &&
+        isValidAssignedTask(incoming()) &&
+        incoming().id == taskId &&
+        incoming().createdAt == request.time;
+      allow update: if request.auth != null &&
+        isValidId(taskId) &&
+        request.auth.uid == existing().assignedToUid &&
+        isValidAssignedTask(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().title == existing().title &&
+        incoming().description == existing().description &&
+        incoming().assignedToUid == existing().assignedToUid &&
+        incoming().assignedToName == existing().assignedToName &&
+        incoming().createdBy == existing().createdBy &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'completedAt', 'done', 'updatedAt']);
+      allow delete: if isValidId(taskId) && (
+        isAdmin() ||
+        (request.auth != null && existing().createdBy == request.auth.uid)
+      );
+    }
+
+    // 11. Real-Time Total Visits Counter (/siteStats/visits)
+    // - Public read for real-time onSnapshot listener
+    // - Strict atomic increment-by-1 only (no arbitrary writes or resets)
+    match /siteStats/{statId} {
+      allow get, list: if statId == 'visits';
+      allow create: if statId == 'visits' &&
+        incoming().keys().hasAll(['visits']) &&
+        incoming().keys().hasOnly(['visits', 'updatedAt']) &&
+        incoming().visits is int &&
+        incoming().visits == 1;
+      allow update: if statId == 'visits' &&
+        incoming().keys().hasAll(['visits']) &&
+        incoming().keys().hasOnly(['visits', 'updatedAt']) &&
+        incoming().visits is int &&
+        incoming().visits == existing().visits + 1;
+      allow delete: if false;
     }
   }
 }

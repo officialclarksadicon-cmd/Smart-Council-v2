@@ -25,20 +25,20 @@ export function PageSubNav({ currentPage, onNavigate }: PageSubNavProps) {
   return (
     <nav
       aria-label="Breadcrumb"
-      className="pb-4 mb-6 border-b border-white/[0.14] flex flex-wrap items-center justify-between gap-3 text-xs"
+      className="pb-3.5 mb-5 border-b border-white/[0.12] flex items-center justify-between gap-4 text-xs"
     >
       <button
         type="button"
         onClick={() => onNavigate('home')}
-        className="inline-flex items-center gap-1.5 font-semibold text-[#3ddc97] hover:underline cursor-pointer"
+        className="inline-flex items-center gap-1.5 py-1 font-semibold text-[#3ddc97] hover:underline shrink-0 cursor-pointer"
       >
-        <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+        <ArrowLeft className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span>Back to Home</span>
       </button>
 
-      <div className="flex items-center gap-2 text-[#949ba8] tabular-nums">
-        <span>{label}</span>
-      </div>
+      <span className="text-[#949ba8] font-medium truncate text-right">
+        {label}
+      </span>
     </nav>
   );
 }

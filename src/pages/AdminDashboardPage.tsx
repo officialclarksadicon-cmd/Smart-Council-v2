@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
   KeyRound,
   LayoutDashboard,
+  Lock,
   LogOut,
   Megaphone,
   Menu,
@@ -27,9 +28,8 @@ import {
   Moon,
   Plus,
   RefreshCw,
-  Settings,
+  Search,
   ShieldCheck,
-  Sparkles,
   Sun,
   Tag,
   Trash2,
@@ -39,6 +39,7 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import {
   AnnouncementItem,
+  CouncilTask,
   FaqItem,
   ForumThread,
   GalleryEventItem,
@@ -84,12 +85,6 @@ import {
   stripImageFramingHash,
 } from '../utils/imagekit';
 
-export interface PortalVisitStats {
-  totalVisits: number;
-  todayVisits: number;
-  pageViews: number;
-}
-
 interface AdminDashboardPageProps {
   official: OfficialProfile;
   announcements: AnnouncementItem[];
@@ -100,7 +95,8 @@ interface AdminDashboardPageProps {
   faqs: FaqItem[];
   filters: PortalFilters;
   branding: PortalBranding;
-  visitStats?: PortalVisitStats;
+  tasks?: CouncilTask[];
+  totalVisits?: number;
   theme?: ThemeMode;
   onToggleTheme?: () => void;
   onSignOutOfficial?: () => void;
@@ -113,6 +109,9 @@ interface AdminDashboardPageProps {
   onSetFaqs: (faqs: FaqItem[]) => void;
   onSetFilters: (filters: PortalFilters) => void;
   onUpdateBranding: (patch: Partial<PortalBranding>) => void;
+  onAddTask?: (task: CouncilTask) => void;
+  onToggleTask?: (taskId: string) => void;
+  onDeleteTask?: (taskId: string) => void;
   onResetDefaults: () => void;
   onNotify?: (message: string, type?: 'login' | 'logout' | 'refresh') => void;
 }
@@ -179,7 +178,8 @@ export function AdminDashboardPage({
   faqs,
   filters,
   branding,
-  visitStats = { totalVisits: 1, todayVisits: 1, pageViews: 1 },
+  tasks = [],
+  totalVisits = 0,
   theme = 'dark',
   onToggleTheme,
   onSignOutOfficial,
@@ -192,20 +192,30 @@ export function AdminDashboardPage({
   onSetFaqs,
   onSetFilters,
   onUpdateBranding,
+  onAddTask,
+  onToggleTask,
+  onDeleteTask,
   onNotify,
 }: AdminDashboardPageProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
+  // Assigned Tasks linked to Council Accounts State
+  const [taskTitleInput, setTaskTitleInput] = useState('');
+  const [taskDescInput, setTaskDescInput] = useState('');
+  const [assigneeSearchQuery, setAssigneeSearchQuery] = useState('');
+  const [selectedAssigneeId, setSelectedAssigneeId] = useState<string>('');
+  const [selectedTaskModal, setSelectedTaskModal] =
+    useState<CouncilTask | null>(null);
+
   // Discard / Keep Editing Confirmation State for Admin Editor Pop-Ups
   const [discardPromptTarget, setDiscardPromptTarget] =
     useState<ActiveEditorModal | null>(null);
 
-  // Branding & Stock Photo Pop-up Editor State
+  // Branding & Photo Pop-up Editor State
   const [brandingModalOpen, setBrandingModalOpen] = useState(false);
   const [draftLogoUrl, setDraftLogoUrl] = useState(branding.customLogoUrl);
   const [draftAboutImg, setDraftAboutImg] = useState(branding.aboutSlacImage);
-  const [draftHeroImg, setDraftHeroImg] = useState(branding.heroImage);
 
   // Manual Filter Inputs
   const [newAnnFilter, setNewAnnFilter] = useState('');
@@ -351,7 +361,6 @@ export function AdminDashboardPage({
       } else if (draft.brandingModalOpen) {
         setDraftLogoUrl(draft.draftLogoUrl ?? branding.customLogoUrl);
         setDraftAboutImg(draft.draftAboutImg ?? branding.aboutSlacImage);
-        setDraftHeroImg(draft.draftHeroImg ?? branding.heroImage);
         setBrandingModalOpen(true);
       }
     } catch {
@@ -360,7 +369,6 @@ export function AdminDashboardPage({
   }, [
     branding.aboutSlacImage,
     branding.customLogoUrl,
-    branding.heroImage,
     isWebAdmin,
     official.name,
     official.position,
@@ -419,7 +427,6 @@ export function AdminDashboardPage({
         brandingModalOpen,
         draftLogoUrl,
         draftAboutImg,
-        draftHeroImg,
       };
       window.sessionStorage.setItem(
         ADMIN_DRAFT_STORAGE_KEY,
@@ -467,7 +474,6 @@ export function AdminDashboardPage({
     brandingModalOpen,
     draftLogoUrl,
     draftAboutImg,
-    draftHeroImg,
   ]);
 
   const requestCloseEditor = (target: ActiveEditorModal) => {
@@ -533,14 +539,7 @@ export function AdminDashboardPage({
     brandingModalOpen,
   ]);
 
-  // --- Branding & Stock Photos Save ---
-  const openBrandingModal = () => {
-    setDiscardPromptTarget(null);
-    setDraftLogoUrl(branding.customLogoUrl);
-    setDraftAboutImg(branding.aboutSlacImage);
-    setDraftHeroImg(branding.heroImage);
-    setBrandingModalOpen(true);
-  };
+  // --- Branding & Portal Photos Save ---
 
   const handleSaveBrandingModal = (e: FormEvent) => {
     e.preventDefault();
@@ -549,8 +548,6 @@ export function AdminDashboardPage({
         normalizeImageKitInput(draftLogoUrl) || siteConfig.brand.customLogoUrl,
       aboutSlacImage:
         normalizeImageKitInput(draftAboutImg) || siteConfig.councilSection.image,
-      heroImage:
-        normalizeImageKitInput(draftHeroImg) || siteConfig.hero.backgroundImage,
     });
     setDiscardPromptTarget(null);
     setBrandingModalOpen(false);
@@ -720,7 +717,8 @@ export function AdminDashboardPage({
       addFilterTag('events', category);
     }
 
-    const fallbackImage = branding.heroImage || siteConfig.hero.backgroundImage;
+    const fallbackImage =
+      branding.aboutSlacImage || siteConfig.councilSection.image;
     const resolvedImage = normalizeImageKitInput(evtImage) || fallbackImage;
 
     if (editingEvtId) {
@@ -1197,54 +1195,102 @@ export function AdminDashboardPage({
     void deleteFaqFromFirestore(faqId).catch(() => undefined);
   };
 
-  // --- Strapi-Style Overview Computed Tasks & Entries ---
-  const suiteTasks = useMemo(
-    () => [
-      {
-        id: 'task-ann',
-        label: 'Publish a campus announcement',
-        done: announcements.length > 0,
-        action: () => {
-          setActiveTab('announcements');
-          openNewAnnouncement();
-        },
-      },
-      {
-        id: 'task-evt',
-        label: 'Schedule an upcoming campus event',
-        done: events.length > 0,
-        action: () => {
-          setActiveTab('events');
-          openNewEvent();
-        },
-      },
-      {
-        id: 'task-off',
-        label: 'Add council officers to the roster',
-        done: totalOfficersCount > 0,
-        action: () => {
-          setActiveTab('officers');
-        },
-      },
-      {
-        id: 'task-brand',
-        label: 'Verify portal logo & About SLAC photo',
-        done: Boolean(branding.customLogoUrl && branding.aboutSlacImage),
-        action: () => {
-          setActiveTab('branding');
-        },
-      },
-    ],
-    [
-      announcements.length,
-      branding.aboutSlacImage,
-      branding.customLogoUrl,
-      events.length,
-      totalOfficersCount,
-    ]
+  // --- Assigned Tasks Linked to Council Accounts (Task 2) ---
+  const currentOfficerUid = useMemo(() => {
+    if (official.authUid) return official.authUid;
+    const matched = accounts.find(
+      (a) => a.email.trim().toLowerCase() === official.email.trim().toLowerCase()
+    );
+    return matched?.authUid || matched?.id || official.email.trim().toLowerCase();
+  }, [official.authUid, official.email, accounts]);
+
+  const filteredAssigneeAccounts = useMemo(() => {
+    const q = assigneeSearchQuery.trim().toLowerCase();
+    if (!q) return accounts;
+    return accounts.filter(
+      (acc) =>
+        acc.name.toLowerCase().includes(q) ||
+        acc.position.toLowerCase().includes(q) ||
+        acc.email.toLowerCase().includes(q)
+    );
+  }, [accounts, assigneeSearchQuery]);
+
+  // Default assignee selection when accounts load
+  useEffect(() => {
+    if (!selectedAssigneeId && accounts.length > 0) {
+      const selfAccount = accounts.find(
+        (a) =>
+          a.email.trim().toLowerCase() === official.email.trim().toLowerCase()
+      );
+      setSelectedAssigneeId((selfAccount ?? accounts[0]).id);
+    }
+  }, [accounts, official.email, selectedAssigneeId]);
+
+  // Hide other officers' tasks completely except for Admin
+  const displayedTasks = useMemo(() => {
+    if (isWebAdmin) return tasks;
+    return tasks.filter((task) => task.assignedToUid === currentOfficerUid);
+  }, [tasks, isWebAdmin, currentOfficerUid]);
+
+  const completedTasksCount = displayedTasks.filter(
+    (t) => t.status === 'completed'
+  ).length;
+
+  // Keep selectedTaskModal synced with real-time updates
+  const activeModalTask = useMemo(
+    () =>
+      selectedTaskModal
+        ? tasks.find((t) => t.id === selectedTaskModal.id) ?? null
+        : null,
+    [tasks, selectedTaskModal]
   );
 
-  const completedTasksCount = suiteTasks.filter((t) => t.done).length;
+  const handleCreateTaskSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    const cleanTitle = taskTitleInput.trim();
+    if (!cleanTitle || !onAddTask) return;
+
+    const targetAccount =
+      accounts.find((a) => a.id === selectedAssigneeId) ??
+      accounts.find(
+        (a) =>
+          a.email.trim().toLowerCase() === official.email.trim().toLowerCase()
+      ) ??
+      accounts[0];
+
+    if (!targetAccount) {
+      onNotify?.(
+        'Please select a valid Council Account assignee first.',
+        'logout'
+      );
+      return;
+    }
+
+    const resolvedAssigneeUid =
+      targetAccount.authUid && targetAccount.authUid.trim()
+        ? targetAccount.authUid.trim()
+        : isPrimaryAdminUser(targetAccount.email)
+          ? 'r6KDRrPBerb0KiJ3M5QYpZ0Yjl62'
+          : targetAccount.id;
+
+    const created: CouncilTask = {
+      id: `task-${Date.now()}`,
+      title: cleanTitle.slice(0, 300),
+      description:
+        taskDescInput.trim().slice(0, 2000) ||
+        `Assigned council action item for ${targetAccount.name} (${targetAccount.position}).`,
+      assignedToUid: resolvedAssigneeUid,
+      assignedToName: `${targetAccount.name} (${targetAccount.position})`,
+      status: 'pending',
+      createdBy: `${official.name} (${official.position})`,
+      createdAt: new Date().toISOString(),
+      completedAt: null,
+    };
+
+    onAddTask(created);
+    setTaskTitleInput('');
+    setTaskDescInput('');
+  };
 
   const recentEditedEntries = useMemo(() => {
     const items: Array<{
@@ -1387,7 +1433,7 @@ export function AdminDashboardPage({
           id: 'branding' as AdminTab,
           label: 'Branding & Media',
           icon: ImageIcon,
-          count: 3,
+          count: 2,
         },
         ...(isWebAdmin
           ? [
@@ -1467,9 +1513,9 @@ export function AdminDashboardPage({
         aria-label="SSC Suite navigation"
         className="hidden lg:flex lg:w-64 xl:w-68 shrink-0 flex-col justify-between border-r border-white/[0.12] bg-[#121620] select-none"
       >
-        <div className="p-4 space-y-6">
+        <div className="p-4 space-y-5">
           {/* Top Brand Identity */}
-          <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+          <div className="flex items-center justify-between gap-2 px-2 py-1">
             <div className="flex items-center gap-3 min-w-0">
               <div className="h-9 w-9 rounded-lg bg-[#3ddc97] text-[#042412] flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">
                 <LayoutDashboard className="h-4.5 w-4.5" aria-hidden="true" />
@@ -1483,6 +1529,29 @@ export function AdminDashboardPage({
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Immediate Always-Visible Actions: Go to Portal & Sign Out (Task 1) */}
+          <div className="grid grid-cols-2 gap-2 px-1">
+            <button
+              type="button"
+              onClick={() => onNavigate('home')}
+              className="inline-flex items-center justify-center gap-1.5 min-h-[36px] px-2.5 py-1.5 rounded-lg border border-white/[0.16] bg-[#0b0e15] text-xs font-semibold text-[#f5f4f0] hover:border-[#3ddc97]/50 transition-colors cursor-pointer"
+            >
+              <ExternalLink className="h-3.5 w-3.5 text-[#3ddc97] shrink-0" aria-hidden="true" />
+              <span className="truncate">Portal</span>
+            </button>
+
+            {onSignOutOfficial && (
+              <button
+                type="button"
+                onClick={onSignOutOfficial}
+                className="inline-flex items-center justify-center gap-1.5 min-h-[36px] px-2.5 py-1.5 rounded-lg border border-red-500/35 bg-red-500/12 text-xs font-semibold text-[#fca5a5] hover:bg-red-500/20 transition-colors cursor-pointer"
+              >
+                <LogOut className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">Sign Out</span>
+              </button>
+            )}
           </div>
 
           {/* Grouped Navigation Links */}
@@ -1533,35 +1602,8 @@ export function AdminDashboardPage({
           </div>
         </div>
 
-        {/* Bottom Actions: Theme, Live Website Link & Signed-In User */}
-        <div className="p-4 border-t border-white/[0.12] space-y-2.5">
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => onNavigate('home')}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-lg border border-white/[0.14] bg-[#0b0e15] text-xs font-medium text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
-            >
-              <ExternalLink className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
-              <span>Live Portal</span>
-            </button>
-
-            {onToggleTheme && (
-              <button
-                type="button"
-                aria-label="Toggle theme"
-                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-                onClick={onToggleTheme}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.14] bg-[#0b0e15] text-[#b4bac6] hover:text-[#f5f4f0] transition-colors cursor-pointer"
-              >
-                {theme === 'dark' ? (
-                  <Sun className="h-4 w-4 text-[#facc15]" aria-hidden="true" />
-                ) : (
-                  <Moon className="h-4 w-4 text-[#3ddc97]" aria-hidden="true" />
-                )}
-              </button>
-            )}
-          </div>
-
+        {/* Bottom Profile & Theme Toggle */}
+        <div className="p-4 border-t border-white/[0.12]">
           <div className="flex items-center justify-between gap-2.5 rounded-lg border border-white/[0.1] bg-[#0b0e15] px-2.5 py-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="h-7 w-7 rounded-full bg-[#181d29] border border-white/[0.16] flex items-center justify-center text-[11px] font-bold text-[#3ddc97] shrink-0">
@@ -1577,15 +1619,19 @@ export function AdminDashboardPage({
               </div>
             </div>
 
-            {onSignOutOfficial && (
+            {onToggleTheme && (
               <button
                 type="button"
-                aria-label="Sign out of SSC Suite"
-                title="Sign out"
-                onClick={onSignOutOfficial}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#949ba8] hover:text-[#f87171] transition-colors cursor-pointer shrink-0"
+                aria-label="Toggle theme"
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                onClick={onToggleTheme}
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-white/[0.12] bg-[#121620] text-[#b4bac6] hover:text-[#f5f4f0] transition-colors cursor-pointer"
               >
-                <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+                {theme === 'dark' ? (
+                  <Sun className="h-3.5 w-3.5 text-[#facc15]" aria-hidden="true" />
+                ) : (
+                  <Moon className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
+                )}
               </button>
             )}
           </div>
@@ -1594,17 +1640,17 @@ export function AdminDashboardPage({
 
       {/* ====================================================================
           MOBILE TOP BAR + RIGHT-ALIGNED MENU DRAWER (< lg)
-          Burger menu stays on the right side so it never jumps to the left
+          Shows Go to Portal & Sign Out immediately on load alongside burger menu
          ==================================================================== */}
-      <div className="lg:hidden sticky top-0 z-40 border-b border-white/[0.12] bg-[#121620]/90 backdrop-blur-md">
-        <div className="px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+      <div className="lg:hidden sticky top-0 z-40 border-b border-white/[0.12] bg-[#121620]">
+        <div className="px-3.5 sm:px-6 h-14 flex items-center justify-between gap-2">
           {/* Left: SSC Suite Brand */}
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             <div className="h-8 w-8 rounded-lg bg-[#3ddc97] text-[#042412] flex items-center justify-center font-bold text-xs shrink-0">
               <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
             </div>
             <div className="min-w-0 leading-tight">
-              <p className="text-sm font-bold text-[#f5f4f0] truncate">
+              <p className="text-xs sm:text-sm font-bold text-[#f5f4f0] truncate">
                 SSC Suite
               </p>
               <p className="text-[10px] text-[#949ba8] truncate">
@@ -1613,16 +1659,27 @@ export function AdminDashboardPage({
             </div>
           </div>
 
-          {/* Right: Live Portal Button + Right-Side Menu Button */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Right: Portal + Sign Out + Right-Side Burger Menu Button */}
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => onNavigate('home')}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-white/[0.14] bg-[#0b0e15] text-xs font-medium text-[#f5f4f0] cursor-pointer"
+              className="inline-flex items-center gap-1.5 h-8.5 px-2.5 rounded-lg border border-white/[0.14] bg-[#0b0e15] text-[11px] font-semibold text-[#f5f4f0] cursor-pointer"
             >
-              <ExternalLink className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
+              <ExternalLink className="h-3 w-3 text-[#3ddc97]" aria-hidden="true" />
               <span>Portal</span>
             </button>
+
+            {onSignOutOfficial && (
+              <button
+                type="button"
+                onClick={onSignOutOfficial}
+                className="inline-flex items-center gap-1 h-8.5 px-2.5 rounded-lg border border-red-500/35 bg-red-500/12 text-[11px] font-semibold text-[#fca5a5] cursor-pointer"
+              >
+                <LogOut className="h-3 w-3" aria-hidden="true" />
+                <span>Sign Out</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -1631,21 +1688,21 @@ export function AdminDashboardPage({
               }
               aria-expanded={mobileDrawerOpen}
               onClick={() => setMobileDrawerOpen((prev) => !prev)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.14] bg-[#0b0e15] text-[#f5f4f0] cursor-pointer"
+              className="inline-flex h-8.5 w-8.5 items-center justify-center rounded-lg border border-white/[0.14] bg-[#0b0e15] text-[#f5f4f0] cursor-pointer"
             >
               {mobileDrawerOpen ? (
-                <X className="h-4.5 w-4.5" aria-hidden="true" />
+                <X className="h-4 w-4" aria-hidden="true" />
               ) : (
-                <Menu className="h-4.5 w-4.5" aria-hidden="true" />
+                <Menu className="h-4 w-4" aria-hidden="true" />
               )}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Separate Floating Mobile Module Switcher Bar Below Top Bar (< lg) */}
-      <div className="lg:hidden px-4 sm:px-6 pt-3 pb-1">
-        <div className="rounded-xl border border-white/[0.12] bg-[#121620] p-1.5">
+      {/* Separate In-Page Mobile Module Switcher Bar Below Top Bar (< lg) */}
+      <div className="lg:hidden border-b border-white/[0.12] bg-[#121620] px-4 sm:px-6 py-3">
+        <div className="rounded-2xl border border-white/[0.12] bg-[#0b0e15] p-1.5">
           <ResistiveFilterBar
             ariaLabel="SSC Suite modules"
             compact
@@ -1662,120 +1719,154 @@ export function AdminDashboardPage({
         </div>
       </div>
 
-      {/* Mobile Right-Aligned Drawer Sheet */}
+      {/* Compact Mobile Right Slide-In Drawer Sheet */}
       {typeof document !== 'undefined' &&
         createPortal(
           <AnimatePresence>
             {mobileDrawerOpen && (
-              <div className="fixed inset-0 z-50 lg:hidden">
+              <div className="fixed inset-0 z-50 lg:hidden overflow-hidden">
                 <motion.div
                   aria-hidden="true"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
+                  transition={{ duration: 0.18 }}
                   onClick={() => setMobileDrawerOpen(false)}
-                  className="fixed inset-0 bg-black/55 backdrop-blur-xs"
+                  className="fixed inset-0 bg-black/50 touch-none select-none"
                 />
-                <motion.div
+                <motion.aside
                   role="dialog"
                   aria-modal="true"
                   aria-label="SSC Suite navigation drawer"
-                  initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
-                  style={{ transformOrigin: 'top right' }}
-                  className="fixed top-[60px] left-3 right-3 sm:left-auto sm:right-6 sm:w-[340px] z-50 rounded-2xl border border-white/[0.16] bg-[#121620] p-4 shadow-2xl space-y-4 max-h-[calc(100dvh-5rem)] overflow-y-auto"
+                  initial={{ x: '100%' }}
+                  animate={{ x: 0 }}
+                  exit={{ x: '100%' }}
+                  transition={{
+                    type: 'spring',
+                    stiffness: 400,
+                    damping: 36,
+                    mass: 0.8,
+                  }}
+                  className="fixed top-0 right-0 bottom-0 z-50 w-[264px] sm:w-[300px] max-w-[82vw] flex flex-col border-l border-white/[0.14] bg-[#0d1017] shadow-2xl"
                 >
-                  {navSections.map((section) => (
-                    <div key={section.group} className="space-y-1.5">
-                      <p className="px-1 text-[11px] font-semibold uppercase tracking-wider text-[#949ba8]">
-                        {section.group}
-                      </p>
-                      <div className="grid grid-cols-1 gap-1">
-                        {section.items.map((item) => {
-                          const Icon = item.icon;
-                          const isActive = activeTab === item.id;
-                          return (
-                            <button
-                              key={item.id}
-                              type="button"
-                              onClick={() => {
-                                setActiveTab(item.id);
-                                setMobileDrawerOpen(false);
-                              }}
-                              className={`w-full flex items-center justify-between gap-2.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors cursor-pointer ${
-                                isActive
-                                  ? 'bg-[#181d29] text-[#3ddc97] border border-white/[0.16]'
-                                  : 'bg-[#0b0e15] text-[#b4bac6] hover:text-[#f5f4f0] border border-white/[0.08]'
-                              }`}
-                            >
-                              <span className="flex items-center gap-2">
-                                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                                <span>{item.label}</span>
-                              </span>
-                              {typeof item.count === 'number' && (
-                                <span className="text-[11px] text-[#949ba8] tabular-nums">
-                                  {item.count}
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
+                  <div className="shrink-0 flex items-center justify-between px-3.5 h-13 border-b border-white/[0.1] bg-[#121620]">
+                    <span className="text-sm font-bold text-[#f5f4f0]">
+                      SSC Suite
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="Close SSC Suite menu"
+                      onClick={() => setMobileDrawerOpen(false)}
+                      className="inline-flex h-7.5 w-7.5 items-center justify-center rounded-lg border border-white/[0.12] bg-[#181d29] text-[#b4bac6] hover:text-[#f5f4f0] cursor-pointer"
+                    >
+                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
 
-                  <div className="pt-3 border-t border-white/[0.12] space-y-2">
+                  <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3.5">
+                    {navSections.map((section) => (
+                      <div key={section.group} className="space-y-1">
+                        <p className="px-1 text-[10px] font-semibold uppercase tracking-wider text-[#949ba8]">
+                          {section.group}
+                        </p>
+                        <div className="grid grid-cols-1 gap-1">
+                          {section.items.map((item) => {
+                            const Icon = item.icon;
+                            const isActive = activeTab === item.id;
+                            return (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => {
+                                  setActiveTab(item.id);
+                                  setMobileDrawerOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between gap-2 min-h-[36px] rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                                  isActive
+                                    ? 'bg-[#181d29] text-[#3ddc97] border border-white/[0.16]'
+                                    : 'bg-[#121620] text-[#b4bac6] hover:text-[#f5f4f0] border border-white/[0.08]'
+                                }`}
+                              >
+                                <span className="flex items-center gap-2 truncate">
+                                  <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                                  <span className="truncate">{item.label}</span>
+                                </span>
+                                {typeof item.count === 'number' && (
+                                  <span className="text-[11px] text-[#949ba8] tabular-nums">
+                                    {item.count}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="shrink-0 p-3 border-t border-white/[0.1] bg-[#121620] space-y-2">
                     {onToggleTheme && (
                       <button
                         type="button"
                         onClick={onToggleTheme}
-                        className="w-full flex items-center justify-between rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-xs font-semibold text-[#f5f4f0] cursor-pointer"
+                        className="w-full flex items-center justify-between rounded-lg border border-white/[0.12] bg-[#0b0e15] px-2.5 py-1.5 text-xs font-semibold text-[#f5f4f0] cursor-pointer"
                       >
                         <span className="text-[#b4bac6]">Theme</span>
                         <span className="inline-flex items-center gap-1.5">
                           {theme === 'dark' ? (
                             <>
                               <Sun className="h-3.5 w-3.5 text-[#facc15]" />
-                              <span>Light Mode</span>
+                              <span>Light</span>
                             </>
                           ) : (
                             <>
                               <Moon className="h-3.5 w-3.5 text-[#3ddc97]" />
-                              <span>Dark Mode</span>
+                              <span>Dark</span>
                             </>
                           )}
                         </span>
                       </button>
                     )}
 
-                    <div className="flex items-center justify-between gap-2 rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2">
+                    <div className="rounded-lg border border-white/[0.12] bg-[#0b0e15] p-2.5 space-y-2">
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-[#f5f4f0] truncate">
                           {official.name}
                         </p>
-                        <p className="text-[11px] text-[#949ba8] truncate">
+                        <p className="text-[10px] text-[#949ba8] truncate">
                           {official.position}
                         </p>
                       </div>
-                      {onSignOutOfficial && (
+
+                      <div className="grid grid-cols-2 gap-1.5">
                         <button
                           type="button"
                           onClick={() => {
                             setMobileDrawerOpen(false);
-                            onSignOutOfficial();
+                            onNavigate('home');
                           }}
-                          className="inline-flex items-center gap-1 rounded-md border border-red-500/35 bg-red-500/10 px-2.5 py-1 text-xs font-semibold text-[#fca5a5] cursor-pointer"
+                          className="inline-flex items-center justify-center gap-1 rounded-md border border-white/[0.14] bg-[#121620] px-2 py-1.5 text-[11px] font-semibold text-[#f5f4f0] cursor-pointer"
                         >
-                          <LogOut className="h-3 w-3" />
-                          <span>Sign Out</span>
+                          <ExternalLink className="h-3 w-3 text-[#3ddc97]" />
+                          <span>Portal</span>
                         </button>
-                      )}
+                        {onSignOutOfficial && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMobileDrawerOpen(false);
+                              onSignOutOfficial();
+                            }}
+                            className="inline-flex items-center justify-center gap-1 rounded-md border border-red-500/35 bg-red-500/12 px-2 py-1.5 text-[11px] font-semibold text-[#fca5a5] cursor-pointer"
+                          >
+                            <LogOut className="h-3 w-3" />
+                            <span>Sign Out</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </motion.div>
+                </motion.aside>
               </div>
             )}
           </AnimatePresence>,
@@ -1796,99 +1887,69 @@ export function AdminDashboardPage({
                   Hello {firstName}
                 </h1>
                 <p className="mt-1 text-sm text-[#949ba8]">
-                  Welcome to your SSC Suite administration panel
+                  Welcome to your SSC Suite administration panel ({official.position})
                 </p>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={openBrandingModal}
-                  className="inline-flex items-center gap-1.5 min-h-[36px] px-3.5 py-1.5 rounded-lg border border-white/[0.14] bg-[#121620] text-xs font-medium text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
-                >
-                  <ImageIcon className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
-                  <span>Edit Photo &amp; Logo</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={openNewAnnouncement}
-                  className="gemini-cta inline-flex items-center gap-1.5 min-h-[36px] px-3.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>New Entry</span>
-                </button>
               </div>
             </div>
 
-            {/* Row 1: Strapi 2-Column Hero Card (Website Visits & Traffic + Your Tasks) */}
+            {/* Row 1: Strapi 2-Column Hero Card (Total Visits Counter + Council Account Tasks) */}
             <div className="rounded-xl border border-white/[0.12] bg-[#121620] overflow-hidden">
               <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-white/[0.12]">
-                {/* Left Column: Website Visits & Live Portal Analytics */}
-                <div className="lg:col-span-6 p-5 sm:p-6 flex flex-col justify-between gap-5">
+                {/* Left Column: Total Visits Counter (Task 3) */}
+                <div className="lg:col-span-5 p-5 sm:p-6 flex flex-col justify-between gap-5">
                   <div className="space-y-3">
                     <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#3ddc97]/15 text-[#3ddc97]">
                       <Activity className="h-4.5 w-4.5" aria-hidden="true" />
                     </div>
+
                     <div>
                       <h2 className="text-base sm:text-lg font-bold text-[#f5f4f0]">
-                        Website Visits &amp; Portal Activity
+                        Portal Visit Counter
                       </h2>
                       <p className="mt-1 text-xs sm:text-sm text-[#b4bac6] leading-relaxed">
-                        Live student and visitor traffic across the Smart Council portal, synced with your active collections.
+                        Cumulative student and visitor sessions recorded across the Smart Council portal.
                       </p>
                     </div>
                   </div>
 
-                  {/* Website Visits Metrics Strip */}
-                  <div className="grid grid-cols-3 gap-2.5">
-                    <div className="rounded-lg border border-white/[0.1] bg-[#0b0e15] p-3">
-                      <p className="text-[11px] font-medium text-[#949ba8]">
-                        Total Visits
-                      </p>
-                      <p className="mt-1 text-lg sm:text-xl font-bold text-[#f5f4f0] tabular-nums">
-                        {visitStats.totalVisits.toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-white/[0.1] bg-[#0b0e15] p-3">
-                      <p className="text-[11px] font-medium text-[#949ba8]">
-                        Today
-                      </p>
-                      <p className="mt-1 text-lg sm:text-xl font-bold text-[#3ddc97] tabular-nums">
-                        {visitStats.todayVisits.toLocaleString()}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-white/[0.1] bg-[#0b0e15] p-3">
-                      <p className="text-[11px] font-medium text-[#949ba8]">
-                        Page Views
-                      </p>
-                      <p className="mt-1 text-lg sm:text-xl font-bold text-[#facc15] tabular-nums">
-                        {visitStats.pageViews.toLocaleString()}
-                      </p>
-                    </div>
+                  {/* Single Total Visits Metric Card */}
+                  <div className="rounded-xl border border-white/[0.12] bg-[#0b0e15] p-4 sm:p-5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[#949ba8]">
+                      Total Visits
+                    </p>
+                    <p className="mt-1.5 text-3xl sm:text-4xl font-bold text-[#f5f4f0] tabular-nums">
+                      {totalVisits.toLocaleString()}
+                    </p>
                   </div>
 
-                  {/* Progress & Quick Action */}
+                  {/* Task Progress & Quick Content Manager Action */}
                   <div className="space-y-3 pt-1">
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between text-xs text-[#949ba8] tabular-nums">
-                        <span>Portal setup progress</span>
+                        <span>Assigned task completion</span>
                         <span className="font-semibold text-[#f5f4f0]">
-                          {completedTasksCount}/{suiteTasks.length}
+                          {completedTasksCount}/{displayedTasks.length}
                         </span>
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-[#0b0e15] overflow-hidden">
                         <div
                           style={{
-                            width: `${Math.round(
-                              (completedTasksCount / suiteTasks.length) * 100
-                            )}%`,
+                            width: `${
+                              displayedTasks.length > 0
+                                ? Math.round(
+                                    (completedTasksCount /
+                                      displayedTasks.length) *
+                                      100
+                                  )
+                                : 0
+                            }%`,
                           }}
                           className="h-full bg-[#3ddc97] transition-all duration-300"
                         />
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex flex-wrap items-center gap-2.5">
                       <button
                         type="button"
                         onClick={() => setActiveTab('announcements')}
@@ -1897,69 +1958,239 @@ export function AdminDashboardPage({
                         <span>Open Content Manager</span>
                         <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onNavigate('home')}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-[#949ba8] hover:text-[#f5f4f0] transition-colors cursor-pointer"
-                      >
-                        <span>View live website</span>
-                        <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
-                      </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Right Column: Strapi "Your tasks" Checklist */}
-                <div className="lg:col-span-6 p-5 sm:p-6 flex flex-col justify-between gap-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-bold text-[#f5f4f0]">
-                      Your tasks
-                    </h2>
-                    <span className="text-xs text-[#949ba8] tabular-nums">
-                      {completedTasksCount}/{suiteTasks.length} completed
-                    </span>
-                  </div>
+                {/* Right Column: Assigned Tasks Linked to Council Accounts (Task 2) */}
+                <div className="lg:col-span-7 p-5 sm:p-6 flex flex-col justify-between gap-4">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <h2 className="text-sm sm:text-base font-bold text-[#f5f4f0]">
+                          Council Officer Assigned Tasks
+                        </h2>
+                        <p className="text-xs text-[#949ba8]">
+                          {isWebAdmin
+                            ? 'Assign action items to Council Accounts. Only the assigned officer can open or complete their task.'
+                            : 'Tasks assigned directly to your Council Account.'}
+                        </p>
+                      </div>
+                      <span className="text-xs font-mono text-[#3ddc97] tabular-nums">
+                        {displayedTasks.length}{' '}
+                        {displayedTasks.length === 1 ? 'task' : 'tasks'}
+                      </span>
+                    </div>
 
-                  <div className="divide-y divide-white/[0.08]">
-                    {suiteTasks.map((task) => (
-                      <div
-                        key={task.id}
-                        className="py-3 flex items-center justify-between gap-3"
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          {task.done ? (
-                            <CheckCircle2
-                              className="h-4 w-4 text-[#3ddc97] shrink-0"
-                              aria-hidden="true"
+                    {/* Create Assigned Task Form linked to Council Accounts */}
+                    <form
+                      onSubmit={handleCreateTaskSubmit}
+                      className="rounded-xl border border-white/[0.12] bg-[#0b0e15] p-3.5 space-y-3"
+                    >
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[#949ba8] mb-1">
+                            Search Council Officer
+                          </label>
+                          <div className="relative">
+                            <Search className="h-3.5 w-3.5 text-[#949ba8] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="text"
+                              value={assigneeSearchQuery}
+                              onChange={(e) =>
+                                setAssigneeSearchQuery(e.target.value)
+                              }
+                              placeholder="Filter by name or position..."
+                              className="w-full min-h-[34px] rounded-lg border border-white/[0.12] bg-[#121620] pl-8 pr-2.5 py-1 text-xs text-[#f5f4f0] placeholder:text-[#949ba8]"
                             />
-                          ) : (
-                            <Circle
-                              className="h-4 w-4 text-[#949ba8] shrink-0"
-                              aria-hidden="true"
-                            />
-                          )}
-                          <span
-                            className={`text-xs sm:text-sm truncate ${
-                              task.done
-                                ? 'text-[#949ba8] line-through'
-                                : 'text-[#f5f4f0] font-medium'
-                            }`}
-                          >
-                            {task.label}
-                          </span>
+                          </div>
                         </div>
 
+                        <div>
+                          <label className="block text-[11px] font-semibold text-[#949ba8] mb-1">
+                            Assign to Council Account *
+                          </label>
+                          <select
+                            required
+                            value={selectedAssigneeId}
+                            onChange={(e) =>
+                              setSelectedAssigneeId(e.target.value)
+                            }
+                            aria-label="Select Council Account Assignee"
+                            className="w-full min-h-[34px] rounded-lg border border-white/[0.14] bg-[#121620] px-2.5 py-1 text-xs font-semibold text-[#f5f4f0]"
+                          >
+                            {filteredAssigneeAccounts.length === 0 ? (
+                              <option value="">No matching officer account</option>
+                            ) : (
+                              filteredAssigneeAccounts.map((acc) => (
+                                <option key={acc.id} value={acc.id}>
+                                  {acc.name} — {acc.position}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                        <input
+                          type="text"
+                          required
+                          maxLength={300}
+                          value={taskTitleInput}
+                          onChange={(e) => setTaskTitleInput(e.target.value)}
+                          placeholder="Task title (e.g. Prepare General Assembly budget report)..."
+                          aria-label="Task title"
+                          className="sm:col-span-5 min-h-[36px] rounded-lg border border-white/[0.12] bg-[#121620] px-3 py-1.5 text-xs text-[#f5f4f0] placeholder:text-[#949ba8]"
+                        />
+                        <input
+                          type="text"
+                          maxLength={2000}
+                          value={taskDescInput}
+                          onChange={(e) => setTaskDescInput(e.target.value)}
+                          placeholder="Instructions or task details..."
+                          aria-label="Task description"
+                          className="sm:col-span-4 min-h-[36px] rounded-lg border border-white/[0.12] bg-[#121620] px-3 py-1.5 text-xs text-[#f5f4f0] placeholder:text-[#949ba8]"
+                        />
                         <button
-                          type="button"
-                          onClick={task.action}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#3ddc97] hover:underline shrink-0 cursor-pointer"
+                          type="submit"
+                          disabled={filteredAssigneeAccounts.length === 0}
+                          className="sm:col-span-3 gemini-cta inline-flex items-center justify-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 cursor-pointer disabled:opacity-50"
                         >
-                          <span>{task.done ? 'Open' : 'Start'}</span>
-                          <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>Assign Task</span>
                         </button>
                       </div>
-                    ))}
+                    </form>
                   </div>
+
+                  {/* Assigned Task List */}
+                  {displayedTasks.length === 0 ? (
+                    <div className="rounded-xl border border-white/[0.08] bg-[#0b0e15] p-6 text-center space-y-1">
+                      <p className="text-xs sm:text-sm font-semibold text-[#f5f4f0]">
+                        No assigned tasks for your account yet
+                      </p>
+                      <p className="text-xs text-[#949ba8]">
+                        Use the form above to assign a task to a Council Account.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-white/[0.08] max-h-[260px] overflow-y-auto pr-1">
+                      {displayedTasks.map((task) => {
+                        const isAssignedToMe =
+                          task.assignedToUid === currentOfficerUid;
+                        const isCompleted = task.status === 'completed';
+
+                        return (
+                          <div
+                            key={task.id}
+                            className="py-2.5 flex items-center justify-between gap-3"
+                          >
+                            <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                              <button
+                                type="button"
+                                disabled={!isAssignedToMe}
+                                onClick={() => {
+                                  if (!isAssignedToMe) return;
+                                  onToggleTask?.(task.id);
+                                }}
+                                title={
+                                  isAssignedToMe
+                                    ? isCompleted
+                                      ? 'Mark as pending'
+                                      : 'Mark as completed'
+                                    : `Locked: Only ${task.assignedToName} can complete this task`
+                                }
+                                className={`mt-0.5 shrink-0 ${
+                                  isAssignedToMe
+                                    ? 'cursor-pointer group'
+                                    : 'cursor-not-allowed opacity-50'
+                                }`}
+                              >
+                                {isCompleted ? (
+                                  <CheckCircle2
+                                    className="h-4 w-4 text-[#3ddc97]"
+                                    aria-hidden="true"
+                                  />
+                                ) : isAssignedToMe ? (
+                                  <Circle
+                                    className="h-4 w-4 text-[#949ba8] group-hover:text-[#3ddc97] transition-colors"
+                                    aria-hidden="true"
+                                  />
+                                ) : (
+                                  <Lock
+                                    className="h-4 w-4 text-[#facc15]"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={!isAssignedToMe}
+                                onClick={() => {
+                                  if (!isAssignedToMe) return;
+                                  setSelectedTaskModal(task);
+                                }}
+                                className={`min-w-0 flex-1 text-left space-y-0.5 ${
+                                  isAssignedToMe
+                                    ? 'cursor-pointer hover:opacity-90'
+                                    : 'cursor-not-allowed opacity-75'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <p
+                                    className={`text-xs sm:text-sm break-words ${
+                                      isCompleted
+                                        ? 'text-[#949ba8] line-through'
+                                        : 'text-[#f5f4f0] font-semibold'
+                                    }`}
+                                  >
+                                    {task.title}
+                                  </p>
+                                  {isAssignedToMe ? (
+                                    <span className="text-[10px] font-semibold text-[#3ddc97] shrink-0">
+                                      Open details &rsaquo;
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 bg-[#facc15]/15 text-[#facc15] text-[10px] font-semibold shrink-0">
+                                      <Lock className="h-2.5 w-2.5" />
+                                      Assignee Only
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                                  <span className="rounded-md px-1.5 py-0.5 font-semibold border bg-[#3ddc97]/12 text-[#3ddc97] border-[#3ddc97]/30">
+                                    Assignee: {task.assignedToName}
+                                  </span>
+                                  <span className="text-[#949ba8]">
+                                    by {task.createdBy}
+                                  </span>
+                                </div>
+                              </button>
+                            </div>
+
+                            {onDeleteTask &&
+                              (isWebAdmin || isAssignedToMe) && (
+                                <button
+                                  type="button"
+                                  onClick={() => onDeleteTask(task.id)}
+                                  title="Delete task"
+                                  aria-label={`Delete task ${task.title}`}
+                                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#949ba8] hover:text-[#fca5a5] hover:bg-red-500/15 transition-colors cursor-pointer"
+                                >
+                                  <Trash2
+                                    className="h-3.5 w-3.5"
+                                    aria-hidden="true"
+                                  />
+                                </button>
+                              )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2178,40 +2409,36 @@ export function AdminDashboardPage({
           </div>
         )}
 
-        {/* TAB: BRANDING, LOGO & ABOUT SLAC CARD PHOTO */}
+        {/* TAB: BRANDING, LOGO & ABOUT SLAC CARD PHOTO (Task 5) */}
         {activeTab === 'branding' && (
           <div className="space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/[0.12] pb-4">
-              <div>
-                <h1 className="text-xl sm:text-2xl font-bold text-[#f5f4f0]">
-                  Branding &amp; Media Assets
-                </h1>
-                <p className="mt-0.5 text-xs sm:text-sm text-[#949ba8]">
-                  Synced with ImageKit (ik.imagekit.io/slacssc) and Cloud Firestore.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={openBrandingModal}
-                className="inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-semibold rounded-lg border border-white/[0.16] bg-[#121620] text-[#f5f4f0] hover:border-white/[0.28] cursor-pointer"
-              >
-                <Edit3 className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
-                <span>Photo &amp; Logo Editor</span>
-              </button>
+            <div className="border-b border-white/[0.12] pb-4">
+              <h1 className="text-xl sm:text-2xl font-bold text-[#f5f4f0]">
+                Photo &amp; Logo Editor
+              </h1>
+              <p className="mt-0.5 text-xs sm:text-sm text-[#949ba8]">
+                Upload, reposition, zoom, and apply the official Website Seal and About SLAC Card photo.
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {/* Card 1: Website Logo */}
-              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-5 space-y-4 flex flex-col">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-[#f5f4f0]">
-                    Website Seal / Logo
-                  </span>
-                  <span className="text-xs font-medium text-[#949ba8] tabular-nums">
-                    1:1
-                  </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Card 1: Website Seal / Logo */}
+              <div className="rounded-xl border border-white/[0.12] bg-[#121620] p-5 sm:p-6 space-y-4 flex flex-col justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm sm:text-base font-bold text-[#f5f4f0]">
+                      Website Seal / Logo
+                    </span>
+                    <span className="rounded-md bg-[#0b0e15] border border-white/[0.1] px-2 py-0.5 text-[11px] font-mono text-[#3ddc97] tabular-nums">
+                      1:1 Seal
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#949ba8]">
+                    Displayed in the navigation bar, footer, and official sign-in dialog.
+                  </p>
                 </div>
-                <div className="aspect-square w-32 mx-auto rounded-xl border border-white/[0.1] bg-[#0b0e15] p-3.5 flex items-center justify-center overflow-hidden">
+
+                <div className="aspect-logo-card w-36 mx-auto rounded-xl border border-white/[0.12] bg-[#0b0e15] p-3.5 flex items-center justify-center overflow-hidden">
                   <img
                     src={
                       resolveImageUrl(
@@ -2225,6 +2452,7 @@ export function AdminDashboardPage({
                     className="h-full w-full object-contain"
                   />
                 </div>
+
                 <ImageKitUploader
                   value={branding.customLogoUrl}
                   onChange={(nextUrl) =>
@@ -2234,23 +2462,29 @@ export function AdminDashboardPage({
                     })
                   }
                   folder="logo"
-                  label="Logo"
+                  label="Upload → Adjust → Apply Seal"
                   aspect="square"
                   cardType="logo"
                 />
               </div>
 
               {/* Card 2: About SLAC Card Photo */}
-              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-5 space-y-4 flex flex-col">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-[#f5f4f0]">
-                    About SLAC Photo
-                  </span>
-                  <span className="text-xs font-medium text-[#949ba8] tabular-nums">
-                    4:3
-                  </span>
+              <div className="rounded-xl border border-white/[0.12] bg-[#121620] p-5 sm:p-6 space-y-4 flex flex-col justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm sm:text-base font-bold text-[#f5f4f0]">
+                      About SLAC Card Photo
+                    </span>
+                    <span className="rounded-md bg-[#0b0e15] border border-white/[0.1] px-2 py-0.5 text-[11px] font-mono text-[#3ddc97] tabular-nums">
+                      4:3 Card
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#949ba8]">
+                    Displayed in the About SLAC &amp; Supreme Student Council feature card on the home page.
+                  </p>
                 </div>
-                <div className="aspect-[4/3] w-full rounded-xl border border-white/[0.1] bg-[#0b0e15] overflow-hidden">
+
+                <div className="aspect-about-card w-full rounded-xl border border-white/[0.12] bg-[#0b0e15] overflow-hidden">
                   <img
                     src={
                       resolveImageUrl(
@@ -2267,6 +2501,7 @@ export function AdminDashboardPage({
                     className="h-full w-full object-cover"
                   />
                 </div>
+
                 <ImageKitUploader
                   value={branding.aboutSlacImage}
                   onChange={(nextUrl) =>
@@ -2276,47 +2511,9 @@ export function AdminDashboardPage({
                     })
                   }
                   folder="council-stock"
-                  label="About Photo"
+                  label="Upload → Adjust → Apply Photo"
                   aspect="landscape"
                   cardType="about"
-                />
-              </div>
-
-              {/* Card 3: Campus Stock / Fallback Photo */}
-              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-5 space-y-4 flex flex-col">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-[#f5f4f0]">
-                    Campus Stock Photo
-                  </span>
-                  <span className="text-xs font-medium text-[#949ba8] tabular-nums">
-                    16:9
-                  </span>
-                </div>
-                <div className="aspect-[16/9] w-full rounded-xl border border-white/[0.1] bg-[#0b0e15] overflow-hidden">
-                  <img
-                    src={
-                      resolveImageUrl(
-                        branding.heroImage,
-                        'w-800,c-at_max,f-auto,q-85'
-                      ) || stripImageFramingHash(branding.heroImage)
-                    }
-                    alt="Campus Stock Photo"
-                    referrerPolicy="no-referrer"
-                    style={getImageFramingStyle(branding.heroImage, 'landscape')}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-                <ImageKitUploader
-                  value={branding.heroImage}
-                  onChange={(nextUrl) =>
-                    onUpdateBranding({
-                      heroImage: nextUrl || siteConfig.hero.backgroundImage,
-                    })
-                  }
-                  folder="council-stock"
-                  label="Stock Photo"
-                  aspect="landscape"
-                  cardType="cover"
                 />
               </div>
             </div>
@@ -2459,18 +2656,13 @@ export function AdminDashboardPage({
             </div>
 
             {announcements.length === 0 ? (
-              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-8 text-center space-y-3">
+              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-8 text-center space-y-1.5">
                 <p className="text-sm font-semibold text-[#f5f4f0]">
                   No announcements published yet
                 </p>
-                <button
-                  type="button"
-                  onClick={openNewAnnouncement}
-                  className="gemini-cta inline-flex items-center gap-1.5 min-h-[36px] px-3.5 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Create first announcement</span>
-                </button>
+                <p className="text-xs text-[#949ba8]">
+                  Use the &ldquo;Create new entry&rdquo; button in the section header above to publish the first campus advisory.
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -2545,18 +2737,13 @@ export function AdminDashboardPage({
             </div>
 
             {events.length === 0 ? (
-              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-8 text-center space-y-3">
+              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-8 text-center space-y-1.5">
                 <p className="text-sm font-semibold text-[#f5f4f0]">
                   No upcoming events scheduled yet
                 </p>
-                <button
-                  type="button"
-                  onClick={openNewEvent}
-                  className="gemini-cta inline-flex items-center gap-1.5 min-h-[36px] px-3.5 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Schedule first event</span>
-                </button>
+                <p className="text-xs text-[#949ba8]">
+                  Use the &ldquo;Create new entry&rdquo; button in the section header above to schedule an upcoming campus activity.
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -2699,18 +2886,13 @@ export function AdminDashboardPage({
                 </p>
               </div>
             ) : activeOfficerRoster.officers.length === 0 ? (
-              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-8 text-center space-y-3">
+              <div className="rounded-xl border border-white/[0.1] bg-[#121620] p-8 text-center space-y-1.5">
                 <p className="text-sm font-semibold text-[#f5f4f0]">
                   No officers added to {activeOfficerRoster.term} yet
                 </p>
-                <button
-                  type="button"
-                  onClick={openNewOfficerEntry}
-                  className="gemini-cta inline-flex items-center gap-1.5 min-h-[36px] px-3.5 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Add First Officer</span>
-                </button>
+                <p className="text-xs text-[#949ba8]">
+                  Use the &ldquo;Add Officer&rdquo; button in the term toolbar above to populate this roster.
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
@@ -3078,6 +3260,112 @@ export function AdminDashboardPage({
       {typeof document !== 'undefined' &&
         createPortal(
           <AnimatePresence>
+            {activeModalTask && (
+              <motion.div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="admin-task-modal-title"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.14 }}
+                onClick={() => setSelectedTaskModal(null)}
+                className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80"
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.97, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.97, y: 8 }}
+                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="w-full max-w-lg rounded-2xl border border-white/[0.12] bg-[#131519] shadow-2xl overflow-hidden"
+                >
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08]">
+                    <div>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#3ddc97]">
+                        Assigned Officer Task
+                      </span>
+                      <h3
+                        id="admin-task-modal-title"
+                        className="text-lg font-bold text-[#f5f4f0]"
+                      >
+                        {activeModalTask.title}
+                      </h3>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Close task details"
+                      onClick={() => setSelectedTaskModal(null)}
+                      className="inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-lg text-[#b4bac6] hover:text-[#f5f4f0] hover:bg-[#1a1d22] cursor-pointer"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="p-6 space-y-4">
+                    <div className="rounded-xl border border-white/[0.1] bg-[#0b0e15] p-4 space-y-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-[#949ba8]">
+                        Instructions &amp; Details
+                      </p>
+                      <p className="text-sm text-[#f5f4f0] leading-relaxed whitespace-pre-line">
+                        {activeModalTask.description}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div className="rounded-lg border border-white/[0.08] bg-[#0b0e15] p-3">
+                        <p className="text-[#949ba8]">Assigned To</p>
+                        <p className="mt-0.5 font-semibold text-[#f5f4f0]">
+                          {activeModalTask.assignedToName}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-white/[0.08] bg-[#0b0e15] p-3">
+                        <p className="text-[#949ba8]">Created By</p>
+                        <p className="mt-0.5 font-semibold text-[#f5f4f0]">
+                          {activeModalTask.createdBy}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-between gap-3">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                          activeModalTask.status === 'completed'
+                            ? 'bg-[#3ddc97]/15 text-[#3ddc97] border border-[#3ddc97]/30'
+                            : 'bg-[#facc15]/15 text-[#facc15] border border-[#facc15]/30'
+                        }`}
+                      >
+                        {activeModalTask.status === 'completed'
+                          ? 'Status: Completed'
+                          : 'Status: Pending'}
+                      </span>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTaskModal(null)}
+                          className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-[#b4bac6] rounded-lg border border-white/[0.12] bg-[#181d29] cursor-pointer"
+                        >
+                          Close
+                        </button>
+                        {activeModalTask.assignedToUid === currentOfficerUid && (
+                          <button
+                            type="button"
+                            onClick={() => onToggleTask?.(activeModalTask.id)}
+                            className="gemini-cta min-h-[38px] px-4 py-1.5 text-xs font-semibold rounded-lg cursor-pointer"
+                          >
+                            {activeModalTask.status === 'completed'
+                              ? 'Mark as Pending'
+                              : 'Mark as Completed'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+
             {brandingModalOpen && (
               <motion.div
                 role="dialog"
@@ -3104,7 +3392,7 @@ export function AdminDashboardPage({
                       id="admin-branding-modal-title"
                       className="text-lg font-bold text-[#f5f4f0]"
                     >
-                      Edit Logo &amp; Portal Photos
+                      Photo &amp; Logo Editor
                     </h3>
                     <button
                       type="button"
@@ -3123,7 +3411,7 @@ export function AdminDashboardPage({
                       value={draftLogoUrl}
                       onChange={setDraftLogoUrl}
                       folder="logo"
-                      label="Website Logo (1:1)"
+                      label="Website Seal / Logo (1:1)"
                       aspect="square"
                       cardType="logo"
                     />
@@ -3135,15 +3423,6 @@ export function AdminDashboardPage({
                       label="About SLAC Card Photo (4:3)"
                       aspect="landscape"
                       cardType="about"
-                    />
-
-                    <ImageKitUploader
-                      value={draftHeroImg}
-                      onChange={setDraftHeroImg}
-                      folder="council-stock"
-                      label="Campus Stock Photo (16:9)"
-                      aspect="landscape"
-                      cardType="cover"
                     />
 
                     <div className="pt-2 flex justify-end gap-2.5">

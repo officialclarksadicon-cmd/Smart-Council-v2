@@ -5,7 +5,6 @@ import {
   Calendar,
   Check,
   Eye,
-  LayoutDashboard,
   LayoutGrid,
   List,
   Plus,
@@ -209,17 +208,6 @@ export function AnnouncementsPage({
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 type="button"
-                onClick={() => onNavigate('admin')}
-                className="inline-flex items-center gap-1.5 min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-lg border border-white/[0.14] bg-[#0b0e15] text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
-              >
-                <LayoutDashboard
-                  className="h-3.5 w-3.5 text-[#3ddc97]"
-                  aria-hidden="true"
-                />
-                <span>SSC Suite</span>
-              </button>
-              <button
-                type="button"
                 onClick={() => {
                   setShowDiscardConfirm(false);
                   setShowPostForm(true);
@@ -306,7 +294,9 @@ export function AnnouncementsPage({
                 No announcements match your filter
               </p>
               <p className="mt-1 text-xs sm:text-sm text-[#b4bac6]">
-                Try clearing your search or selecting “All” categories.
+                {official
+                  ? 'Try clearing your search, selecting “All” categories, or use the “New Announcement” button in the section header above.'
+                  : 'Try clearing your search or selecting “All” categories.'}
               </p>
             </div>
           ) : viewMode === 'grid' ? (
@@ -364,7 +354,7 @@ export function AnnouncementsPage({
                       />
 
                       {showBanner && (
-                        <div className="aspect-[16/9] w-full overflow-hidden border-b border-white/[0.08] bg-[#0b0e15] shrink-0">
+                        <div className="aspect-announcement-card w-full overflow-hidden border-b border-white/[0.08] bg-[#0b0e15] shrink-0">
                           <img
                             src={activeImgSrc}
                             alt={item.title}

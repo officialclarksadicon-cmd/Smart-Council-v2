@@ -191,7 +191,7 @@ function OfficerCommitteeRow({
                 key={member.id}
                 type="button"
                 onClick={() => onSelectOfficer(member)}
-                className="card-elevated group relative aspect-[3/4] w-[215px] sm:w-[240px] shrink-0 snap-start text-left rounded-2xl overflow-hidden bg-[#0b0f18] cursor-pointer"
+                className="card-elevated group relative aspect-officer-card w-[215px] sm:w-[240px] shrink-0 snap-start text-left rounded-2xl overflow-hidden bg-[#0b0f18] cursor-pointer"
               >
                 <div
                   className="h-[2px] w-full absolute top-0 inset-x-0 z-20"
@@ -444,7 +444,7 @@ export function OfficersPage({
 
                     return (
                       <div
-                        className="relative aspect-[3/4] max-h-[360px] w-full flex items-center justify-center bg-[#0d1017] overflow-hidden"
+                        className="relative aspect-officer-card max-h-[360px] w-full flex items-center justify-center bg-[#0d1017] overflow-hidden"
                         style={{
                           backgroundImage: hasModalPhoto
                             ? undefined

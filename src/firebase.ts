@@ -22,15 +22,18 @@ import {
   getDocFromServer,
   getDocs,
   getFirestore,
+  increment,
   onSnapshot,
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import {
   AnnouncementItem,
+  CouncilTask,
   FaqItem,
   ForumThread,
   GalleryEventItem,
@@ -309,6 +312,7 @@ export async function signInOfficialWithFirebaseAuth(
     if (isPrimaryAdminUser(auth.currentUser.email)) {
       return {
         id: 'acc-admin-1',
+        authUid: auth.currentUser.uid || PRIMARY_ADMIN_UID,
         email: PRIMARY_ADMIN_EMAIL,
         name: 'Clark Sadicon',
         position: 'Head Of Technical',
@@ -324,6 +328,7 @@ export async function signInOfficialWithFirebaseAuth(
         const d = uidSnap.data();
         return {
           id: String(d.id ?? auth.currentUser.uid),
+          authUid: String(d.authUid ?? auth.currentUser.uid),
           email: cleanEmail,
           name: String(d.name ?? auth.currentUser.displayName ?? 'SSC Official'),
           position: String(d.position ?? 'SSC Officer'),
@@ -338,6 +343,7 @@ export async function signInOfficialWithFirebaseAuth(
         const d = byEmailSnap.docs[0].data();
         return {
           id: String(d.id ?? byEmailSnap.docs[0].id),
+          authUid: String(d.authUid ?? auth.currentUser.uid),
           email: cleanEmail,
           name: String(d.name ?? auth.currentUser.displayName ?? 'SSC Official'),
           position: String(d.position ?? 'SSC Officer'),
@@ -765,7 +771,7 @@ export async function upsertEventToFirestore(
   const cleanId = sanitizeFirestoreId(item.id);
   const ref = doc(db, 'events', cleanId);
   const path = `events/${cleanId}`;
-  const fallbackImg = siteConfig.hero.backgroundImage;
+  const fallbackImg = siteConfig.councilSection.image;
   const safeImg =
     sanitizeFirestoreImageUrl(item.image, fallbackImg) || fallbackImg;
 
@@ -1021,11 +1027,6 @@ export async function upsertPortalSettingsToFirestore(
       branding?.aboutSlacImage ?? existing.aboutSlacImage
     );
     if (resolvedAbout) basePayload.aboutSlacImage = resolvedAbout;
-
-    const resolvedHero = sanitizeFirestoreImageUrl(
-      branding?.heroImage ?? existing.heroImage
-    );
-    if (resolvedHero) basePayload.heroImage = resolvedHero;
 
     if (snap.exists()) {
       await setDoc(ref, {
@@ -1374,6 +1375,90 @@ export async function deleteCouncilAccountFromFirestore(
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, accPath);
+  }
+}
+
+export async function createAssignedTaskInFirestore(
+  task: CouncilTask
+): Promise<void> {
+  if (!isFirebaseAuthenticated() || !auth.currentUser) return;
+
+  const cleanId = sanitizeFirestoreId(task.id);
+  const ref = doc(db, 'tasks', cleanId);
+  const path = `tasks/${cleanId}`;
+
+  try {
+    const payload = {
+      id: cleanId,
+      title: task.title.trim().slice(0, 300) || 'Council Task',
+      description: task.description.trim().slice(0, 2000),
+      assignedToUid: sanitizeFirestoreId(task.assignedToUid),
+      assignedToName: task.assignedToName.trim().slice(0, 120) || 'SSC Officer',
+      status: 'pending' as const,
+      createdBy: auth.currentUser.uid,
+      createdAt: serverTimestamp(),
+      completedAt: null,
+    };
+    await setDoc(ref, payload);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function updateAssignedTaskStatusInFirestore(
+  taskId: string,
+  nextStatus: 'pending' | 'completed'
+): Promise<void> {
+  if (!isFirebaseAuthenticated() || !auth.currentUser) return;
+
+  const cleanId = sanitizeFirestoreId(taskId);
+  const ref = doc(db, 'tasks', cleanId);
+  const path = `tasks/${cleanId}`;
+
+  try {
+    await updateDoc(ref, {
+      status: nextStatus,
+      completedAt: nextStatus === 'completed' ? serverTimestamp() : null,
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function deleteAssignedTaskFromFirestore(
+  taskId: string
+): Promise<void> {
+  if (!isFirebaseAuthenticated()) return;
+  const cleanId = sanitizeFirestoreId(taskId);
+  const path = `tasks/${cleanId}`;
+  try {
+    await deleteDoc(doc(db, 'tasks', cleanId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export const SITE_VISITS_DOC_ID = 'visits';
+
+export async function incrementSiteVisitsInFirestore(): Promise<void> {
+  const ref = doc(db, 'siteStats', SITE_VISITS_DOC_ID);
+  const path = `siteStats/${SITE_VISITS_DOC_ID}`;
+
+  try {
+    await setDoc(
+      ref,
+      {
+        visits: increment(1),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    try {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    } catch {
+      // Logged via handleFirestoreError
+    }
   }
 }
 
