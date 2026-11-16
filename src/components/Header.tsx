@@ -267,13 +267,18 @@ export function Header({
     return null;
   }
 
-  const headerFillClass =
-    isFilled || menuDrawerOpen ? 'karst-header-solid' : 'karst-header-glass';
+  // State-dependent blurred glass:
+  // - Top of Hero section (currentPage === 'home' && !isFilled): .karst-header-glass
+  // - Scrolled or on any inner section page: .karst-header-solid
+  const isSectionState = isFilled || currentPage !== 'home';
+  const headerFillClass = isSectionState
+    ? 'karst-header-solid'
+    : 'karst-header-glass';
 
   return (
     <>
       <header
-        className={`fixed top-0 left-0 right-0 z-50 w-full translate-y-0 ${headerFillClass}`}
+        className={`fixed top-0 left-0 right-0 z-50 w-full translate-y-0 border-b ${headerFillClass}`}
       >
         <div className="mx-auto max-w-[1440px] px-4 sm:px-8 h-16 flex items-center justify-between gap-4">
           {/* Zone 1 (Left): Smart Council Wordmark */}
@@ -372,7 +377,7 @@ export function Header({
               </button>
             )}
 
-            {/* Menu Drawer Button (Compact on mobile; houses Theme Toggle & User Profile) */}
+            {/* Menu Drawer Button (Designcouch ExvwPY animated 3-line to X icon) */}
             <button
               type="button"
               aria-label={
@@ -381,25 +386,20 @@ export function Header({
               aria-expanded={menuDrawerOpen}
               aria-controls="portal-menu-drawer"
               onClick={() => setMenuDrawerOpen((prev) => !prev)}
-              className="relative inline-flex h-9 w-9 sm:h-9.5 sm:w-9.5 shrink-0 items-center justify-center rounded-lg border border-white/[0.14] bg-[#121620]/75 text-[#f5f4f0] hover:border-white/[0.28] active:scale-95 transition-all duration-150 cursor-pointer"
+              className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center text-[#f5f4f0] hover:text-[#3ddc97] transition-colors duration-150 cursor-pointer"
             >
-              {menuDrawerOpen ? (
-                <X className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <Menu className="h-4 w-4" aria-hidden="true" />
-              )}
-              {!menuDrawerOpen && (official || student) && totalUnread === 0 && (
-                <span
-                  aria-hidden="true"
-                  className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-[#0d1017] ${
-                    official ? 'bg-[#3ddc97]' : 'bg-[#facc15]'
-                  }`}
-                />
-              )}
+              <div
+                aria-hidden="true"
+                className={`designcouch-burger ${menuDrawerOpen ? 'open' : ''}`}
+              >
+                <span />
+                <span />
+                <span />
+              </div>
               {!menuDrawerOpen && totalUnread > 0 && (
                 <span
                   aria-label={`${totalUnread} new notifications`}
-                  className="absolute -top-1 -right-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#ef4444] px-1 text-[9px] font-bold text-white tabular-nums shadow-sm"
+                  className="absolute top-0 right-0 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#ef4444] px-1 text-[9px] font-bold text-white tabular-nums shadow-sm"
                 >
                   {totalUnread}
                 </span>
@@ -443,19 +443,19 @@ export function Header({
         createPortal(
           <AnimatePresence>
             {menuDrawerOpen && (
-              <div className="fixed inset-0 z-[70] overflow-hidden">
+              <div className="fixed inset-0 z-[80] overflow-hidden">
                 {/* Soft Dimmed Background Overlay */}
                 <motion.div
                   aria-hidden="true"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
                   onClick={() => setMenuDrawerOpen(false)}
-                  className="fixed inset-0 bg-black/50 touch-none select-none"
+                  className="fixed inset-0 bg-black/45 touch-none select-none"
                 />
 
-                {/* Compact Right Slide-In Drawer */}
+                {/* Minimalist Slide-In Menu Sheet (Sits ABOVE the header at z-[85]) */}
                 <motion.aside
                   id="portal-menu-drawer"
                   role="dialog"
@@ -470,256 +470,146 @@ export function Header({
                     damping: 36,
                     mass: 0.8,
                   }}
-                  className="fixed top-0 right-0 bottom-0 z-[75] w-[264px] sm:w-[300px] max-w-[82vw] flex flex-col border-l border-white/[0.14] bg-[#0d1017] shadow-2xl will-change-transform"
+                  className={`fixed top-0 right-0 bottom-0 z-[85] w-[250px] sm:w-[280px] max-w-[80vw] flex flex-col border-l shadow-2xl will-change-transform ${headerFillClass}`}
                 >
-                  {/* Compact Drawer Header */}
-                  <div className="shrink-0 flex items-center justify-between px-3.5 h-13 border-b border-white/[0.1] bg-[#121620]">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold tracking-tight text-[#f5f4f0]">
-                        Menu
-                      </span>
-                      <span className="rounded-md border border-white/[0.12] bg-[#181d29] px-1.5 py-0.5 text-[10px] font-semibold text-[#b4bac6]">
-                        {official
-                          ? 'Official'
-                          : student
-                            ? 'Student'
-                            : 'Guest'}
-                      </span>
-                    </div>
+                  {/* Top Bar: Only the animated X icon, no border-b, no title/badge clutter */}
+                  <div className="shrink-0 flex items-center justify-end px-5 sm:px-7 h-16">
                     <button
                       type="button"
                       aria-label="Close menu"
                       onClick={() => setMenuDrawerOpen(false)}
-                      className="inline-flex h-7.5 w-7.5 items-center justify-center rounded-lg border border-white/[0.12] bg-[#181d29] text-[#b4bac6] hover:text-[#f5f4f0] active:scale-95 transition-all cursor-pointer"
+                      className="inline-flex h-9 w-9 items-center justify-center text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
                     >
-                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                      <div
+                        aria-hidden="true"
+                        className={`designcouch-burger ${menuDrawerOpen ? 'open' : ''}`}
+                      >
+                        <span />
+                        <span />
+                        <span />
+                      </div>
                     </button>
                   </div>
 
-                  {/* Compact Scrollable Drawer Body */}
-                  <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar p-3 space-y-3.5 touch-pan-y">
-                    {/* 1. Compact Profile Card */}
-                    {official ? (
-                      <div className="rounded-xl border border-white/[0.14] bg-[#121620] p-3 space-y-2.5">
-                        <div className="flex items-center gap-2.5">
-                          <span className="inline-flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-full bg-[#3ddc97]/15 border border-[#3ddc97]/35 text-[#3ddc97]">
-                            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-[#f5f4f0] truncate">
+                  {/* Clean Unboxed Vertical Navigation & Account Links */}
+                  <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar px-7 pb-8 pt-2 flex flex-col justify-between touch-pan-y">
+                    {/* Primary Section Links */}
+                    <nav
+                      aria-label="Menu navigation"
+                      className="flex flex-col items-start space-y-1"
+                    >
+                      {mobileNavOptions.map((option) => {
+                        const isActive = currentPage === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            aria-current={isActive ? 'page' : undefined}
+                            onClick={() => handleNavigateSelect(option.value)}
+                            className={`w-full flex items-center justify-between py-2.5 text-left text-[15px] tracking-tight transition-colors cursor-pointer ${
+                              isActive
+                                ? 'font-bold text-[#3ddc97]'
+                                : 'font-semibold text-[#f5f4f0] hover:text-[#3ddc97]'
+                            }`}
+                          >
+                            <span>{option.rawLabel}</span>
+                            {option.badgeCount > 0 && (
+                              <span className="text-xs font-mono font-bold text-[#ef4444] tabular-nums">
+                                {option.badgeCount}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </nav>
+
+                    {/* Bottom Account & Settings Group (Separated by clean whitespace like image_46fb9d32.png) */}
+                    <div className="mt-10 pt-6 flex flex-col items-start space-y-1">
+                      {official ? (
+                        <>
+                          <div className="pb-2">
+                            <p className="text-xs font-bold text-[#f5f4f0] truncate max-w-[200px]">
                               {official.name}
                             </p>
-                            <p className="text-[11px] text-[#949ba8] truncate">
+                            <p className="text-[11px] text-[#949ba8] truncate max-w-[200px]">
                               {official.position}
                             </p>
                           </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleNavigateSelect('admin')}
-                          className="inline-flex w-full min-h-[34px] items-center justify-center gap-1.5 rounded-lg border border-white/[0.14] bg-[#181d29] px-2.5 py-1 text-xs font-semibold text-[#f5f4f0] hover:border-white/[0.26] transition-colors cursor-pointer"
-                        >
-                          <LayoutDashboard
-                            className="h-3.5 w-3.5 text-[#3ddc97]"
-                            aria-hidden="true"
-                          />
-                          <span>SSC Suite</span>
-                        </button>
-                      </div>
-                    ) : student ? (
-                      <div className="rounded-xl border border-white/[0.14] bg-[#121620] p-3 space-y-2.5">
-                        <div className="flex items-center gap-2.5">
-                          <span className="inline-flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-full bg-[#facc15]/15 border border-[#facc15]/35 text-[#facc15]">
-                            <GraduationCap
-                              className="h-4 w-4"
-                              aria-hidden="true"
-                            />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-[#f5f4f0] truncate">
+                          <button
+                            type="button"
+                            onClick={() => handleNavigateSelect('admin')}
+                            className="w-full py-2 text-left text-[15px] font-semibold text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
+                          >
+                            My account (SSC Suite)
+                          </button>
+                        </>
+                      ) : student ? (
+                        <>
+                          <div className="pb-2">
+                            <p className="text-xs font-bold text-[#f5f4f0] truncate max-w-[200px]">
                               {student.name}
                             </p>
-                            <p className="text-[11px] text-[#949ba8] truncate">
+                            <p className="text-[11px] text-[#949ba8] truncate max-w-[200px]">
                               {student.yearCourse || 'SLAC Student'}
                             </p>
                           </div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMenuDrawerOpen(false);
-                            openIdentityEditor();
-                          }}
-                          className="inline-flex w-full min-h-[34px] items-center justify-center gap-1.5 rounded-lg border border-white/[0.14] bg-[#181d29] px-2.5 py-1 text-xs font-semibold text-[#f5f4f0] hover:border-white/[0.26] transition-colors cursor-pointer"
-                        >
-                          <Edit3
-                            className="h-3.5 w-3.5 text-[#3ddc97]"
-                            aria-hidden="true"
-                          />
-                          <span>Edit Profile</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-white/[0.14] bg-[#121620] p-3 space-y-2.5">
-                        <div className="space-y-0.5">
-                          <p className="text-xs font-bold text-[#f5f4f0]">
-                            Sign in to Smart Council
-                          </p>
-                          <p className="text-[11px] text-[#949ba8] leading-snug">
-                            Post in the Student Forum or access SSC Suite.
-                          </p>
-                        </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMenuDrawerOpen(false);
+                              openIdentityEditor();
+                            }}
+                            className="w-full py-2 text-left text-[15px] font-semibold text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
+                          >
+                            My account
+                          </button>
+                        </>
+                      ) : (
                         <button
                           type="button"
                           onClick={() => {
                             setMenuDrawerOpen(false);
                             onOpenAuth('student');
                           }}
-                          className="gemini-cta inline-flex w-full min-h-[36px] items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer"
+                          className="w-full py-2 text-left text-[15px] font-semibold text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
                         >
-                          <LogIn
-                            className="h-3.5 w-3.5 shrink-0"
-                            aria-hidden="true"
-                          />
-                          <span>{siteConfig.header.primaryButtonText}</span>
+                          My account (Sign in)
                         </button>
-                      </div>
-                    )}
+                      )}
 
-                    {/* 2. Mobile-Only Vertical Navigation List (Compact rows) */}
-                    <div className="lg:hidden space-y-1.5">
-                      <div className="flex items-center justify-between px-1 text-[11px] text-[#949ba8]">
-                        <span className="font-semibold text-[#f5f4f0]">
-                          Sections
-                        </span>
-                        <span className="tabular-nums">
-                          {mobileNavOptions.length}
-                        </span>
-                      </div>
-
-                      <nav
-                        aria-label="Mobile drawer navigation"
-                        className="flex flex-col gap-1"
-                      >
-                        {mobileNavOptions.map((option) => {
-                          const isActive = currentPage === option.value;
-                          const accentText =
-                            option.tone === 'amber'
-                              ? 'text-[#e8985e]'
-                              : option.tone === 'red'
-                                ? 'text-[#f87171]'
-                                : option.tone === 'yellow'
-                                  ? 'text-[#facc15]'
-                                  : 'text-[#3ddc97]';
-
-                          return (
-                            <button
-                              key={option.value}
-                              type="button"
-                              aria-current={isActive ? 'page' : undefined}
-                              onClick={() => handleNavigateSelect(option.value)}
-                              className={`flex w-full min-h-[38px] items-center justify-between gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all cursor-pointer ${
-                                isActive
-                                  ? 'bg-[#181d29] text-[#f5f4f0] border border-white/[0.22]'
-                                  : 'bg-[#121620] text-[#b4bac6] hover:text-[#f5f4f0] border border-white/[0.08]'
-                              }`}
-                            >
-                              <span className="flex items-center gap-2.5 min-w-0">
-                                <span
-                                  className={`inline-flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-md bg-[#0b0e15] border border-white/[0.08] ${accentText}`}
-                                >
-                                  {option.icon}
-                                </span>
-                                <span className="truncate font-semibold">
-                                  {option.rawLabel}
-                                </span>
-                              </span>
-
-                              <span className="flex items-center gap-1.5 shrink-0 text-[11px]">
-                                {option.badgeCount > 0 && (
-                                  <span className="inline-flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#ef4444] px-1 text-[10px] font-bold text-white tabular-nums">
-                                    {option.badgeCount}
-                                  </span>
-                                )}
-                                {isActive && (
-                                  <span className={`font-semibold ${accentText}`}>
-                                    Active
-                                  </span>
-                                )}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </nav>
-                    </div>
-
-                    {/* 3. Compact Display & Theme Switcher */}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-1.5 px-1 text-[11px] font-semibold text-[#f5f4f0]">
-                        <Settings
-                          className="h-3 w-3 text-[#3ddc97]"
-                          aria-hidden="true"
-                        />
-                        <span>Appearance</span>
-                      </div>
-
-                      <div className="rounded-xl border border-white/[0.12] bg-[#121620] p-2.5 space-y-2">
-                        <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-[#0b0e15] border border-white/[0.1]">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (theme !== 'light') onToggleTheme();
-                            }}
-                            className={`inline-flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                              theme === 'light'
-                                ? 'bg-[#181d29] text-[#f5f4f0] border border-white/[0.16]'
-                                : 'text-[#949ba8] hover:text-[#f5f4f0]'
-                            }`}
-                          >
-                            <Sun className="h-3.5 w-3.5 text-[#facc15]" aria-hidden="true" />
-                            <span>Light</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (theme !== 'dark') onToggleTheme();
-                            }}
-                            className={`inline-flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                              theme === 'dark'
-                                ? 'bg-[#181d29] text-[#f5f4f0] border border-white/[0.16]'
-                                : 'text-[#949ba8] hover:text-[#f5f4f0]'
-                            }`}
-                          >
-                            <Moon className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
-                            <span>Dark</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Compact Drawer Footer: Sign Out (when signed in) */}
-                  {(official || student) && (
-                    <div className="shrink-0 p-3 border-t border-white/[0.1] bg-[#121620]">
                       <button
                         type="button"
-                        onClick={() => {
-                          setMenuDrawerOpen(false);
-                          if (official) {
-                            onSignOutOfficial();
-                          } else {
-                            onSignOutStudent();
-                          }
-                        }}
-                        className="inline-flex w-full min-h-[36px] items-center justify-center gap-1.5 rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-[#fca5a5] hover:bg-red-500/20 transition-colors cursor-pointer"
+                        onClick={onToggleTheme}
+                        className="w-full flex items-center justify-between py-2 text-left text-[15px] font-semibold text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
                       >
-                        <LogOut className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                        <span>Sign Out</span>
+                        <span>
+                          Theme ({theme === 'dark' ? 'Dark' : 'Light'})
+                        </span>
+                        {theme === 'dark' ? (
+                          <Sun className="h-4 w-4 text-[#facc15]" aria-hidden="true" />
+                        ) : (
+                          <Moon className="h-4 w-4 text-[#3ddc97]" aria-hidden="true" />
+                        )}
                       </button>
+
+                      {(official || student) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuDrawerOpen(false);
+                            if (official) {
+                              onSignOutOfficial();
+                            } else {
+                              onSignOutStudent();
+                            }
+                          }}
+                          className="w-full py-2 text-left text-[15px] font-semibold text-[#f87171] hover:opacity-80 transition-opacity cursor-pointer"
+                        >
+                          Sign out
+                        </button>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </motion.aside>
               </div>
             )}

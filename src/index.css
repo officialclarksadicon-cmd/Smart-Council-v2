@@ -241,6 +241,11 @@ html[data-theme="dark"] .claude-pill-version {
 /* ==========================================================================
    KARST HEADER: CONSISTENT FROSTED BLUR + SCROLL-FOLD TRANSITION
    ========================================================================== */
+/* ==========================================================================
+   STATE-DEPENDENT BLURRED GLASS HEADER & BURGER MENU DRAWER
+   - State 1 (.karst-header-glass): Top of Hero stage — blurred glass tinted to hero sky
+   - State 2 (.karst-header-solid): Scrolled / Inner Sections — blurred glass tinted to section surface (#1a201d / #f4f1e7)
+   ========================================================================== */
 .karst-header-glass,
 .karst-header-solid {
   transition:
@@ -252,38 +257,104 @@ html[data-theme="dark"] .claude-pill-version {
     -webkit-backdrop-filter 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Top of Page: Translucent Frosted Warm Stone Glass */
+/* State 1 (Light): Top of Hero Stage — Frosted Blur Interpolated with Hero Sky & Warm Stone */
 .karst-header-glass {
-  background-color: rgba(230, 226, 214, 0.76);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-  border-bottom: 1px solid rgba(23, 24, 22, 0.13);
+  background-color: rgba(230, 226, 214, 0.62);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-color: rgba(23, 24, 22, 0.12);
   box-shadow: none;
 }
 
-/* Scrolled Down or Up (scrollY > 8): 100% Opaque Solid Surface (Zero Transparency/Blur) */
+/* State 2 (Light): Scrolled or Inner Section — Frosted Blur Interpolated with Section Surface (#f4f1e7) */
 .karst-header-solid {
-  background-color: #f2efe5;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border-bottom: 1px solid rgba(23, 24, 22, 0.20);
-  box-shadow: 0 4px 16px -6px rgba(23, 24, 22, 0.10);
+  background-color: rgba(244, 241, 231, 0.82);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-color: rgba(23, 24, 22, 0.18);
+  box-shadow: 0 4px 16px -6px rgba(23, 24, 22, 0.08);
 }
 
+/* State 1 (Dark): Top of Hero Stage — Frosted Blur Interpolated with Hero Night Stage */
 html[data-theme="dark"] .karst-header-glass {
-  background-color: rgba(22, 27, 24, 0.72);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-  border-bottom: 1px solid rgba(245, 243, 238, 0.12);
+  background-color: rgba(17, 23, 32, 0.62);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-color: rgba(245, 243, 238, 0.11);
   box-shadow: none;
 }
 
+/* State 2 (Dark): Scrolled or Inner Section — Frosted Blur Interpolated with Section Surface (#1a201d) */
 html[data-theme="dark"] .karst-header-solid {
-  background-color: #1f2622;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border-bottom: 1px solid rgba(245, 243, 238, 0.18);
-  box-shadow: none;
+  background-color: rgba(26, 32, 29, 0.82);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-color: rgba(245, 243, 238, 0.15);
+  box-shadow: 0 4px 20px -6px rgba(0, 0, 0, 0.32);
+}
+
+/* ==========================================================================
+   DESIGNCOUCH (ExvwPY) ANIMATED 3-LINE TO X HAMBURGER ICON
+   ========================================================================== */
+.designcouch-burger {
+  width: 20px;
+  height: 14px;
+  position: relative;
+  transform: rotate(0deg);
+  transition: 0.3s ease-in-out;
+  cursor: pointer;
+}
+
+.designcouch-burger span {
+  display: block;
+  position: absolute;
+  height: 2px;
+  width: 100%;
+  background: currentColor;
+  border-radius: 9999px;
+  opacity: 1;
+  left: 0;
+  transform: rotate(0deg);
+  transition: 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.designcouch-burger span:nth-child(1) {
+  top: 0px;
+}
+
+.designcouch-burger span:nth-child(2) {
+  top: 6px;
+}
+
+.designcouch-burger span:nth-child(3) {
+  top: 12px;
+}
+
+.designcouch-burger.open span:nth-child(1) {
+  top: 6px;
+  transform: rotate(135deg);
+  @starting-style {
+    top: 0px;
+    transform: rotate(0deg);
+  }
+}
+
+.designcouch-burger.open span:nth-child(2) {
+  opacity: 0;
+  transform: translateX(-14px);
+  @starting-style {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.designcouch-burger.open span:nth-child(3) {
+  top: 6px;
+  transform: rotate(-135deg);
+  @starting-style {
+    top: 12px;
+    transform: rotate(0deg);
+  }
 }
 
 /* Karst-style wordmark: heavy geometric grotesque, tight tracking, tall x-height */
@@ -465,19 +536,15 @@ html:not([data-theme="dark"]) [class~="bg-[#121620]"] .card-elevated {
 }
 
 html[data-theme="dark"] .card-elevated {
-  background-color: #242e28;
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0) 100%);
-  border: 1px solid rgba(245, 243, 238, 0.20);
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.13),
-    inset 0 -1px 0 0 rgba(0, 0, 0, 0.40),
-    0 12px 28px -8px rgba(0, 0, 0, 0.72),
-    0 4px 10px -2px rgba(0, 0, 0, 0.48);
+  background-color: #202723;
+  background-image: none;
+  border: 1px solid rgba(245, 243, 238, 0.13);
+  box-shadow: 0 4px 12px -3px rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.16);
 }
 
 html[data-theme="dark"] [class~="bg-[#121620]"] .card-elevated {
-  background-color: #252f29;
-  border-color: rgba(245, 243, 238, 0.21);
+  background-color: #212824;
+  border-color: rgba(245, 243, 238, 0.14);
 }
 
 @media (hover: hover) {
@@ -488,13 +555,9 @@ html[data-theme="dark"] [class~="bg-[#121620]"] .card-elevated {
   }
 
   html[data-theme="dark"] .card-elevated:hover {
-    background-color: #2b3730;
-    border-color: rgba(104, 182, 143, 0.48);
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.16),
-      inset 0 -1px 0 0 rgba(0, 0, 0, 0.42),
-      0 16px 34px -8px rgba(0, 0, 0, 0.78),
-      0 6px 14px -3px rgba(0, 0, 0, 0.55);
+    background-color: #252d29;
+    border-color: rgba(104, 182, 143, 0.36);
+    box-shadow: 0 8px 20px -4px rgba(0, 0, 0, 0.36);
   }
 }
 
@@ -506,12 +569,10 @@ html[data-theme="dark"] [class~="bg-[#121620]"] .card-elevated {
 }
 
 html[data-theme="dark"] .surface-depth {
-  background-color: #202924;
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, rgba(255, 255, 255, 0) 100%);
-  border: 1px solid rgba(245, 243, 238, 0.18);
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.10),
-    0 8px 20px -6px rgba(0, 0, 0, 0.60);
+  background-color: #1e2521;
+  background-image: none;
+  border: 1px solid rgba(245, 243, 238, 0.13);
+  box-shadow: none;
 }
 
 /* ==========================================================================
@@ -531,11 +592,6 @@ html:not([data-theme="dark"]) [class~="bg-[#0d1017]/85"],
 html:not([data-theme="dark"]) [class~="bg-[#0b0e15]/85"],
 html:not([data-theme="dark"]) [class~="bg-[#0b0e15]/80"] {
   background-color: #ddd9cc;
-}
-html:not([data-theme="dark"]) #mobile-nav-drawer,
-html:not([data-theme="dark"]) #portal-menu-drawer {
-  background-color: #ebe7dc;
-  border-color: rgba(23, 24, 22, 0.18);
 }
 html:not([data-theme="dark"]) [class~="bg-[#121620]"],
 html:not([data-theme="dark"]) [class~="bg-[#121620]/90"],
@@ -684,141 +740,59 @@ html:not([data-theme="dark"]) [class~="border-[#3ddc97]/60"] {
 }
 
 /* ==========================================================================
-   DARK MODE TACTILE DEPTH & MULTI-TIER LUMINANCE HIERARCHY
-   Tier 0 (Deep Canvas):          #090c0a (bg-[#07090e])
-   Tier 1 (Workspace / Recessed): #0f1411 (bg-[#0b0e15] / bg-[#0d0e11])
-   Tier 2 (Section / Sidebar):    #161c19 (bg-[#121620] structural containers)
-   Tier 3 (Elevated Cards/Panels):#242e28 (.card-elevated & rounded cards)
-   Tier 4 (Raised Controls/Chips):#2e3a33 (bg-[#181d29] / bg-[#1a1d22] / buttons)
+   DARK MODE MATTE STONE-PAPER SURFACE PALETTE (ZERO GRADIENTS / ZERO BEVELS)
+   Mirrors Light Mode's calm matte color separation:
+   - Canvas (bg-[#07090e]):          #0f1210
+   - Recessed / Base (bg-[#0b0e15]): #131715
+   - Surface / Panels (bg-[#121620]):#1a201d
+   - Elevated Cards (.card-elevated):#212824
+   - Active / Hover (bg-[#181d29]):  #27302b
    ========================================================================== */
 html[data-theme="dark"] [class~="bg-[#07090e]"] {
-  background-color: #090c0a;
+  background-color: #0f1210;
 }
 
 html[data-theme="dark"] [class~="bg-[#0d1017]"],
 html[data-theme="dark"] [class~="bg-[#0b0e15]"],
 html[data-theme="dark"] [class~="bg-[#0b0f18]"],
 html[data-theme="dark"] [class~="bg-[#0d0e11]"] {
-  background-color: #0f1411;
+  background-color: #131715;
 }
 
-/* Structural Page Sections, Sidebars, and Sticky Bars */
 html[data-theme="dark"] [class~="bg-[#121620]"],
 html[data-theme="dark"] [class~="bg-[#121620]/90"],
-html[data-theme="dark"] [class~="bg-[#121620]/70"] {
-  background-color: #161c19;
-}
-
-/* Elevated Rounded Cards, Dashboard Panels & Modals using bg-[#121620] or bg-[#131519] */
-html[data-theme="dark"] [class~="bg-[#121620]"][class~="rounded-xl"],
-html[data-theme="dark"] [class~="bg-[#121620]"][class~="rounded-2xl"],
+html[data-theme="dark"] [class~="bg-[#121620]/70"],
 html[data-theme="dark"] [class~="bg-[#131519]"] {
-  background-color: #222c26;
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0) 100%);
-  border-color: rgba(245, 243, 238, 0.19);
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 0 0 rgba(0, 0, 0, 0.38),
-    0 12px 28px -8px rgba(0, 0, 0, 0.68),
-    0 4px 10px -2px rgba(0, 0, 0, 0.45);
+  background-color: #1a201d;
 }
 
-/* Sunken / Recessed Wells & Inner Containers (non-button boxes inside cards/sections) */
-html[data-theme="dark"] div[class~="bg-[#0b0e15]"][class~="rounded-lg"],
-html[data-theme="dark"] div[class~="bg-[#0b0e15]"][class~="rounded-xl"],
-html[data-theme="dark"] div[class~="bg-[#0b0e15]"][class~="rounded-2xl"],
-html[data-theme="dark"] form[class~="bg-[#0b0e15]"][class~="rounded-xl"],
-html[data-theme="dark"] div[class~="bg-[#0d0e11]"][class~="rounded-lg"],
-html[data-theme="dark"] div[class~="bg-[#0d0e11]"][class~="rounded-xl"],
-html[data-theme="dark"] div[class~="bg-[#0d0e11]"][class~="rounded-2xl"] {
-  background-color: #101512;
-  border-color: rgba(245, 243, 238, 0.15);
-  box-shadow:
-    inset 0 2px 5px rgba(0, 0, 0, 0.58),
-    inset 0 1px 0 rgba(0, 0, 0, 0.40),
-    0 1px 0 rgba(255, 255, 255, 0.05);
-}
-
-/* Tactile Recessed Inputs, Selects & Textareas in Dark Mode */
-html[data-theme="dark"] input[class~="bg-[#0b0e15]"],
-html[data-theme="dark"] input[class~="bg-[#0d0e11]"],
-html[data-theme="dark"] select[class~="bg-[#0b0e15]"],
-html[data-theme="dark"] select[class~="bg-[#0d0e11]"],
-html[data-theme="dark"] textarea[class~="bg-[#0b0e15]"],
-html[data-theme="dark"] textarea[class~="bg-[#0d0e11]"] {
-  background-color: #0d120f;
-  border-color: rgba(245, 243, 238, 0.18);
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.55),
-    0 1px 0 rgba(255, 255, 255, 0.05);
-}
-
-/* Inputs & Selects placed inside a recessed bg-[#0b0e15] form well */
-html[data-theme="dark"] input[class~="bg-[#121620]"],
-html[data-theme="dark"] select[class~="bg-[#121620]"],
-html[data-theme="dark"] textarea[class~="bg-[#121620]"] {
-  background-color: #1b231e;
-  border-color: rgba(245, 243, 238, 0.20);
-  box-shadow:
-    inset 0 2px 4px rgba(0, 0, 0, 0.48),
-    0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-/* Raised Interactive Buttons & Controls in Dark Mode */
-html[data-theme="dark"] button[class~="bg-[#0b0e15]"],
-html[data-theme="dark"] button[class~="bg-[#121620]"],
-html[data-theme="dark"] a[class~="bg-[#0b0e15]"],
-html[data-theme="dark"] a[class~="bg-[#121620]"] {
-  background-color: #26312b;
-  border-color: rgba(245, 243, 238, 0.20);
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.11),
-    0 3px 8px -2px rgba(0, 0, 0, 0.52);
-}
-
-html[data-theme="dark"] button[class~="bg-[#0b0e15]"]:hover,
-html[data-theme="dark"] button[class~="bg-[#121620]"]:hover,
-html[data-theme="dark"] a[class~="bg-[#0b0e15]"]:hover,
-html[data-theme="dark"] a[class~="bg-[#121620]"]:hover {
-  background-color: #2f3c35;
-  border-color: rgba(104, 182, 143, 0.42);
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
-    0 5px 12px -2px rgba(0, 0, 0, 0.62);
-}
-
-/* Active Controls, Selected States & Elevated Chips (bg-[#181d29] / bg-[#1a1d22]) */
 html[data-theme="dark"] [class~="bg-[#181d29]"],
 html[data-theme="dark"] [class~="bg-[#1a1d22]"] {
-  background-color: #2f3c35;
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.13),
-    0 3px 8px -2px rgba(0, 0, 0, 0.50);
+  background-color: #27302b;
 }
 
-/* Primary Botanical Green CTAs in Dark Mode: Crisp Top Bevel + Depth Shadow */
-html[data-theme="dark"] .gemini-cta,
-html[data-theme="dark"] button[class~="bg-[#3ddc97]"] {
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.32),
-    0 4px 12px -2px rgba(0, 0, 0, 0.55);
+html[data-theme="dark"] #mobile-nav-drawer {
+  background-color: rgba(26, 32, 29, 0.84);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-color: rgba(245, 243, 238, 0.16);
 }
 
-html[data-theme="dark"] #mobile-nav-drawer,
-html[data-theme="dark"] #portal-menu-drawer {
-  background-color: #19201c;
-  border-color: rgba(245, 243, 238, 0.20);
-  box-shadow: -16px 0 40px rgba(0, 0, 0, 0.75);
+html:not([data-theme="dark"]) #mobile-nav-drawer {
+  background-color: rgba(244, 241, 231, 0.84);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-color: rgba(23, 24, 22, 0.18);
 }
 
 html[data-theme="dark"] [class~="border-white/[0.08]"],
 html[data-theme="dark"] [class~="border-white/[0.1]"] {
-  border-color: rgba(245, 243, 238, 0.15);
+  border-color: rgba(245, 243, 238, 0.11);
 }
 html[data-theme="dark"] [class~="border-white/[0.12]"],
 html[data-theme="dark"] [class~="border-white/[0.14]"],
 html[data-theme="dark"] [class~="border-white/[0.16]"] {
-  border-color: rgba(245, 243, 238, 0.21);
+  border-color: rgba(245, 243, 238, 0.15);
 }
 
 :focus-visible {

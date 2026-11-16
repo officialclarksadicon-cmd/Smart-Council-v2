@@ -491,11 +491,6 @@ export const ForumPage: React.FC<ForumPageProps> = ({
         {/* Collapsible New Discussion Composer with 3-Option Student Privacy Selector */}
         {isComposerOpen && (
           <div className="mt-6 card-elevated rounded-2xl overflow-hidden">
-            <div
-              className="h-[2px] w-full"
-              style={{ backgroundColor: 'var(--ssc-green-bright)' }}
-              aria-hidden="true"
-            />
             <div className="p-6 sm:p-8">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-5 pb-4 border-b border-white/[0.12]">
                 <div>
@@ -817,11 +812,6 @@ export const ForumPage: React.FC<ForumPageProps> = ({
 
             {/* Primary Thread Document */}
             <article className="card-elevated rounded-2xl overflow-hidden">
-              <div
-                className="h-[2px] w-full"
-                style={{ backgroundColor: 'var(--ssc-yellow-bright)' }}
-                aria-hidden="true"
-              />
               <div className="p-6 sm:p-8">
                 <div className="flex flex-wrap items-center justify-between gap-2.5 mb-3 text-xs">
                   <span className="font-semibold text-[#facc15]">
@@ -891,11 +881,6 @@ export const ForumPage: React.FC<ForumPageProps> = ({
 
             {/* Chronological Responses Section */}
             <div className="card-elevated rounded-2xl overflow-hidden">
-              <div
-                className="h-[2px] w-full"
-                style={{ backgroundColor: 'var(--ssc-green-bright)' }}
-                aria-hidden="true"
-              />
               <div className="p-6 sm:p-8 space-y-6">
                 <div className="flex items-center justify-between border-b border-white/[0.12] pb-4">
                   <h3 className="text-base sm:text-lg font-bold text-[#f5f4f0] flex items-center gap-2">
@@ -1129,11 +1114,6 @@ export const ForumPage: React.FC<ForumPageProps> = ({
               {/* Left Sidebar: Forum Boards Directory & Etiquette */}
               <aside className="lg:col-span-4 space-y-4">
                 <div className="card-elevated rounded-2xl overflow-hidden">
-                  <div
-                    className="h-[2px] w-full"
-                    style={{ backgroundColor: 'var(--ssc-green-bright)' }}
-                    aria-hidden="true"
-                  />
                   <div className="p-5 space-y-3">
                     <div className="flex items-center justify-between border-b border-white/[0.12] pb-3">
                       <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#f5f4f0]">
@@ -1172,11 +1152,6 @@ export const ForumPage: React.FC<ForumPageProps> = ({
 
                 {/* Forum Etiquette & Privacy Note Card */}
                 <div className="card-elevated rounded-2xl overflow-hidden">
-                  <div
-                    className="h-[2px] w-full"
-                    style={{ backgroundColor: 'var(--ssc-yellow-bright)' }}
-                    aria-hidden="true"
-                  />
                   <div className="p-5 space-y-2.5">
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#facc15]">
                       <MessagesSquare className="w-4 h-4" />
@@ -1236,11 +1211,6 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                 {/* Topic Directory List */}
                 {filteredThreads.length === 0 ? (
                   <div className="card-elevated rounded-2xl overflow-hidden">
-                    <div
-                      className="h-[2px] w-full"
-                      style={{ backgroundColor: 'var(--ssc-yellow-bright)' }}
-                      aria-hidden="true"
-                    />
                     <div className="p-10 sm:p-12 text-center space-y-2.5">
                       <div className="h-12 w-12 rounded-2xl bg-[#0b0e15] border border-white/[0.14] flex items-center justify-center text-[#3ddc97] mx-auto">
                         <MessageSquare className="w-6 h-6" />
@@ -1275,15 +1245,6 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                           }}
                           className="card-elevated rounded-2xl overflow-hidden group cursor-pointer"
                         >
-                          <div
-                            className="h-[2px] w-full"
-                            style={{
-                              backgroundColor: isOfficialAuthor
-                                ? 'var(--ssc-yellow-bright)'
-                                : 'var(--ssc-green-bright)',
-                            }}
-                            aria-hidden="true"
-                          />
                           <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div className="space-y-2 min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2 text-xs">

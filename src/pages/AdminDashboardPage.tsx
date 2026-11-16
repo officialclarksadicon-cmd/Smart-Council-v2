@@ -1688,13 +1688,16 @@ export function AdminDashboardPage({
               }
               aria-expanded={mobileDrawerOpen}
               onClick={() => setMobileDrawerOpen((prev) => !prev)}
-              className="inline-flex h-8.5 w-8.5 items-center justify-center rounded-lg border border-white/[0.14] bg-[#0b0e15] text-[#f5f4f0] cursor-pointer"
+              className="inline-flex h-9 w-9 items-center justify-center text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
             >
-              {mobileDrawerOpen ? (
-                <X className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <Menu className="h-4 w-4" aria-hidden="true" />
-              )}
+              <div
+                aria-hidden="true"
+                className={`designcouch-burger ${mobileDrawerOpen ? 'open' : ''}`}
+              >
+                <span />
+                <span />
+                <span />
+              </div>
             </button>
           </div>
         </div>
@@ -1724,7 +1727,7 @@ export function AdminDashboardPage({
         createPortal(
           <AnimatePresence>
             {mobileDrawerOpen && (
-              <div className="fixed inset-0 z-50 lg:hidden overflow-hidden">
+              <div className="fixed inset-0 z-[80] lg:hidden overflow-hidden">
                 <motion.div
                   aria-hidden="true"
                   initial={{ opacity: 0 }}
@@ -1732,9 +1735,10 @@ export function AdminDashboardPage({
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.18 }}
                   onClick={() => setMobileDrawerOpen(false)}
-                  className="fixed inset-0 bg-black/50 touch-none select-none"
+                  className="fixed inset-0 bg-black/45 touch-none select-none"
                 />
                 <motion.aside
+                  id="mobile-nav-drawer"
                   role="dialog"
                   aria-modal="true"
                   aria-label="SSC Suite navigation drawer"
@@ -1747,123 +1751,110 @@ export function AdminDashboardPage({
                     damping: 36,
                     mass: 0.8,
                   }}
-                  className="fixed top-0 right-0 bottom-0 z-50 w-[264px] sm:w-[300px] max-w-[82vw] flex flex-col border-l border-white/[0.14] bg-[#0d1017] shadow-2xl"
+                  className="fixed top-0 right-0 bottom-0 z-[85] w-[250px] sm:w-[280px] max-w-[80vw] flex flex-col border-l bg-[#121620] shadow-2xl"
                 >
-                  <div className="shrink-0 flex items-center justify-between px-3.5 h-13 border-b border-white/[0.1] bg-[#121620]">
-                    <span className="text-sm font-bold text-[#f5f4f0]">
-                      SSC Suite
-                    </span>
+                  {/* Top Bar: Only the animated X icon, no border-b */}
+                  <div className="shrink-0 flex items-center justify-end px-5 h-14">
                     <button
                       type="button"
                       aria-label="Close SSC Suite menu"
                       onClick={() => setMobileDrawerOpen(false)}
-                      className="inline-flex h-7.5 w-7.5 items-center justify-center rounded-lg border border-white/[0.12] bg-[#181d29] text-[#b4bac6] hover:text-[#f5f4f0] cursor-pointer"
+                      className="inline-flex h-9 w-9 items-center justify-center text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
                     >
-                      <X className="h-3.5 w-3.5" aria-hidden="true" />
+                      <div
+                        aria-hidden="true"
+                        className={`designcouch-burger ${mobileDrawerOpen ? 'open' : ''}`}
+                      >
+                        <span />
+                        <span />
+                        <span />
+                      </div>
                     </button>
                   </div>
 
-                  <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3.5">
-                    {navSections.map((section) => (
-                      <div key={section.group} className="space-y-1">
-                        <p className="px-1 text-[10px] font-semibold uppercase tracking-wider text-[#949ba8]">
-                          {section.group}
-                        </p>
-                        <div className="grid grid-cols-1 gap-1">
-                          {section.items.map((item) => {
-                            const Icon = item.icon;
-                            const isActive = activeTab === item.id;
-                            return (
-                              <button
-                                key={item.id}
-                                type="button"
-                                onClick={() => {
-                                  setActiveTab(item.id);
-                                  setMobileDrawerOpen(false);
-                                }}
-                                className={`w-full flex items-center justify-between gap-2 min-h-[36px] rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
-                                  isActive
-                                    ? 'bg-[#181d29] text-[#3ddc97] border border-white/[0.16]'
-                                    : 'bg-[#121620] text-[#b4bac6] hover:text-[#f5f4f0] border border-white/[0.08]'
-                                }`}
-                              >
-                                <span className="flex items-center gap-2 truncate">
-                                  <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                                  <span className="truncate">{item.label}</span>
-                                </span>
-                                {typeof item.count === 'number' && (
-                                  <span className="text-[11px] text-[#949ba8] tabular-nums">
-                                    {item.count}
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  {/* Clean Unboxed Vertical Navigation & Account Links */}
+                  <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar px-7 pb-8 pt-2 flex flex-col justify-between">
+                    <nav
+                      aria-label="SSC Suite mobile menu"
+                      className="flex flex-col items-start space-y-1"
+                    >
+                      {allTabsFlat.map((item) => {
+                        const isActive = activeTab === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveTab(item.id);
+                              setMobileDrawerOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between py-2.5 text-left text-[15px] tracking-tight transition-colors cursor-pointer ${
+                              isActive
+                                ? 'font-bold text-[#3ddc97]'
+                                : 'font-semibold text-[#f5f4f0] hover:text-[#3ddc97]'
+                            }`}
+                          >
+                            <span className="truncate">{item.label}</span>
+                            {typeof item.count === 'number' && (
+                              <span className="text-xs font-mono text-[#949ba8] tabular-nums">
+                                {item.count}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </nav>
 
-                  <div className="shrink-0 p-3 border-t border-white/[0.1] bg-[#121620] space-y-2">
-                    {onToggleTheme && (
-                      <button
-                        type="button"
-                        onClick={onToggleTheme}
-                        className="w-full flex items-center justify-between rounded-lg border border-white/[0.12] bg-[#0b0e15] px-2.5 py-1.5 text-xs font-semibold text-[#f5f4f0] cursor-pointer"
-                      >
-                        <span className="text-[#b4bac6]">Theme</span>
-                        <span className="inline-flex items-center gap-1.5">
-                          {theme === 'dark' ? (
-                            <>
-                              <Sun className="h-3.5 w-3.5 text-[#facc15]" />
-                              <span>Light</span>
-                            </>
-                          ) : (
-                            <>
-                              <Moon className="h-3.5 w-3.5 text-[#3ddc97]" />
-                              <span>Dark</span>
-                            </>
-                          )}
-                        </span>
-                      </button>
-                    )}
-
-                    <div className="rounded-lg border border-white/[0.12] bg-[#0b0e15] p-2.5 space-y-2">
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-[#f5f4f0] truncate">
+                    <div className="mt-10 pt-6 flex flex-col items-start space-y-1">
+                      <div className="pb-2">
+                        <p className="text-xs font-bold text-[#f5f4f0] truncate max-w-[200px]">
                           {official.name}
                         </p>
-                        <p className="text-[10px] text-[#949ba8] truncate">
+                        <p className="text-[11px] text-[#949ba8] truncate max-w-[200px]">
                           {official.position}
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMobileDrawerOpen(false);
+                          onNavigate('home');
+                        }}
+                        className="w-full py-2 text-left text-[15px] font-semibold text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
+                      >
+                        Portal
+                      </button>
+
+                      {onToggleTheme && (
+                        <button
+                          type="button"
+                          onClick={onToggleTheme}
+                          className="w-full flex items-center justify-between py-2 text-left text-[15px] font-semibold text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
+                        >
+                          <span>
+                            Theme ({theme === 'dark' ? 'Dark' : 'Light'})
+                          </span>
+                          {theme === 'dark' ? (
+                            <Sun className="h-4 w-4 text-[#facc15]" />
+                          ) : (
+                            <Moon className="h-4 w-4 text-[#3ddc97]" />
+                          )}
+                        </button>
+                      )}
+
+                      {onSignOutOfficial && (
                         <button
                           type="button"
                           onClick={() => {
                             setMobileDrawerOpen(false);
-                            onNavigate('home');
+                            onSignOutOfficial();
                           }}
-                          className="inline-flex items-center justify-center gap-1 rounded-md border border-white/[0.14] bg-[#121620] px-2 py-1.5 text-[11px] font-semibold text-[#f5f4f0] cursor-pointer"
+                          className="w-full py-2 text-left text-[15px] font-semibold text-[#f87171] hover:opacity-80 transition-opacity cursor-pointer"
                         >
-                          <ExternalLink className="h-3 w-3 text-[#3ddc97]" />
-                          <span>Portal</span>
+                          Sign out
                         </button>
-                        {onSignOutOfficial && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMobileDrawerOpen(false);
-                              onSignOutOfficial();
-                            }}
-                            className="inline-flex items-center justify-center gap-1 rounded-md border border-red-500/35 bg-red-500/12 px-2 py-1.5 text-[11px] font-semibold text-[#fca5a5] cursor-pointer"
-                          >
-                            <LogOut className="h-3 w-3" />
-                            <span>Sign Out</span>
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
                 </motion.aside>
