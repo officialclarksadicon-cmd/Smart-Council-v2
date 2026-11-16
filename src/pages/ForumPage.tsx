@@ -14,12 +14,17 @@ import {
   Clock,
   FolderOpen,
   MessagesSquare,
+  EyeOff,
+  GraduationCap,
+  User,
 } from 'lucide-react';
 import {
   ForumReply,
   ForumThread,
   OfficialProfile,
   PageRoute,
+  SLAC_COLLEGE_DEPARTMENTS,
+  SLAC_YEAR_LEVELS,
   StudentProfile,
 } from '../siteConfig';
 import { PageSubNav } from '../components/PageSubNav';
@@ -44,6 +49,7 @@ interface ForumPageProps {
 }
 
 type SortByOption = 'recent' | 'discussed' | 'relevant';
+type StudentIdentityMode = 'nickname' | 'year_course' | 'anonymous';
 
 export const ForumPage: React.FC<ForumPageProps> = ({
   threads,
@@ -74,6 +80,29 @@ export const ForumPage: React.FC<ForumPageProps> = ({
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
+  // Student Identity Privacy Mode for Topic Creation:
+  // 'nickname' (Nickname / Name) | 'year_course' (Year Level & Course Only) | 'anonymous' (Completely Anonymous)
+  const [identityMode, setIdentityMode] = useState<StudentIdentityMode>(() => {
+    try {
+      const saved = localStorage.getItem('slac_forum_identity_mode');
+      if (
+        saved === 'nickname' ||
+        saved === 'year_course' ||
+        saved === 'anonymous'
+      ) {
+        return saved;
+      }
+    } catch {
+      // ignore
+    }
+    return 'nickname';
+  });
+
+  const [selectedYear, setSelectedYear] = useState<string>(SLAC_YEAR_LEVELS[2]);
+  const [selectedDept, setSelectedDept] = useState<string>(
+    SLAC_COLLEGE_DEPARTMENTS[1]
+  );
+
   // Composer state
   const [authorName, setAuthorName] = useState(() => {
     if (student?.name) return student.name;
@@ -86,9 +115,12 @@ export const ForumPage: React.FC<ForumPageProps> = ({
   const [authorSection, setAuthorSection] = useState(() => {
     if (student?.yearCourse) return student.yearCourse;
     try {
-      return localStorage.getItem('slac_student_forum_section') || '';
+      return (
+        localStorage.getItem('slac_student_forum_section') ||
+        `${SLAC_YEAR_LEVELS[2]} — ${SLAC_COLLEGE_DEPARTMENTS[1]}`
+      );
     } catch {
-      return '';
+      return `${SLAC_YEAR_LEVELS[2]} — ${SLAC_COLLEGE_DEPARTMENTS[1]}`;
     }
   });
   const [category, setCategory] = useState(categories[0] || 'Student Welfare');
@@ -98,9 +130,17 @@ export const ForumPage: React.FC<ForumPageProps> = ({
 
   // Sync student profile when signed in
   useEffect(() => {
-    if (student?.name) setAuthorName(student.name);
+    if (student?.name && !authorName) setAuthorName(student.name);
     if (student?.yearCourse) setAuthorSection(student.yearCourse);
   }, [student]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('slac_forum_identity_mode', identityMode);
+    } catch {
+      // ignore
+    }
+  }, [identityMode]);
 
   // Track student's own authored thread IDs and reply IDs in localStorage
   const [ownedThreadIds, setOwnedThreadIds] = useState<string[]>(() => {
@@ -138,6 +178,8 @@ export const ForumPage: React.FC<ForumPageProps> = ({
   }, [ownedReplyIds]);
 
   // Reply state for dedicated thread view
+  const [replyIdentityMode, setReplyIdentityMode] =
+    useState<StudentIdentityMode>(identityMode);
   const [replyText, setReplyText] = useState('');
   const [replyAuthor, setReplyAuthor] = useState(() => {
     if (student?.name) return student.name;
@@ -250,25 +292,66 @@ export const ForumPage: React.FC<ForumPageProps> = ({
     onMarkSeen?.(threadId);
   };
 
+  const resolveStudentSubmissionIdentity = (
+    mode: StudentIdentityMode,
+    rawName: string,
+    rawSection: string
+  ): { author: string; yearLevel: string } => {
+    const computedYearCourse =
+      rawSection.trim() || `${selectedYear} — ${selectedDept}`;
+
+    if (mode === 'anonymous') {
+      return {
+        author: 'Anonymous Student',
+        yearLevel: 'Anonymous Louisianian',
+      };
+    }
+
+    if (mode === 'year_course') {
+      return {
+        author: computedYearCourse,
+        yearLevel: 'Name Hidden · Verified Student Course/Year',
+      };
+    }
+
+    return {
+      author: rawName.trim() || student?.name || 'SLAC Student',
+      yearLevel: computedYearCourse,
+    };
+  };
+
   const handleSubmitThread = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !content.trim()) return;
     setIsSubmitting(true);
     try {
-      const finalName = official
-        ? official.name
-        : student?.name || authorName.trim() || 'SLAC Student';
-      const finalSection = official
-        ? official.role === 'admin'
-          ? `Web Admin (${official.position})`
-          : `SSC Officer (${official.position})`
-        : student?.yearCourse || authorSection.trim() || 'Student Body';
+      let finalName = '';
+      let finalSection = '';
 
-      if (!official && authorName.trim()) {
-        localStorage.setItem('slac_student_forum_author', authorName.trim());
-      }
-      if (!official && authorSection.trim()) {
-        localStorage.setItem('slac_student_forum_section', authorSection.trim());
+      if (official) {
+        finalName = official.name;
+        finalSection =
+          official.role === 'admin'
+            ? `Web Admin (${official.position})`
+            : `SSC Officer (${official.position})`;
+      } else {
+        const resolved = resolveStudentSubmissionIdentity(
+          identityMode,
+          authorName,
+          authorSection
+        );
+        finalName = resolved.author;
+        finalSection = resolved.yearLevel;
+
+        if (identityMode === 'nickname' && authorName.trim()) {
+          localStorage.setItem('slac_student_forum_author', authorName.trim());
+        }
+        if (authorSection.trim()) {
+          localStorage.setItem(
+            'slac_student_forum_section',
+            authorSection.trim()
+          );
+        }
       }
 
       const newThread: ForumThread = {
@@ -300,22 +383,32 @@ export const ForumPage: React.FC<ForumPageProps> = ({
   const handleSubmitReply = async (threadId: string) => {
     const text = replyText.trim();
     if (!text) return;
-    const customName = replyAuthor.trim();
-    const finalAuthor = official
-      ? official.name
-      : student?.name || customName || authorName.trim() || 'SLAC Student';
-    const finalYearLevel = official
-      ? official.role === 'admin'
-        ? `Web Admin (${official.position})`
-        : `SSC Officer (${official.position})`
-      : student?.yearCourse || authorSection.trim() || 'Student Body';
 
-    if (!official && customName) {
-      try {
-        localStorage.setItem('slac_student_forum_author', customName);
-        if (!authorName) setAuthorName(customName);
-      } catch {
-        // ignore
+    let finalAuthor = '';
+    let finalYearLevel = '';
+
+    if (official) {
+      finalAuthor = official.name;
+      finalYearLevel =
+        official.role === 'admin'
+          ? `Web Admin (${official.position})`
+          : `SSC Officer (${official.position})`;
+    } else {
+      const resolved = resolveStudentSubmissionIdentity(
+        replyIdentityMode,
+        replyAuthor || authorName,
+        authorSection
+      );
+      finalAuthor = resolved.author;
+      finalYearLevel = resolved.yearLevel;
+
+      if (replyIdentityMode === 'nickname' && replyAuthor.trim()) {
+        try {
+          localStorage.setItem('slac_student_forum_author', replyAuthor.trim());
+          if (!authorName) setAuthorName(replyAuthor.trim());
+        } catch {
+          // ignore
+        }
       }
     }
 
@@ -370,7 +463,7 @@ export const ForumPage: React.FC<ForumPageProps> = ({
               highlightWords={['Forum']}
             />
             <p className="mt-2 text-sm sm:text-base text-[#b4bac6] max-w-2xl leading-relaxed">
-              Submit formal academic inquiries, campus facility feedback, and student welfare proposals directly to the Supreme Student Council and fellow Louisianians.
+              Submit formal academic inquiries, campus facility feedback, and student welfare proposals—with full control to post by nickname, by year &amp; course only, or completely anonymously.
             </p>
           </div>
 
@@ -395,7 +488,7 @@ export const ForumPage: React.FC<ForumPageProps> = ({
           </div>
         </ScrollReveal>
 
-        {/* Collapsible New Discussion Composer */}
+        {/* Collapsible New Discussion Composer with 3-Option Student Privacy Selector */}
         {isComposerOpen && (
           <div className="mt-6 card-elevated rounded-2xl overflow-hidden">
             <div
@@ -424,49 +517,220 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                 )}
               </div>
 
-              <form onSubmit={handleSubmitThread} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {!official ? (
-                    <>
+              <form onSubmit={handleSubmitThread} className="space-y-5">
+                {/* Student Identity & Privacy Mode Selector */}
+                {!official ? (
+                  <div className="rounded-2xl border border-white/[0.14] bg-[#0b0e15] p-4 sm:p-5 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <label className="block text-xs font-semibold text-[#b4bac6] mb-1.5">
-                          Your Name
-                        </label>
-                        <input
-                          type="text"
-                          value={authorName}
-                          onChange={(e) => setAuthorName(e.target.value)}
-                          placeholder="e.g. Juan Dela Cruz"
-                          className="w-full min-h-[42px] rounded-xl border border-white/[0.14] bg-[#0b0e15] px-3.5 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
-                        />
+                        <span className="text-xs font-bold uppercase tracking-wider text-[#f5f4f0]">
+                          Student Identity &amp; Privacy Option
+                        </span>
+                        <p className="text-xs text-[#949ba8] mt-0.5">
+                          Choose how your identity appears on this forum post.
+                        </p>
                       </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-[#b4bac6] mb-1.5">
-                          Course / Year &amp; Section
-                        </label>
-                        <input
-                          type="text"
-                          value={authorSection}
-                          onChange={(e) => setAuthorSection(e.target.value)}
-                          placeholder="e.g. BSIT 3-A"
-                          className="w-full min-h-[42px] rounded-xl border border-white/[0.14] bg-[#0b0e15] px-3.5 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
-                        />
+                      <span className="text-xs font-semibold text-[#3ddc97]">
+                        {identityMode === 'anonymous'
+                          ? 'Posting as: Anonymous Student'
+                          : identityMode === 'year_course'
+                            ? `Posting as: ${authorSection.trim() || `${selectedYear} — ${selectedDept}`}`
+                            : `Posting as: ${authorName.trim() || student?.name || 'SLAC Student'}`}
+                      </span>
+                    </div>
+
+                    {/* 3-Option Segmented Identity Toggle */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIdentityMode('nickname')}
+                        className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          identityMode === 'nickname'
+                            ? 'bg-[#181d29] border-[#3ddc97]/50 text-[#f5f4f0]'
+                            : 'bg-[#121620] border-white/[0.1] text-[#b4bac6] hover:text-[#f5f4f0]'
+                        }`}
+                      >
+                        <User className="w-4 h-4 text-[#3ddc97] shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold truncate">
+                            Nickname / Name
+                          </p>
+                          <p className="text-[11px] text-[#949ba8] truncate">
+                            Show nickname &amp; course
+                          </p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIdentityMode('year_course')}
+                        className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          identityMode === 'year_course'
+                            ? 'bg-[#181d29] border-[#facc15]/50 text-[#f5f4f0]'
+                            : 'bg-[#121620] border-white/[0.1] text-[#b4bac6] hover:text-[#f5f4f0]'
+                        }`}
+                      >
+                        <GraduationCap className="w-4 h-4 text-[#facc15] shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold truncate">
+                            Year &amp; Course Only
+                          </p>
+                          <p className="text-[11px] text-[#949ba8] truncate">
+                            Hide name, show course
+                          </p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIdentityMode('anonymous')}
+                        className={`flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          identityMode === 'anonymous'
+                            ? 'bg-[#181d29] border-[#3ddc97]/50 text-[#f5f4f0]'
+                            : 'bg-[#121620] border-white/[0.1] text-[#b4bac6] hover:text-[#f5f4f0]'
+                        }`}
+                      >
+                        <EyeOff className="w-4 h-4 text-[#3ddc97] shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold truncate">
+                            Anonymous
+                          </p>
+                          <p className="text-[11px] text-[#949ba8] truncate">
+                            Hide name &amp; course
+                          </p>
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Dynamic Identity Fields based on chosen privacy option */}
+                    {identityMode === 'nickname' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                        <div>
+                          <label className="block text-xs font-semibold text-[#b4bac6] mb-1.5">
+                            Nickname or Full Name
+                          </label>
+                          <input
+                            type="text"
+                            value={authorName}
+                            onChange={(e) => setAuthorName(e.target.value)}
+                            placeholder="e.g. Louisiancoder or Juan Dela Cruz"
+                            className="w-full min-h-[40px] rounded-xl border border-white/[0.14] bg-[#121620] px-3.5 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-[#b4bac6] mb-1.5">
+                            Year Level &amp; Course
+                          </label>
+                          <input
+                            type="text"
+                            value={authorSection}
+                            onChange={(e) => setAuthorSection(e.target.value)}
+                            placeholder="e.g. 3rd Year — BSIT"
+                            className="w-full min-h-[40px] rounded-xl border border-white/[0.14] bg-[#121620] px-3.5 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                          />
+                        </div>
                       </div>
-                    </>
-                  ) : (
-                    <div className="sm:col-span-2 flex items-center gap-3 px-4 py-2.5 rounded-xl border border-[#3ddc97]/30 bg-[#0b0e15]">
-                      <ShieldCheck className="w-4 h-4 text-[#3ddc97] shrink-0" />
-                      <div className="text-xs text-[#f5f4f0]">
-                        Posting officially as{' '}
-                        <span className="font-bold text-[#3ddc97]">
-                          {official.name}
-                        </span>{' '}
-                        <span className="text-[#949ba8]">
-                          ({official.position})
+                    )}
+
+                    {identityMode === 'year_course' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                        <div>
+                          <label className="block text-xs font-semibold text-[#b4bac6] mb-1.5">
+                            Year Level
+                          </label>
+                          <select
+                            value={selectedYear}
+                            onChange={(e) => {
+                              const yr = e.target.value;
+                              setSelectedYear(yr);
+                              setAuthorSection(`${yr} — ${selectedDept}`);
+                            }}
+                            className="w-full min-h-[40px] rounded-xl border border-white/[0.14] bg-[#121620] px-3 py-2 text-xs text-[#f5f4f0]"
+                          >
+                            {SLAC_YEAR_LEVELS.map((yr) => (
+                              <option key={yr} value={yr}>
+                                {yr}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-[#b4bac6] mb-1.5">
+                            College Department
+                          </label>
+                          <select
+                            value={selectedDept}
+                            onChange={(e) => {
+                              const dept = e.target.value;
+                              setSelectedDept(dept);
+                              setAuthorSection(`${selectedYear} — ${dept}`);
+                            }}
+                            className="w-full min-h-[40px] rounded-xl border border-white/[0.14] bg-[#121620] px-3 py-2 text-xs text-[#f5f4f0]"
+                          >
+                            {SLAC_COLLEGE_DEPARTMENTS.map((dept) => (
+                              <option key={dept} value={dept}>
+                                {dept}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-[#b4bac6] mb-1.5">
+                            Displayed Course Label
+                          </label>
+                          <input
+                            type="text"
+                            value={authorSection}
+                            onChange={(e) => setAuthorSection(e.target.value)}
+                            placeholder="e.g. 3rd Year — BSIT"
+                            className="w-full min-h-[40px] rounded-xl border border-white/[0.14] bg-[#121620] px-3.5 py-2 text-xs text-[#f5f4f0] placeholder:text-[#949ba8]"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {identityMode === 'anonymous' && (
+                      <div className="flex items-center gap-2.5 rounded-xl border border-white/[0.1] bg-[#121620] px-3.5 py-2.5 text-xs text-[#b4bac6]">
+                        <EyeOff className="w-4 h-4 text-[#3ddc97] shrink-0" />
+                        <span>
+                          Your name and course will be hidden. This post will appear publicly as{' '}
+                          <strong className="text-[#f5f4f0]">
+                            Anonymous Student
+                          </strong>
+                          .
                         </span>
                       </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[#3ddc97]/30 bg-[#0b0e15]">
+                    <ShieldCheck className="w-4 h-4 text-[#3ddc97] shrink-0" />
+                    <div className="text-xs text-[#f5f4f0]">
+                      Posting officially as{' '}
+                      <span className="font-bold text-[#3ddc97]">
+                        {official.name}
+                      </span>{' '}
+                      <span className="text-[#949ba8]">
+                        ({official.position})
+                      </span>
                     </div>
-                  )}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-[#b4bac6] mb-1.5">
+                      Discussion Subject / Title *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="State the main topic clearly (e.g., Library Evening Study Hours Proposal)"
+                      className="w-full min-h-[42px] rounded-xl border border-white/[0.14] bg-[#0b0e15] px-4 py-2.5 text-sm font-medium text-[#f5f4f0] placeholder:text-[#949ba8]"
+                    />
+                  </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-[#b4bac6] mb-1.5">
@@ -484,20 +748,6 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                       ))}
                     </select>
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-[#b4bac6] mb-1.5">
-                    Discussion Subject / Title *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="State the main topic clearly (e.g., Library Evening Study Hours Proposal)"
-                    className="w-full min-h-[42px] rounded-xl border border-white/[0.14] bg-[#0b0e15] px-4 py-2.5 text-sm font-medium text-[#f5f4f0] placeholder:text-[#949ba8]"
-                  />
                 </div>
 
                 <div>
@@ -587,9 +837,13 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                   {activeThread.title}
                 </h2>
 
-                <div className="flex items-center gap-3 pb-5 mb-5 border-b border-white/[0.1]">
+                <div className="flex items-center gap-3 pb-5 mb-5 border-b border-white/[0.12]">
                   <div className="w-10 h-10 rounded-xl bg-[#0b0e15] border border-white/[0.14] flex items-center justify-center text-[#3ddc97] font-bold text-sm shrink-0">
-                    {activeThread.author.charAt(0).toUpperCase()}
+                    {activeThread.author === 'Anonymous Student' ? (
+                      <EyeOff className="w-4 h-4 text-[#3ddc97]" />
+                    ) : (
+                      activeThread.author.charAt(0).toUpperCase()
+                    )}
                   </div>
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -612,7 +866,7 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                   {activeThread.body}
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-white/[0.1]">
+                <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-white/[0.12]">
                   <button
                     type="button"
                     onClick={() => onToggleSupport(activeThread.id, 1)}
@@ -643,7 +897,7 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                 aria-hidden="true"
               />
               <div className="p-6 sm:p-8 space-y-6">
-                <div className="flex items-center justify-between border-b border-white/[0.1] pb-4">
+                <div className="flex items-center justify-between border-b border-white/[0.12] pb-4">
                   <h3 className="text-base sm:text-lg font-bold text-[#f5f4f0] flex items-center gap-2">
                     <MessageSquare className="w-4 h-4 text-[#3ddc97]" />
                     <span>
@@ -656,7 +910,7 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                 </div>
 
                 {activeThread.replies.length === 0 ? (
-                  <div className="rounded-xl border border-white/[0.1] bg-[#0b0e15] py-8 px-4 text-center">
+                  <div className="rounded-xl border border-white/[0.12] bg-[#0b0e15] py-8 px-4 text-center">
                     <p className="text-sm font-semibold text-[#f5f4f0]">
                       No responses have been recorded for this topic yet.
                     </p>
@@ -665,7 +919,7 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                     </p>
                   </div>
                 ) : (
-                  <div className="divide-y divide-white/[0.1]">
+                  <div className="divide-y divide-white/[0.12]">
                     {activeThread.replies.map((reply, index) => {
                       const isOfficialReply = isOfficialRoleLabel(
                         reply.yearLevel
@@ -678,10 +932,14 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                                 className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 border ${
                                   isOfficialReply
                                     ? 'bg-[#3ddc97]/15 text-[#3ddc97] border-[#3ddc97]/35'
-                                    : 'bg-[#0b0e15] text-[#f5f4f0] border-white/[0.12]'
+                                    : 'bg-[#0b0e15] text-[#f5f4f0] border-white/[0.14]'
                                 }`}
                               >
-                                {reply.author.charAt(0).toUpperCase()}
+                                {reply.author === 'Anonymous Student' ? (
+                                  <EyeOff className="w-3.5 h-3.5 text-[#3ddc97]" />
+                                ) : (
+                                  reply.author.charAt(0).toUpperCase()
+                                )}
                               </div>
                               <div className="flex flex-wrap items-center gap-1.5 text-xs">
                                 <span className="font-bold text-[#f5f4f0]">
@@ -730,55 +988,111 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                   </div>
                 )}
 
-                {/* Add Response Form */}
-                <div className="pt-5 border-t border-white/[0.1]">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#949ba8] mb-3">
-                    Post a Formal Response
-                  </h4>
-                  <div className="space-y-3">
+                {/* Add Response Form with Privacy Selector */}
+                <div className="pt-5 border-t border-white/[0.12] space-y-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-[#f5f4f0]">
+                      Post a Formal Response
+                    </h4>
+
                     {!official && (
-                      <div className="sm:max-w-xs">
-                        <label className="block text-xs font-semibold text-[#b4bac6] mb-1">
-                          Your Name
-                        </label>
-                        <input
-                          type="text"
-                          value={replyAuthor}
-                          onChange={(e) => setReplyAuthor(e.target.value)}
-                          placeholder={
-                            authorName || 'e.g. Maria Santos (BSED 2-A)'
-                          }
-                          className="w-full min-h-[40px] rounded-xl border border-white/[0.14] bg-[#0b0e15] px-3.5 py-2 text-xs text-[#f5f4f0] placeholder:text-[#949ba8]"
-                        />
+                      <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#0b0e15] border border-white/[0.12]">
+                        {(
+                          [
+                            { id: 'nickname', label: 'Nickname' },
+                            { id: 'year_course', label: 'Year & Course' },
+                            { id: 'anonymous', label: 'Anonymous' },
+                          ] as const
+                        ).map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setReplyIdentityMode(opt.id)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer ${
+                              replyIdentityMode === opt.id
+                                ? 'bg-[#3ddc97] text-[#042412]'
+                                : 'text-[#949ba8] hover:text-[#f5f4f0]'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
                       </div>
                     )}
-                    <div className="flex flex-col sm:flex-row gap-2.5">
-                      <textarea
-                        rows={2}
-                        value={replyText}
-                        onChange={(e) => setReplyText(e.target.value)}
-                        placeholder="Write a respectful, constructive response to this topic..."
-                        className="flex-1 rounded-xl border border-white/[0.14] bg-[#0b0e15] px-4 py-2.5 text-sm text-[#f5f4f0] placeholder:text-[#949ba8] resize-y"
+                  </div>
+
+                  {!official && replyIdentityMode === 'nickname' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <input
+                        type="text"
+                        value={replyAuthor}
+                        onChange={(e) => setReplyAuthor(e.target.value)}
+                        placeholder={
+                          authorName || 'Nickname or Name (e.g. Maria Santos)'
+                        }
+                        className="w-full min-h-[38px] rounded-xl border border-white/[0.14] bg-[#0b0e15] px-3.5 py-1.5 text-xs text-[#f5f4f0] placeholder:text-[#949ba8]"
                       />
-                      <button
-                        type="button"
-                        disabled={isSubmittingReply || !replyText.trim()}
-                        onClick={() => handleSubmitReply(activeThread.id)}
-                        className="gemini-cta inline-flex items-center justify-center gap-2 min-h-[42px] px-5 py-2.5 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 self-end sm:self-stretch shrink-0"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        <span>
-                          {isSubmittingReply ? 'Posting...' : 'Submit Reply'}
-                        </span>
-                      </button>
+                      <input
+                        type="text"
+                        value={authorSection}
+                        onChange={(e) => setAuthorSection(e.target.value)}
+                        placeholder="Year & Course (e.g. 2nd Year — BSED)"
+                        className="w-full min-h-[38px] rounded-xl border border-white/[0.14] bg-[#0b0e15] px-3.5 py-1.5 text-xs text-[#f5f4f0] placeholder:text-[#949ba8]"
+                      />
                     </div>
+                  )}
+
+                  {!official && replyIdentityMode === 'year_course' && (
+                    <div className="sm:max-w-sm">
+                      <input
+                        type="text"
+                        value={authorSection}
+                        onChange={(e) => setAuthorSection(e.target.value)}
+                        placeholder="Displayed Year & Course (e.g. 3rd Year — BSIT)"
+                        className="w-full min-h-[38px] rounded-xl border border-white/[0.14] bg-[#0b0e15] px-3.5 py-1.5 text-xs text-[#f5f4f0] placeholder:text-[#949ba8]"
+                      />
+                    </div>
+                  )}
+
+                  {!official && replyIdentityMode === 'anonymous' && (
+                    <p className="text-xs text-[#949ba8] flex items-center gap-1.5">
+                      <EyeOff className="w-3.5 h-3.5 text-[#3ddc97]" />
+                      <span>
+                        Replying anonymously as{' '}
+                        <strong className="text-[#f5f4f0]">
+                          Anonymous Student
+                        </strong>
+                        .
+                      </span>
+                    </p>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-2.5">
+                    <textarea
+                      rows={2}
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      placeholder="Write a respectful, constructive response to this topic..."
+                      className="flex-1 rounded-xl border border-white/[0.14] bg-[#0b0e15] px-4 py-2.5 text-sm text-[#f5f4f0] placeholder:text-[#949ba8] resize-y"
+                    />
+                    <button
+                      type="button"
+                      disabled={isSubmittingReply || !replyText.trim()}
+                      onClick={() => handleSubmitReply(activeThread.id)}
+                      className="gemini-cta inline-flex items-center justify-center gap-2 min-h-[42px] px-5 py-2.5 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50 self-end sm:self-stretch shrink-0"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>
+                        {isSubmittingReply ? 'Posting...' : 'Submit Reply'}
+                      </span>
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         ) : (
-          /* BOARD FILTER BAR + 2-COLUMN SPLIT GRID (Matched to FAQ & Announcements) */
+          /* BOARD FILTER BAR + 2-COLUMN SPLIT GRID (With Deep Layered Dark Mode Surfaces) */
           <div className="mt-6 space-y-6">
             {/* Top Category Filter Bar + Search */}
             <div className="pb-5 border-b border-white/[0.14] flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
@@ -805,7 +1119,7 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search topics or authors..."
                   aria-label="Search forum topics"
-                  className="w-full min-h-[40px] rounded-xl border border-white/[0.12] bg-[#0b0e15] pl-9 pr-3.5 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
+                  className="w-full min-h-[40px] rounded-xl border border-white/[0.14] bg-[#0b0e15] pl-9 pr-3.5 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
                 />
               </div>
             </div>
@@ -821,7 +1135,7 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                     aria-hidden="true"
                   />
                   <div className="p-5 space-y-3">
-                    <div className="flex items-center justify-between border-b border-white/[0.1] pb-3">
+                    <div className="flex items-center justify-between border-b border-white/[0.12] pb-3">
                       <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#f5f4f0]">
                         <FolderOpen className="w-4 h-4 text-[#3ddc97]" />
                         <span>Consultation Boards</span>
@@ -831,7 +1145,7 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                       </span>
                     </div>
 
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       {availableCategories.map((cat) => {
                         const active = selectedCategory === cat;
                         return (
@@ -839,10 +1153,10 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                             key={cat}
                             type="button"
                             onClick={() => setSelectedCategory(cat)}
-                            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all text-left cursor-pointer ${
+                            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all text-left cursor-pointer ${
                               active
-                                ? 'bg-[#181d29] text-[#3ddc97] border border-white/[0.16]'
-                                : 'text-[#b4bac6] hover:bg-[#0b0e15] hover:text-[#f5f4f0] border border-transparent'
+                                ? 'bg-[#0b0e15] text-[#3ddc97] border border-[#3ddc97]/40'
+                                : 'text-[#b4bac6] hover:bg-[#0b0e15]/60 hover:text-[#f5f4f0] border border-transparent'
                             }`}
                           >
                             <span className="truncate pr-2">{cat}</span>
@@ -856,20 +1170,20 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                   </div>
                 </div>
 
-                {/* Forum Etiquette Card */}
+                {/* Forum Etiquette & Privacy Note Card */}
                 <div className="card-elevated rounded-2xl overflow-hidden">
                   <div
                     className="h-[2px] w-full"
                     style={{ backgroundColor: 'var(--ssc-yellow-bright)' }}
                     aria-hidden="true"
                   />
-                  <div className="p-5 space-y-2">
+                  <div className="p-5 space-y-2.5">
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#facc15]">
                       <MessagesSquare className="w-4 h-4" />
-                      <span>Forum Guidelines</span>
+                      <span>Forum Guidelines &amp; Privacy</span>
                     </div>
                     <p className="text-xs sm:text-sm text-[#b4bac6] leading-relaxed">
-                      All discussions are reviewed by the Supreme Student Council. Keep inquiries constructive, factual, and respectful of fellow students and faculty.
+                      Students may submit inquiries using a nickname, their Year Level &amp; Course only, or completely anonymously. Keep discussions constructive and respectful.
                     </p>
                   </div>
                 </div>
@@ -878,7 +1192,7 @@ export const ForumPage: React.FC<ForumPageProps> = ({
               {/* Right Column: Formal Sort Controls + Topic Directory */}
               <div className="lg:col-span-8 space-y-4">
                 {/* Formal Sort Toolbar */}
-                <div className="rounded-2xl border border-white/[0.12] bg-[#0b0e15] p-2.5 flex flex-wrap items-center justify-between gap-2">
+                <div className="rounded-2xl border border-white/[0.14] bg-[#0b0e15] p-2.5 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-1 overflow-x-auto">
                     {(
                       [
@@ -911,10 +1225,10 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                     className={`inline-flex items-center gap-1.5 min-h-[34px] px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors border cursor-pointer ${
                       showMyContributionsOnly
                         ? 'bg-[#facc15]/15 text-[#facc15] border-[#facc15]/40'
-                        : 'border-white/[0.12] bg-[#121620] text-[#b4bac6] hover:text-[#f5f4f0]'
+                        : 'border-white/[0.14] bg-[#181d29] text-[#f5f4f0] hover:border-white/[0.26]'
                     }`}
                   >
-                    <UserCircle2 className="w-3.5 h-3.5" />
+                    <UserCircle2 className="w-3.5 h-3.5 text-[#facc15]" />
                     <span>My Contributions</span>
                   </button>
                 </div>
@@ -928,7 +1242,7 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                       aria-hidden="true"
                     />
                     <div className="p-10 sm:p-12 text-center space-y-2.5">
-                      <div className="h-12 w-12 rounded-2xl bg-[#0b0e15] border border-white/[0.12] flex items-center justify-center text-[#3ddc97] mx-auto">
+                      <div className="h-12 w-12 rounded-2xl bg-[#0b0e15] border border-white/[0.14] flex items-center justify-center text-[#3ddc97] mx-auto">
                         <MessageSquare className="w-6 h-6" />
                       </div>
                       <h3 className="text-lg font-bold text-[#f5f4f0]">
@@ -942,7 +1256,7 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-3.5">
                     {filteredThreads.map((thread) => {
                       const isOfficialAuthor = isOfficialRoleLabel(
                         thread.yearLevel
@@ -959,10 +1273,19 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                               openThreadDetail(thread.id);
                             }
                           }}
-                          className="card-elevated rounded-2xl overflow-hidden group cursor-pointer transition-all hover:border-[#3ddc97]/40"
+                          className="card-elevated rounded-2xl overflow-hidden group cursor-pointer"
                         >
+                          <div
+                            className="h-[2px] w-full"
+                            style={{
+                              backgroundColor: isOfficialAuthor
+                                ? 'var(--ssc-yellow-bright)'
+                                : 'var(--ssc-green-bright)',
+                            }}
+                            aria-hidden="true"
+                          />
                           <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div className="space-y-1.5 min-w-0 flex-1">
+                            <div className="space-y-2 min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2 text-xs">
                                 <span className="font-semibold text-[#3ddc97]">
                                   {thread.topic}
@@ -973,7 +1296,7 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                                 </span>
                               </div>
 
-                              <h3 className="text-base sm:text-lg font-bold text-[#f5f4f0] group-hover:text-[#3ddc97] transition-colors line-clamp-1">
+                              <h3 className="text-base sm:text-xl font-bold text-[#f5f4f0] group-hover:text-[#3ddc97] transition-colors line-clamp-1">
                                 {thread.title}
                               </h3>
 
@@ -994,8 +1317,8 @@ export const ForumPage: React.FC<ForumPageProps> = ({
                               </div>
                             </div>
 
-                            <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/[0.08]">
-                              <div className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.12] bg-[#0b0e15] px-3 py-1.5 text-xs font-semibold text-[#f5f4f0] tabular-nums">
+                            <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2.5 shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-white/[0.1]">
+                              <div className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.14] bg-[#0b0e15] px-3 py-1.5 text-xs font-semibold text-[#f5f4f0] tabular-nums">
                                 <MessageSquare className="w-3.5 h-3.5 text-[#3ddc97]" />
                                 <span>
                                   {thread.replies.length}{' '}

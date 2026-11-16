@@ -465,10 +465,19 @@ html:not([data-theme="dark"]) [class~="bg-[#121620]"] .card-elevated {
 }
 
 html[data-theme="dark"] .card-elevated {
-  background-color: #242b27;
-  background-image: none;
-  border: 1px solid rgba(245, 243, 238, 0.15);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background-color: #242e28;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0) 100%);
+  border: 1px solid rgba(245, 243, 238, 0.20);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.13),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.40),
+    0 12px 28px -8px rgba(0, 0, 0, 0.72),
+    0 4px 10px -2px rgba(0, 0, 0, 0.48);
+}
+
+html[data-theme="dark"] [class~="bg-[#121620]"] .card-elevated {
+  background-color: #252f29;
+  border-color: rgba(245, 243, 238, 0.21);
 }
 
 @media (hover: hover) {
@@ -479,9 +488,13 @@ html[data-theme="dark"] .card-elevated {
   }
 
   html[data-theme="dark"] .card-elevated:hover {
-    background-color: #29312c;
-    border-color: rgba(104, 182, 143, 0.38);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    background-color: #2b3730;
+    border-color: rgba(104, 182, 143, 0.48);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.16),
+      inset 0 -1px 0 0 rgba(0, 0, 0, 0.42),
+      0 16px 34px -8px rgba(0, 0, 0, 0.78),
+      0 6px 14px -3px rgba(0, 0, 0, 0.55);
   }
 }
 
@@ -493,10 +506,12 @@ html[data-theme="dark"] .card-elevated {
 }
 
 html[data-theme="dark"] .surface-depth {
-  background-color: #1c221f;
-  background-image: none;
-  border: 1px solid rgba(245, 243, 238, 0.14);
-  box-shadow: none;
+  background-color: #202924;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, rgba(255, 255, 255, 0) 100%);
+  border: 1px solid rgba(245, 243, 238, 0.18);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.10),
+    0 8px 20px -6px rgba(0, 0, 0, 0.60);
 }
 
 /* ==========================================================================
@@ -668,39 +683,142 @@ html:not([data-theme="dark"]) [class~="border-[#3ddc97]/60"] {
   border-color: rgba(36, 82, 59, 0.38);
 }
 
-/* Dark Mode Surface Refinement (Lighter Warm Charcoal-Sage Surfaces for Clear Depth Without Shadows) */
+/* ==========================================================================
+   DARK MODE TACTILE DEPTH & MULTI-TIER LUMINANCE HIERARCHY
+   Tier 0 (Deep Canvas):          #090c0a (bg-[#07090e])
+   Tier 1 (Workspace / Recessed): #0f1411 (bg-[#0b0e15] / bg-[#0d0e11])
+   Tier 2 (Section / Sidebar):    #161c19 (bg-[#121620] structural containers)
+   Tier 3 (Elevated Cards/Panels):#242e28 (.card-elevated & rounded cards)
+   Tier 4 (Raised Controls/Chips):#2e3a33 (bg-[#181d29] / bg-[#1a1d22] / buttons)
+   ========================================================================== */
 html[data-theme="dark"] [class~="bg-[#07090e]"] {
-  background-color: #0f1210;
+  background-color: #090c0a;
 }
+
 html[data-theme="dark"] [class~="bg-[#0d1017]"],
 html[data-theme="dark"] [class~="bg-[#0b0e15]"],
 html[data-theme="dark"] [class~="bg-[#0b0f18]"],
 html[data-theme="dark"] [class~="bg-[#0d0e11]"] {
-  background-color: #161b18;
+  background-color: #0f1411;
 }
+
+/* Structural Page Sections, Sidebars, and Sticky Bars */
 html[data-theme="dark"] [class~="bg-[#121620]"],
 html[data-theme="dark"] [class~="bg-[#121620]/90"],
-html[data-theme="dark"] [class~="bg-[#121620]/70"],
-html[data-theme="dark"] [class~="bg-[#131519]"] {
-  background-color: #242b27;
+html[data-theme="dark"] [class~="bg-[#121620]/70"] {
+  background-color: #161c19;
 }
+
+/* Elevated Rounded Cards, Dashboard Panels & Modals using bg-[#121620] or bg-[#131519] */
+html[data-theme="dark"] [class~="bg-[#121620]"][class~="rounded-xl"],
+html[data-theme="dark"] [class~="bg-[#121620]"][class~="rounded-2xl"],
+html[data-theme="dark"] [class~="bg-[#131519]"] {
+  background-color: #222c26;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0) 100%);
+  border-color: rgba(245, 243, 238, 0.19);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.38),
+    0 12px 28px -8px rgba(0, 0, 0, 0.68),
+    0 4px 10px -2px rgba(0, 0, 0, 0.45);
+}
+
+/* Sunken / Recessed Wells & Inner Containers (non-button boxes inside cards/sections) */
+html[data-theme="dark"] div[class~="bg-[#0b0e15]"][class~="rounded-lg"],
+html[data-theme="dark"] div[class~="bg-[#0b0e15]"][class~="rounded-xl"],
+html[data-theme="dark"] div[class~="bg-[#0b0e15]"][class~="rounded-2xl"],
+html[data-theme="dark"] form[class~="bg-[#0b0e15]"][class~="rounded-xl"],
+html[data-theme="dark"] div[class~="bg-[#0d0e11]"][class~="rounded-lg"],
+html[data-theme="dark"] div[class~="bg-[#0d0e11]"][class~="rounded-xl"],
+html[data-theme="dark"] div[class~="bg-[#0d0e11]"][class~="rounded-2xl"] {
+  background-color: #101512;
+  border-color: rgba(245, 243, 238, 0.15);
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.58),
+    inset 0 1px 0 rgba(0, 0, 0, 0.40),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Tactile Recessed Inputs, Selects & Textareas in Dark Mode */
+html[data-theme="dark"] input[class~="bg-[#0b0e15]"],
+html[data-theme="dark"] input[class~="bg-[#0d0e11]"],
+html[data-theme="dark"] select[class~="bg-[#0b0e15]"],
+html[data-theme="dark"] select[class~="bg-[#0d0e11]"],
+html[data-theme="dark"] textarea[class~="bg-[#0b0e15]"],
+html[data-theme="dark"] textarea[class~="bg-[#0d0e11]"] {
+  background-color: #0d120f;
+  border-color: rgba(245, 243, 238, 0.18);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Inputs & Selects placed inside a recessed bg-[#0b0e15] form well */
+html[data-theme="dark"] input[class~="bg-[#121620]"],
+html[data-theme="dark"] select[class~="bg-[#121620]"],
+html[data-theme="dark"] textarea[class~="bg-[#121620]"] {
+  background-color: #1b231e;
+  border-color: rgba(245, 243, 238, 0.20);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.48),
+    0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Raised Interactive Buttons & Controls in Dark Mode */
+html[data-theme="dark"] button[class~="bg-[#0b0e15]"],
+html[data-theme="dark"] button[class~="bg-[#121620]"],
+html[data-theme="dark"] a[class~="bg-[#0b0e15]"],
+html[data-theme="dark"] a[class~="bg-[#121620]"] {
+  background-color: #26312b;
+  border-color: rgba(245, 243, 238, 0.20);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.11),
+    0 3px 8px -2px rgba(0, 0, 0, 0.52);
+}
+
+html[data-theme="dark"] button[class~="bg-[#0b0e15]"]:hover,
+html[data-theme="dark"] button[class~="bg-[#121620]"]:hover,
+html[data-theme="dark"] a[class~="bg-[#0b0e15]"]:hover,
+html[data-theme="dark"] a[class~="bg-[#121620]"]:hover {
+  background-color: #2f3c35;
+  border-color: rgba(104, 182, 143, 0.42);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
+    0 5px 12px -2px rgba(0, 0, 0, 0.62);
+}
+
+/* Active Controls, Selected States & Elevated Chips (bg-[#181d29] / bg-[#1a1d22]) */
 html[data-theme="dark"] [class~="bg-[#181d29]"],
 html[data-theme="dark"] [class~="bg-[#1a1d22]"] {
-  background-color: #2e3732;
+  background-color: #2f3c35;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.13),
+    0 3px 8px -2px rgba(0, 0, 0, 0.50);
 }
+
+/* Primary Botanical Green CTAs in Dark Mode: Crisp Top Bevel + Depth Shadow */
+html[data-theme="dark"] .gemini-cta,
+html[data-theme="dark"] button[class~="bg-[#3ddc97]"] {
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.32),
+    0 4px 12px -2px rgba(0, 0, 0, 0.55);
+}
+
 html[data-theme="dark"] #mobile-nav-drawer,
 html[data-theme="dark"] #portal-menu-drawer {
-  background-color: #1d2320;
-  border-color: rgba(245, 243, 238, 0.18);
+  background-color: #19201c;
+  border-color: rgba(245, 243, 238, 0.20);
+  box-shadow: -16px 0 40px rgba(0, 0, 0, 0.75);
 }
+
 html[data-theme="dark"] [class~="border-white/[0.08]"],
 html[data-theme="dark"] [class~="border-white/[0.1]"] {
-  border-color: rgba(245, 243, 238, 0.14);
+  border-color: rgba(245, 243, 238, 0.15);
 }
 html[data-theme="dark"] [class~="border-white/[0.12]"],
 html[data-theme="dark"] [class~="border-white/[0.14]"],
 html[data-theme="dark"] [class~="border-white/[0.16]"] {
-  border-color: rgba(245, 243, 238, 0.18);
+  border-color: rgba(245, 243, 238, 0.21);
 }
 
 :focus-visible {

@@ -1884,7 +1884,7 @@ export function AdminDashboardPage({
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#f5f4f0]">
-                  Hello {firstName}
+                  Hello, {firstName}!
                 </h1>
                 <p className="mt-1 text-sm text-[#949ba8]">
                   Welcome to your SSC Suite administration panel ({official.position})
