@@ -4,6 +4,7 @@
     "rules": "firestore.rules"
   },
   "hosting": {
+    "site": "smart-council",
     "public": "dist",
     "ignore": [
       "firebase.json",
