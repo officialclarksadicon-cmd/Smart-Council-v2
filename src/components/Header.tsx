@@ -10,10 +10,8 @@ import {
   LogIn,
   LogOut,
   Megaphone,
-  Menu,
   MessageSquare,
   Moon,
-  Settings,
   ShieldCheck,
   Sun,
   Users,
@@ -112,6 +110,7 @@ export function Header({
   onSignOutStudent,
 }: HeaderProps) {
   const [menuDrawerOpen, setMenuDrawerOpen] = useState(false);
+  const [pressedItem, setPressedItem] = useState<string | null>(null);
   const [identityModalOpen, setIdentityModalOpen] = useState(false);
   const [isFilled, setIsFilled] = useState(false);
 
@@ -198,7 +197,7 @@ export function Header({
     };
   }, [currentPage]);
 
-  // Lock background page scroll & listen for Escape when Menu Drawer is open
+  // Lock background page scroll & listen for Escape when Menu Overlay is open
   useEffect(() => {
     if (!menuDrawerOpen) return;
 
@@ -217,6 +216,7 @@ export function Header({
   }, [menuDrawerOpen]);
 
   const handleNavigateSelect = (page: PageRoute) => {
+    setPressedItem(null);
     setMenuDrawerOpen(false);
     onNavigate(page);
   };
@@ -268,9 +268,9 @@ export function Header({
   }
 
   // State-dependent blurred glass:
-  // - Top of Hero section (currentPage === 'home' && !isFilled): .karst-header-glass
-  // - Scrolled or on any inner section page: .karst-header-solid
-  const isSectionState = isFilled || currentPage !== 'home';
+  // - Top of Hero section (currentPage === 'home' && !isFilled && !menuDrawerOpen): .karst-header-glass
+  // - Scrolled, menu open, or on any inner section page: .karst-header-solid
+  const isSectionState = isFilled || currentPage !== 'home' || menuDrawerOpen;
   const headerFillClass = isSectionState
     ? 'karst-header-solid'
     : 'karst-header-glass';
@@ -278,10 +278,10 @@ export function Header({
   return (
     <>
       <header
-        className={`fixed top-0 left-0 right-0 z-50 w-full translate-y-0 border-b ${headerFillClass}`}
+        className={`fixed top-0 left-0 right-0 z-[90] w-full translate-y-0 border-b ${headerFillClass}`}
       >
-        <div className="mx-auto max-w-[1440px] px-4 sm:px-8 h-16 flex items-center justify-between gap-4">
-          {/* Zone 1 (Left): Smart Council Wordmark */}
+        <div className="mx-auto max-w-[1440px] px-4 sm:px-8 h-16 flex items-center justify-between gap-8">
+          {/* Zone 1 (Left): Smart Council Wordmark (Logo) */}
           <div className="shrink-0 flex items-center">
             <button
               type="button"
@@ -294,10 +294,10 @@ export function Header({
             </button>
           </div>
 
-          {/* Zone 2 (Center): Desktop Navigation Links (Never clipped) */}
+          {/* Zone 2 (Center): Desktop Navigation Bar with Mavi-Style Pill Hover/Pressed Feedback */}
           <nav
             aria-label="Main navigation"
-            className="hidden lg:flex items-center justify-center gap-5 xl:gap-7 shrink-0"
+            className="hidden lg:flex items-center justify-center gap-1.5 xl:gap-2 shrink-0"
           >
             {siteConfig.header.navItems.map((item) => {
               const isActive = currentPage === item.page;
@@ -316,11 +316,9 @@ export function Header({
                   key={item.label}
                   type="button"
                   aria-current={isActive ? 'page' : undefined}
-                  onClick={() => onNavigate(item.page)}
-                  className={`relative inline-flex items-center gap-1.5 py-2 px-0.5 text-sm font-medium transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer ${
-                    isActive
-                      ? 'text-[#f5f4f0] font-semibold'
-                      : 'text-[#b4bac6] hover:text-[#f5f4f0]'
+                  onClick={() => handleNavigateSelect(item.page)}
+                  className={`mavi-desktop-nav-btn shrink-0 ${
+                    isActive ? 'is-active' : ''
                   }`}
                 >
                   <span>{item.label}</span>
@@ -336,7 +334,7 @@ export function Header({
                     <motion.span
                       layoutId="active-nav-indicator"
                       aria-hidden="true"
-                      className={`absolute left-0 right-0 bottom-0 h-[2px] rounded-full ${indicatorColor}`}
+                      className={`absolute left-2.5 right-2.5 bottom-1 h-[2px] rounded-full ${indicatorColor}`}
                       transition={{
                         type: 'spring',
                         stiffness: 460,
@@ -351,8 +349,8 @@ export function Header({
             {official && (
               <button
                 type="button"
-                onClick={() => onNavigate('admin')}
-                className="relative inline-flex items-center gap-1.5 py-2 px-1 text-sm font-medium text-[#b4bac6] hover:text-[#f5f4f0] transition-colors duration-150 whitespace-nowrap shrink-0 cursor-pointer"
+                onClick={() => handleNavigateSelect('admin')}
+                className="mavi-desktop-nav-btn shrink-0"
               >
                 <LayoutDashboard
                   className="h-3.5 w-3.5 text-[#3ddc97]"
@@ -363,30 +361,35 @@ export function Header({
             )}
           </nav>
 
-          {/* Zone 3 (Right): Sign In CTA (when signed out) + Menu Drawer Toggle */}
+          {/* Zone 3 (Right): Primary Sign-In Action + Mavi Design Hamburger Button (3-Line <-> X) */}
           <div className="shrink-0 flex items-center justify-end gap-2.5">
             {!official && !student && (
               <button
                 type="button"
                 aria-label="Sign in as Student or SSC Official"
-                onClick={() => onOpenAuth('student')}
-                className="hidden sm:inline-flex items-center justify-center gap-1.5 h-9 px-3.5 text-xs font-semibold rounded-lg border border-white/[0.16] bg-[#121620] text-[#f5f4f0] hover:border-white/[0.28] active:scale-[0.98] transition-all whitespace-nowrap shrink-0 cursor-pointer"
+                onClick={() => {
+                  setMenuDrawerOpen(false);
+                  onOpenAuth('student');
+                }}
+                className="hidden sm:inline-flex items-center justify-center gap-1.5 h-[42px] px-4 text-xs font-semibold rounded-xl border border-white/[0.16] bg-[#121620] text-[#f5f4f0] hover:border-white/[0.28] active:scale-[0.98] transition-all whitespace-nowrap shrink-0 cursor-pointer"
               >
                 <LogIn className="h-3.5 w-3.5 text-[#3ddc97]" aria-hidden="true" />
                 <span>{siteConfig.header.primaryButtonText}</span>
               </button>
             )}
 
-            {/* Menu Drawer Button (Designcouch ExvwPY animated 3-line to X icon) */}
+            {/* Mavi Design Hamburger Menu Trigger (Rounded-Square Button with Smart-Animate 3-Line to X) */}
             <button
               type="button"
               aria-label={
-                menuDrawerOpen ? 'Close menu drawer' : 'Open menu drawer'
+                menuDrawerOpen ? 'Close navigation menu' : 'Open navigation menu'
               }
               aria-expanded={menuDrawerOpen}
-              aria-controls="portal-menu-drawer"
+              aria-controls="mavi-navigation-overlay"
               onClick={() => setMenuDrawerOpen((prev) => !prev)}
-              className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center text-[#f5f4f0] hover:text-[#3ddc97] transition-colors duration-150 cursor-pointer"
+              className={`relative mavi-burger-btn shrink-0 ${
+                menuDrawerOpen ? 'is-open' : ''
+              }`}
             >
               <div
                 aria-hidden="true"
@@ -399,7 +402,7 @@ export function Header({
               {!menuDrawerOpen && totalUnread > 0 && (
                 <span
                   aria-label={`${totalUnread} new notifications`}
-                  className="absolute top-0 right-0 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#ef4444] px-1 text-[9px] font-bold text-white tabular-nums shadow-sm"
+                  className="absolute -top-1 -right-1 inline-flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#ef4444] px-1 text-[10px] font-bold text-white tabular-nums shadow-sm"
                 >
                   {totalUnread}
                 </span>
@@ -438,13 +441,19 @@ export function Header({
         </div>
       )}
 
-      {/* Portaled Compact Facebook-Style Right Slide-In Menu Drawer */}
+      {/* Portaled Mavi Design Navigation Overlay (Mobile Top-Center Dropdown + Desktop Top-Right Popover) */}
       {typeof document !== 'undefined' &&
         createPortal(
           <AnimatePresence>
             {menuDrawerOpen && (
-              <div className="fixed inset-0 z-[80] overflow-hidden">
-                {/* Soft Dimmed Background Overlay */}
+              <div
+                id="mavi-navigation-overlay"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Site navigation and account menu"
+                className="fixed inset-0 z-[80] overflow-hidden"
+              >
+                {/* Dimmed Backdrop Overlay (Below Header Bar at top-16) */}
                 <motion.div
                   aria-hidden="true"
                   initial={{ opacity: 0 }}
@@ -452,163 +461,329 @@ export function Header({
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.2, ease: 'easeOut' }}
                   onClick={() => setMenuDrawerOpen(false)}
-                  className="fixed inset-0 bg-black/45 touch-none select-none"
+                  className="fixed inset-0 top-16 bg-black/40 lg:bg-black/25 backdrop-blur-[2px] touch-none select-none"
                 />
 
-                {/* Minimalist Slide-In Menu Sheet (Sits ABOVE the header at z-[85]) */}
+                {/* ============================================================
+                    1. MOBILE VIEW (< lg): Mavi Design Top-Center Overlay Menu
+                    Drops down cleanly beneath the top bar (Logo + X header) with
+                    centered full-width Menu Buttons and pressed/hover states.
+                    ============================================================ */}
                 <motion.aside
-                  id="portal-menu-drawer"
-                  role="dialog"
-                  aria-modal="true"
-                  aria-label="Menu and account settings"
-                  initial={{ x: '100%' }}
-                  animate={{ x: 0 }}
-                  exit={{ x: '100%' }}
+                  initial={{ opacity: 0, y: -24, scaleY: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scaleY: 1 }}
+                  exit={{ opacity: 0, y: -18, scaleY: 0.96 }}
                   transition={{
-                    type: 'spring',
-                    stiffness: 400,
-                    damping: 36,
-                    mass: 0.8,
+                    duration: 0.26,
+                    ease: [0.22, 1, 0.36, 1],
                   }}
-                  className={`fixed top-0 right-0 bottom-0 z-[85] w-[250px] sm:w-[280px] max-w-[80vw] flex flex-col border-l shadow-2xl will-change-transform ${headerFillClass}`}
+                  style={{ transformOrigin: 'top center' }}
+                  className="lg:hidden fixed top-16 left-0 right-0 z-[85] max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain no-scrollbar border-b rounded-b-3xl mavi-menu-surface flex flex-col"
                 >
-                  {/* Top Bar: Only the animated X icon, no border-b, no title/badge clutter */}
-                  <div className="shrink-0 flex items-center justify-end px-5 sm:px-7 h-16">
+                  {/* Centered Mavi Design Menu Button Stack */}
+                  <nav
+                    aria-label="Mobile navigation menu"
+                    className="px-5 pt-5 pb-4 flex flex-col items-center space-y-1.5"
+                  >
+                    {mobileNavOptions.map((option, idx) => {
+                      const isActive = currentPage === option.value;
+                      const isPressed = pressedItem === `mobile-${option.value}`;
+                      const labelText =
+                        option.value === 'home' ? 'Homepage' : option.rawLabel;
+                      return (
+                        <motion.button
+                          key={option.value}
+                          type="button"
+                          initial={{ opacity: 0, y: -8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{
+                            duration: 0.2,
+                            delay: idx * 0.025,
+                            ease: [0.22, 1, 0.36, 1],
+                          }}
+                          aria-current={isActive ? 'page' : undefined}
+                          onPointerDown={() =>
+                            setPressedItem(`mobile-${option.value}`)
+                          }
+                          onPointerUp={() => setPressedItem(null)}
+                          onPointerLeave={() => setPressedItem(null)}
+                          onClick={() => handleNavigateSelect(option.value)}
+                          className={`mavi-menu-btn ${
+                            isActive ? 'is-active' : ''
+                          } ${isPressed ? 'is-pressed' : ''}`}
+                        >
+                          <span>{labelText}</span>
+                          {option.badgeCount > 0 && (
+                            <span
+                              aria-label={`${option.badgeCount} new`}
+                              className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#ef4444] px-1.5 text-[11px] font-mono font-bold text-white leading-none tabular-nums"
+                            >
+                              {option.badgeCount}
+                            </span>
+                          )}
+                        </motion.button>
+                      );
+                    })}
+                  </nav>
+
+                  {/* Bottom Account & Theme Utility Actions (Mavi Button Geometry) */}
+                  <div className="px-5 pt-3 pb-6 border-t border-white/[0.12] flex flex-col items-center space-y-1.5">
+                    {official ? (
+                      <>
+                        <div className="w-full py-1.5 text-center">
+                          <p className="text-xs font-bold text-[#f5f4f0] truncate">
+                            {official.name}
+                          </p>
+                          <p className="text-[11px] text-[#949ba8] truncate">
+                            {official.position}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleNavigateSelect('admin')}
+                          className="mavi-menu-btn text-[15px]"
+                        >
+                          <span>My Account (SSC Suite)</span>
+                        </button>
+                      </>
+                    ) : student ? (
+                      <>
+                        <div className="w-full py-1.5 text-center">
+                          <p className="text-xs font-bold text-[#f5f4f0] truncate">
+                            {student.name}
+                          </p>
+                          <p className="text-[11px] text-[#949ba8] truncate">
+                            {student.yearCourse || 'SLAC Student'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMenuDrawerOpen(false);
+                            openIdentityEditor();
+                          }}
+                          className="mavi-menu-btn text-[15px]"
+                        >
+                          <span>My Account Settings</span>
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuDrawerOpen(false);
+                          onOpenAuth('student');
+                        }}
+                        className="mavi-menu-btn text-[15px]"
+                      >
+                        <span>Sign In (Student / Official)</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
-                      aria-label="Close menu"
-                      onClick={() => setMenuDrawerOpen(false)}
-                      className="inline-flex h-9 w-9 items-center justify-center text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
+                      onClick={onToggleTheme}
+                      className="mavi-menu-btn text-[15px] gap-2"
                     >
-                      <div
-                        aria-hidden="true"
-                        className={`designcouch-burger ${menuDrawerOpen ? 'open' : ''}`}
-                      >
-                        <span />
-                        <span />
-                        <span />
-                      </div>
+                      <span>
+                        Appearance: {theme === 'dark' ? 'Dark' : 'Light'}
+                      </span>
+                      {theme === 'dark' ? (
+                        <Sun className="h-4 w-4 text-[#facc15]" aria-hidden="true" />
+                      ) : (
+                        <Moon className="h-4 w-4 text-[#3ddc97]" aria-hidden="true" />
+                      )}
                     </button>
+
+                    {(official || student) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuDrawerOpen(false);
+                          if (official) {
+                            onSignOutOfficial();
+                          } else {
+                            onSignOutStudent();
+                          }
+                        }}
+                        className="mavi-menu-btn text-[15px] !text-[#f87171]"
+                      >
+                        <span>Sign Out</span>
+                      </button>
+                    )}
                   </div>
+                </motion.aside>
 
-                  {/* Clean Unboxed Vertical Navigation & Account Links */}
-                  <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar px-7 pb-8 pt-2 flex flex-col justify-between touch-pan-y">
-                    {/* Primary Section Links */}
-                    <nav
-                      aria-label="Menu navigation"
-                      className="flex flex-col items-start space-y-1"
-                    >
-                      {mobileNavOptions.map((option) => {
-                        const isActive = currentPage === option.value;
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            aria-current={isActive ? 'page' : undefined}
-                            onClick={() => handleNavigateSelect(option.value)}
-                            className={`w-full flex items-center justify-between py-2.5 text-left text-[15px] tracking-tight transition-colors cursor-pointer ${
-                              isActive
-                                ? 'font-bold text-[#3ddc97]'
-                                : 'font-semibold text-[#f5f4f0] hover:text-[#3ddc97]'
-                            }`}
-                          >
-                            <span>{option.rawLabel}</span>
-                            {option.badgeCount > 0 && (
-                              <span className="text-xs font-mono font-bold text-[#ef4444] tabular-nums">
-                                {option.badgeCount}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </nav>
-
-                    {/* Bottom Account & Settings Group (Separated by clean whitespace like image_46fb9d32.png) */}
-                    <div className="mt-10 pt-6 flex flex-col items-start space-y-1">
-                      {official ? (
-                        <>
-                          <div className="pb-2">
-                            <p className="text-xs font-bold text-[#f5f4f0] truncate max-w-[200px]">
+                {/* ============================================================
+                    2. DESKTOP VIEW (>= lg): Top-Right Anchored Mavi Overlay Card
+                    Positioned directly below the top-right burger/X button.
+                    Combines account identity, centered Mavi Menu Buttons, and
+                    quick theme/session controls appropriate for desktop screens.
+                    ============================================================ */}
+                <motion.aside
+                  initial={{ opacity: 0, y: -12, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                  transition={{
+                    duration: 0.22,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                  style={{ transformOrigin: 'top right' }}
+                  className="hidden lg:flex fixed top-[74px] right-[max(2rem,calc((100vw-1440px)/2+2rem))] z-[85] w-[320px] max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain no-scrollbar rounded-2xl border mavi-menu-surface flex-col p-3.5"
+                >
+                  {/* Account Identity Header Card */}
+                  <div className="mb-2.5 rounded-xl border border-white/[0.12] bg-[#0b0e15] p-3">
+                    {official ? (
+                      <div className="flex items-center justify-between gap-2.5">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <ShieldCheck
+                              className="h-3.5 w-3.5 text-[#3ddc97] shrink-0"
+                              aria-hidden="true"
+                            />
+                            <p className="text-xs font-bold text-[#f5f4f0] truncate">
                               {official.name}
                             </p>
-                            <p className="text-[11px] text-[#949ba8] truncate max-w-[200px]">
-                              {official.position}
-                            </p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleNavigateSelect('admin')}
-                            className="w-full py-2 text-left text-[15px] font-semibold text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
-                          >
-                            My account (SSC Suite)
-                          </button>
-                        </>
-                      ) : student ? (
-                        <>
-                          <div className="pb-2">
-                            <p className="text-xs font-bold text-[#f5f4f0] truncate max-w-[200px]">
+                          <p className="mt-0.5 text-[11px] text-[#949ba8] truncate">
+                            {official.position}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleNavigateSelect('admin')}
+                          className="shrink-0 h-8 px-2.5 rounded-lg bg-[#121620] border border-white/[0.14] text-[11px] font-semibold text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
+                        >
+                          SSC Suite
+                        </button>
+                      </div>
+                    ) : student ? (
+                      <div className="flex items-center justify-between gap-2.5">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <GraduationCap
+                              className="h-3.5 w-3.5 text-[#3ddc97] shrink-0"
+                              aria-hidden="true"
+                            />
+                            <p className="text-xs font-bold text-[#f5f4f0] truncate">
                               {student.name}
                             </p>
-                            <p className="text-[11px] text-[#949ba8] truncate max-w-[200px]">
-                              {student.yearCourse || 'SLAC Student'}
-                            </p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMenuDrawerOpen(false);
-                              openIdentityEditor();
-                            }}
-                            className="w-full py-2 text-left text-[15px] font-semibold text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
-                          >
-                            My account
-                          </button>
-                        </>
-                      ) : (
+                          <p className="mt-0.5 text-[11px] text-[#949ba8] truncate">
+                            {student.yearCourse || 'SLAC Student'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label="Edit student identity"
+                          onClick={() => {
+                            setMenuDrawerOpen(false);
+                            openIdentityEditor();
+                          }}
+                          className="shrink-0 inline-flex items-center gap-1 h-8 px-2.5 rounded-lg bg-[#121620] border border-white/[0.14] text-[11px] font-semibold text-[#f5f4f0] hover:border-white/[0.28] transition-colors cursor-pointer"
+                        >
+                          <Edit3 className="h-3 w-3" aria-hidden="true" />
+                          <span>Edit</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2.5">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-[#f5f4f0]">
+                            Portal Account
+                          </p>
+                          <p className="mt-0.5 text-[11px] text-[#949ba8]">
+                            Sign in as Student or Official
+                          </p>
+                        </div>
                         <button
                           type="button"
                           onClick={() => {
                             setMenuDrawerOpen(false);
                             onOpenAuth('student');
                           }}
-                          className="w-full py-2 text-left text-[15px] font-semibold text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
+                          className="gemini-cta shrink-0 h-8 px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
                         >
-                          My account (Sign in)
+                          <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>Sign In</span>
                         </button>
-                      )}
+                      </div>
+                    )}
+                  </div>
 
+                  {/* Mavi Design Centered Menu Buttons for Desktop Quick-Jump */}
+                  <nav
+                    aria-label="Desktop quick navigation menu"
+                    className="flex flex-col items-center space-y-1 py-1"
+                  >
+                    {mobileNavOptions.map((option) => {
+                      const isActive = currentPage === option.value;
+                      const isPressed = pressedItem === `desktop-${option.value}`;
+                      const labelText =
+                        option.value === 'home' ? 'Homepage' : option.rawLabel;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          aria-current={isActive ? 'page' : undefined}
+                          onPointerDown={() =>
+                            setPressedItem(`desktop-${option.value}`)
+                          }
+                          onPointerUp={() => setPressedItem(null)}
+                          onPointerLeave={() => setPressedItem(null)}
+                          onClick={() => handleNavigateSelect(option.value)}
+                          className={`mavi-menu-btn !min-h-[44px] !text-[15px] ${
+                            isActive ? 'is-active' : ''
+                          } ${isPressed ? 'is-pressed' : ''}`}
+                        >
+                          <span>{labelText}</span>
+                          {option.badgeCount > 0 && (
+                            <span
+                              aria-label={`${option.badgeCount} new`}
+                              className="ml-2 inline-flex h-4.5 min-w-[18px] items-center justify-center rounded-full bg-[#ef4444] px-1.5 text-[10px] font-mono font-bold text-white leading-none tabular-nums"
+                            >
+                              {option.badgeCount}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </nav>
+
+                  {/* Bottom Desktop Utility Footer (Theme Toggle + Sign Out) */}
+                  <div className="mt-2.5 pt-2.5 border-t border-white/[0.12] flex flex-col space-y-1">
+                    <button
+                      type="button"
+                      onClick={onToggleTheme}
+                      className="mavi-menu-btn !min-h-[42px] !text-[14px] gap-2"
+                    >
+                      <span>
+                        Theme: {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
+                      </span>
+                      {theme === 'dark' ? (
+                        <Sun className="h-4 w-4 text-[#facc15]" aria-hidden="true" />
+                      ) : (
+                        <Moon className="h-4 w-4 text-[#3ddc97]" aria-hidden="true" />
+                      )}
+                    </button>
+
+                    {(official || student) && (
                       <button
                         type="button"
-                        onClick={onToggleTheme}
-                        className="w-full flex items-center justify-between py-2 text-left text-[15px] font-semibold text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
+                        onClick={() => {
+                          setMenuDrawerOpen(false);
+                          if (official) {
+                            onSignOutOfficial();
+                          } else {
+                            onSignOutStudent();
+                          }
+                        }}
+                        className="mavi-menu-btn !min-h-[42px] !text-[14px] !text-[#f87171] gap-1.5"
                       >
-                        <span>
-                          Theme ({theme === 'dark' ? 'Dark' : 'Light'})
-                        </span>
-                        {theme === 'dark' ? (
-                          <Sun className="h-4 w-4 text-[#facc15]" aria-hidden="true" />
-                        ) : (
-                          <Moon className="h-4 w-4 text-[#3ddc97]" aria-hidden="true" />
-                        )}
+                        <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>Sign Out</span>
                       </button>
-
-                      {(official || student) && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMenuDrawerOpen(false);
-                            if (official) {
-                              onSignOutOfficial();
-                            } else {
-                              onSignOutStudent();
-                            }
-                          }}
-                          className="w-full py-2 text-left text-[15px] font-semibold text-[#f87171] hover:opacity-80 transition-opacity cursor-pointer"
-                        >
-                          Sign out
-                        </button>
-                      )}
-                    </div>
+                    )}
                   </div>
                 </motion.aside>
               </div>

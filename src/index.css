@@ -294,14 +294,66 @@ html[data-theme="dark"] .karst-header-solid {
 }
 
 /* ==========================================================================
-   DESIGNCOUCH (ExvwPY) ANIMATED 3-LINE TO X HAMBURGER ICON
+   MAVI DESIGN (dr6C_LK1U_Y) ROUNDED-SQUARE HAMBURGER BUTTON & SMART-ANIMATE X
    ========================================================================== */
+.mavi-burger-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background-color: rgba(244, 241, 231, 0.78);
+  border: 1px solid rgba(23, 24, 22, 0.16);
+  color: #151715;
+  box-shadow: 0 2px 6px -1px rgba(23, 24, 22, 0.07);
+  transition:
+    background-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.mavi-burger-btn:hover {
+  background-color: #e4e0d2;
+  border-color: rgba(23, 24, 22, 0.28);
+}
+
+.mavi-burger-btn:active,
+.mavi-burger-btn.is-open {
+  background-color: #dad5c5;
+  border-color: rgba(23, 24, 22, 0.32);
+}
+
+.mavi-burger-btn:active {
+  transform: scale(0.95);
+}
+
+html[data-theme="dark"] .mavi-burger-btn {
+  background-color: rgba(34, 41, 37, 0.86);
+  border: 1px solid rgba(245, 243, 238, 0.16);
+  color: #f5f3ee;
+  box-shadow: 0 2px 8px -1px rgba(0, 0, 0, 0.32);
+}
+
+html[data-theme="dark"] .mavi-burger-btn:hover {
+  background-color: #2b342f;
+  border-color: rgba(245, 243, 238, 0.28);
+}
+
+html[data-theme="dark"] .mavi-burger-btn:active,
+html[data-theme="dark"] .mavi-burger-btn.is-open {
+  background-color: #323d37;
+  border-color: rgba(245, 243, 238, 0.34);
+}
+
+/* 3 horizontal equal bars (top, middle, bottom) that Smart-Animate into a crisp X */
 .designcouch-burger {
   width: 20px;
   height: 14px;
   position: relative;
   transform: rotate(0deg);
-  transition: 0.3s ease-in-out;
   cursor: pointer;
 }
 
@@ -314,8 +366,12 @@ html[data-theme="dark"] .karst-header-solid {
   border-radius: 9999px;
   opacity: 1;
   left: 0;
+  transform-origin: center center;
   transform: rotate(0deg);
-  transition: 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    top 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease;
 }
 
 .designcouch-burger span:nth-child(1) {
@@ -332,29 +388,164 @@ html[data-theme="dark"] .karst-header-solid {
 
 .designcouch-burger.open span:nth-child(1) {
   top: 6px;
-  transform: rotate(135deg);
-  @starting-style {
-    top: 0px;
-    transform: rotate(0deg);
-  }
+  transform: rotate(45deg);
 }
 
 .designcouch-burger.open span:nth-child(2) {
   opacity: 0;
-  transform: translateX(-14px);
-  @starting-style {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  transform: scaleX(0.2);
 }
 
 .designcouch-burger.open span:nth-child(3) {
   top: 6px;
-  transform: rotate(-135deg);
-  @starting-style {
-    top: 12px;
-    transform: rotate(0deg);
-  }
+  transform: rotate(-45deg);
+}
+
+/* ==========================================================================
+   MAVI DESIGN MENU OVERLAY SURFACE & INTERACTIVE MENU BUTTON VARIANTS
+   ========================================================================== */
+.mavi-menu-surface {
+  background-color: rgba(248, 246, 239, 0.98);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border-color: rgba(23, 24, 22, 0.16);
+  box-shadow:
+    0 24px 48px -12px rgba(23, 24, 22, 0.18),
+    0 6px 16px -4px rgba(23, 24, 22, 0.08);
+}
+
+html[data-theme="dark"] .mavi-menu-surface {
+  background-color: rgba(22, 27, 24, 0.97);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border-color: rgba(245, 243, 238, 0.16);
+  box-shadow:
+    0 24px 48px -12px rgba(0, 0, 0, 0.6),
+    0 6px 16px -4px rgba(0, 0, 0, 0.4);
+}
+
+/* Mavi Design Menu Button: Centered label + full-width rounded rectangle pressed/hover state */
+.mavi-menu-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.65rem 1.25rem;
+  border-radius: 12px;
+  background-color: transparent;
+  color: #151715;
+  font-family: var(--font-body);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  text-align: center;
+  transition:
+    background-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 160ms ease,
+    transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  user-select: none;
+}
+
+.mavi-menu-btn:hover,
+.mavi-menu-btn:focus-visible {
+  background-color: rgba(23, 24, 22, 0.085);
+  color: #151715;
+}
+
+.mavi-menu-btn:active,
+.mavi-menu-btn.is-pressed {
+  background-color: rgba(23, 24, 22, 0.14);
+  transform: scale(0.985);
+}
+
+.mavi-menu-btn.is-active {
+  background-color: rgba(23, 24, 22, 0.095);
+  color: #151715;
+  font-weight: 700;
+}
+
+html[data-theme="dark"] .mavi-menu-btn {
+  color: #f5f3ee;
+}
+
+html[data-theme="dark"] .mavi-menu-btn:hover,
+html[data-theme="dark"] .mavi-menu-btn:focus-visible {
+  background-color: rgba(245, 243, 238, 0.1);
+  color: #ffffff;
+}
+
+html[data-theme="dark"] .mavi-menu-btn:active,
+html[data-theme="dark"] .mavi-menu-btn.is-pressed {
+  background-color: rgba(245, 243, 238, 0.16);
+  transform: scale(0.985);
+}
+
+html[data-theme="dark"] .mavi-menu-btn.is-active {
+  background-color: rgba(245, 243, 238, 0.12);
+  color: #68b68f;
+  font-weight: 700;
+}
+
+/* Desktop horizontal nav link pill hover/pressed effect inspired by Mavi Menu Button */
+.mavi-desktop-nav-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  height: 38px;
+  padding: 0 0.875rem;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #3d413b;
+  background-color: transparent;
+  transition:
+    background-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 160ms ease,
+    transform 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mavi-desktop-nav-btn:hover {
+  background-color: rgba(23, 24, 22, 0.075);
+  color: #151715;
+}
+
+.mavi-desktop-nav-btn:active {
+  background-color: rgba(23, 24, 22, 0.13);
+  transform: scale(0.975);
+}
+
+.mavi-desktop-nav-btn.is-active {
+  background-color: rgba(23, 24, 22, 0.085);
+  color: #151715;
+  font-weight: 700;
+}
+
+html[data-theme="dark"] .mavi-desktop-nav-btn {
+  color: #b4bac6;
+}
+
+html[data-theme="dark"] .mavi-desktop-nav-btn:hover {
+  background-color: rgba(245, 243, 238, 0.09);
+  color: #f5f3ee;
+}
+
+html[data-theme="dark"] .mavi-desktop-nav-btn:active {
+  background-color: rgba(245, 243, 238, 0.15);
+  transform: scale(0.975);
+}
+
+html[data-theme="dark"] .mavi-desktop-nav-btn.is-active {
+  background-color: rgba(245, 243, 238, 0.11);
+  color: #f5f3ee;
+  font-weight: 700;
 }
 
 /* Karst-style wordmark: heavy geometric grotesque, tight tracking, tall x-height */
