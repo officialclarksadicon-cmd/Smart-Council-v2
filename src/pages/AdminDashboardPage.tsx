@@ -1639,10 +1639,10 @@ export function AdminDashboardPage({
       </aside>
 
       {/* ====================================================================
-          MOBILE TOP BAR + RIGHT-ALIGNED MENU DRAWER (< lg)
-          Shows Go to Portal & Sign Out immediately on load alongside burger menu
+          MOBILE TOP BAR + TOP-ENTERING MAVI DESIGN MENU OVERLAY (< lg)
+          Single connected burger-to-X cog button at z-[95] pushes the menu down from the top
          ==================================================================== */}
-      <div className="lg:hidden sticky top-0 z-40 border-b border-white/[0.12] bg-[#121620]">
+      <div className="lg:hidden sticky top-0 z-[95] border-b border-white/[0.12] bg-[#121620]">
         <div className="px-3.5 sm:px-6 h-14 flex items-center justify-between gap-2">
           {/* Left: SSC Suite Brand */}
           <div className="flex items-center gap-2 min-w-0">
@@ -1659,11 +1659,14 @@ export function AdminDashboardPage({
             </div>
           </div>
 
-          {/* Right: Portal + Sign Out + Right-Side Burger Menu Button */}
+          {/* Right: Portal + Sign Out + Connected Cog Burger-to-X Button */}
           <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
-              onClick={() => onNavigate('home')}
+              onClick={() => {
+                setMobileDrawerOpen(false);
+                onNavigate('home');
+              }}
               className="inline-flex items-center gap-1.5 h-8.5 px-2.5 rounded-lg border border-white/[0.14] bg-[#0b0e15] text-[11px] font-semibold text-[#f5f4f0] cursor-pointer"
             >
               <ExternalLink className="h-3 w-3 text-[#3ddc97]" aria-hidden="true" />
@@ -1673,7 +1676,10 @@ export function AdminDashboardPage({
             {onSignOutOfficial && (
               <button
                 type="button"
-                onClick={onSignOutOfficial}
+                onClick={() => {
+                  setMobileDrawerOpen(false);
+                  onSignOutOfficial();
+                }}
                 className="inline-flex items-center gap-1 h-8.5 px-2.5 rounded-lg border border-red-500/35 bg-red-500/12 text-[11px] font-semibold text-[#fca5a5] cursor-pointer"
               >
                 <LogOut className="h-3 w-3" aria-hidden="true" />
@@ -1687,8 +1693,11 @@ export function AdminDashboardPage({
                 mobileDrawerOpen ? 'Close SSC Suite menu' : 'Open SSC Suite menu'
               }
               aria-expanded={mobileDrawerOpen}
+              aria-controls="mobile-nav-drawer"
               onClick={() => setMobileDrawerOpen((prev) => !prev)}
-              className="inline-flex h-9 w-9 items-center justify-center text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
+              className={`relative mavi-burger-btn !h-9 !w-9 !rounded-lg shrink-0 ${
+                mobileDrawerOpen ? 'is-open' : ''
+              }`}
             >
               <div
                 aria-hidden="true"
@@ -1722,7 +1731,7 @@ export function AdminDashboardPage({
         </div>
       </div>
 
-      {/* Compact Mobile Right Slide-In Drawer Sheet */}
+      {/* Mobile Top-Entering Mavi Design Menu Sheet (Synchronized with Cog Burger-to-X Icon) */}
       {typeof document !== 'undefined' &&
         createPortal(
           <AnimatePresence>
@@ -1733,129 +1742,106 @@ export function AdminDashboardPage({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.18 }}
+                  transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
                   onClick={() => setMobileDrawerOpen(false)}
-                  className="fixed inset-0 bg-black/45 touch-none select-none"
+                  className="fixed inset-0 bg-black/45 backdrop-blur-[2px] touch-none select-none"
                 />
                 <motion.aside
                   id="mobile-nav-drawer"
                   role="dialog"
                   aria-modal="true"
-                  aria-label="SSC Suite navigation drawer"
-                  initial={{ x: '100%' }}
-                  animate={{ x: 0 }}
-                  exit={{ x: '100%' }}
+                  aria-label="SSC Suite navigation menu"
+                  initial={{ y: '-100%' }}
+                  animate={{ y: '0%' }}
+                  exit={{ y: '-100%' }}
                   transition={{
-                    type: 'spring',
-                    stiffness: 400,
-                    damping: 36,
-                    mass: 0.8,
+                    duration: 0.42,
+                    ease: [0.22, 1, 0.36, 1],
                   }}
-                  className="fixed top-0 right-0 bottom-0 z-[85] w-[250px] sm:w-[280px] max-w-[80vw] flex flex-col border-l bg-[#121620] shadow-2xl"
+                  className="fixed top-0 left-0 right-0 z-[85] pt-14 max-h-[100dvh] overflow-y-auto overscroll-contain no-scrollbar border-b rounded-b-3xl mavi-menu-surface flex flex-col will-change-transform"
                 >
-                  {/* Top Bar: Only the animated X icon, no border-b */}
-                  <div className="shrink-0 flex items-center justify-end px-5 h-14">
+                  {/* Centered Mavi Design Menu Buttons for SSC Suite Modules */}
+                  <nav
+                    aria-label="SSC Suite mobile menu"
+                    className="px-5 pt-4 pb-3 flex flex-col items-center space-y-1"
+                  >
+                    {allTabsFlat.map((item) => {
+                      const isActive = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          aria-current={isActive ? 'page' : undefined}
+                          onClick={() => {
+                            setActiveTab(item.id);
+                            setMobileDrawerOpen(false);
+                          }}
+                          className={`mavi-menu-btn !min-h-[44px] !text-[15px] ${
+                            isActive ? 'is-active' : ''
+                          }`}
+                        >
+                          <span className="truncate">{item.label}</span>
+                          {typeof item.count === 'number' && (
+                            <span className="ml-2 text-xs font-mono font-bold text-[#949ba8] tabular-nums">
+                              ({item.count})
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </nav>
+
+                  {/* Bottom Official Account & Theme Controls */}
+                  <div className="px-5 pt-3 pb-6 border-t border-white/[0.12] flex flex-col items-center space-y-1">
+                    <div className="w-full py-1 text-center">
+                      <p className="text-xs font-bold text-[#f5f4f0] truncate">
+                        {official.name}
+                      </p>
+                      <p className="text-[11px] text-[#949ba8] truncate">
+                        {official.position}
+                      </p>
+                    </div>
+
                     <button
                       type="button"
-                      aria-label="Close SSC Suite menu"
-                      onClick={() => setMobileDrawerOpen(false)}
-                      className="inline-flex h-9 w-9 items-center justify-center text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
+                      onClick={() => {
+                        setMobileDrawerOpen(false);
+                        onNavigate('home');
+                      }}
+                      className="mavi-menu-btn !min-h-[44px] !text-[15px]"
                     >
-                      <div
-                        aria-hidden="true"
-                        className={`designcouch-burger ${mobileDrawerOpen ? 'open' : ''}`}
-                      >
-                        <span />
-                        <span />
-                        <span />
-                      </div>
+                      <span>Return to Public Portal</span>
                     </button>
-                  </div>
 
-                  {/* Clean Unboxed Vertical Navigation & Account Links */}
-                  <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain no-scrollbar px-7 pb-8 pt-2 flex flex-col justify-between">
-                    <nav
-                      aria-label="SSC Suite mobile menu"
-                      className="flex flex-col items-start space-y-1"
-                    >
-                      {allTabsFlat.map((item) => {
-                        const isActive = activeTab === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => {
-                              setActiveTab(item.id);
-                              setMobileDrawerOpen(false);
-                            }}
-                            className={`w-full flex items-center justify-between py-2.5 text-left text-[15px] tracking-tight transition-colors cursor-pointer ${
-                              isActive
-                                ? 'font-bold text-[#3ddc97]'
-                                : 'font-semibold text-[#f5f4f0] hover:text-[#3ddc97]'
-                            }`}
-                          >
-                            <span className="truncate">{item.label}</span>
-                            {typeof item.count === 'number' && (
-                              <span className="text-xs font-mono text-[#949ba8] tabular-nums">
-                                {item.count}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </nav>
+                    {onToggleTheme && (
+                      <button
+                        type="button"
+                        onClick={onToggleTheme}
+                        className="mavi-menu-btn !min-h-[44px] !text-[15px] gap-2"
+                      >
+                        <span>
+                          Appearance: {theme === 'dark' ? 'Dark' : 'Light'}
+                        </span>
+                        {theme === 'dark' ? (
+                          <Sun className="h-4 w-4 text-[#facc15]" />
+                        ) : (
+                          <Moon className="h-4 w-4 text-[#3ddc97]" />
+                        )}
+                      </button>
+                    )}
 
-                    <div className="mt-10 pt-6 flex flex-col items-start space-y-1">
-                      <div className="pb-2">
-                        <p className="text-xs font-bold text-[#f5f4f0] truncate max-w-[200px]">
-                          {official.name}
-                        </p>
-                        <p className="text-[11px] text-[#949ba8] truncate max-w-[200px]">
-                          {official.position}
-                        </p>
-                      </div>
-
+                    {onSignOutOfficial && (
                       <button
                         type="button"
                         onClick={() => {
                           setMobileDrawerOpen(false);
-                          onNavigate('home');
+                          onSignOutOfficial();
                         }}
-                        className="w-full py-2 text-left text-[15px] font-semibold text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
+                        className="mavi-menu-btn !min-h-[44px] !text-[15px] !text-[#f87171]"
                       >
-                        Portal
+                        <span>Sign Out</span>
                       </button>
-
-                      {onToggleTheme && (
-                        <button
-                          type="button"
-                          onClick={onToggleTheme}
-                          className="w-full flex items-center justify-between py-2 text-left text-[15px] font-semibold text-[#f5f4f0] hover:text-[#3ddc97] transition-colors cursor-pointer"
-                        >
-                          <span>
-                            Theme ({theme === 'dark' ? 'Dark' : 'Light'})
-                          </span>
-                          {theme === 'dark' ? (
-                            <Sun className="h-4 w-4 text-[#facc15]" />
-                          ) : (
-                            <Moon className="h-4 w-4 text-[#3ddc97]" />
-                          )}
-                        </button>
-                      )}
-
-                      {onSignOutOfficial && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMobileDrawerOpen(false);
-                            onSignOutOfficial();
-                          }}
-                          className="w-full py-2 text-left text-[15px] font-semibold text-[#f87171] hover:opacity-80 transition-opacity cursor-pointer"
-                        >
-                          Sign out
-                        </button>
-                      )}
-                    </div>
+                    )}
                   </div>
                 </motion.aside>
               </div>

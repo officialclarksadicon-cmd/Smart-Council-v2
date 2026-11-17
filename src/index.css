@@ -348,13 +348,20 @@ html[data-theme="dark"] .mavi-burger-btn.is-open {
   border-color: rgba(245, 243, 238, 0.34);
 }
 
-/* 3 horizontal equal bars (top, middle, bottom) that Smart-Animate into a crisp X */
+/* 3 horizontal equal bars (top, middle, bottom) that Cog-Rotate & Smart-Animate into a crisp X */
 .designcouch-burger {
   width: 20px;
   height: 14px;
   position: relative;
+  transform-origin: center center;
   transform: rotate(0deg);
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
   cursor: pointer;
+}
+
+.designcouch-burger.open {
+  transform: rotate(180deg);
 }
 
 .designcouch-burger span {
@@ -367,11 +374,12 @@ html[data-theme="dark"] .mavi-burger-btn.is-open {
   opacity: 1;
   left: 0;
   transform-origin: center center;
-  transform: rotate(0deg);
+  transform: rotate(0deg) scaleX(1);
   transition:
-    top 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 180ms ease;
+    top 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: top, transform, opacity;
 }
 
 .designcouch-burger span:nth-child(1) {
@@ -392,8 +400,9 @@ html[data-theme="dark"] .mavi-burger-btn.is-open {
 }
 
 .designcouch-burger.open span:nth-child(2) {
+  top: 6px;
   opacity: 0;
-  transform: scaleX(0.2);
+  transform: rotate(90deg) scaleX(0);
 }
 
 .designcouch-burger.open span:nth-child(3) {

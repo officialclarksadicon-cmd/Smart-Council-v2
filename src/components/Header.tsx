@@ -278,7 +278,7 @@ export function Header({
   return (
     <>
       <header
-        className={`fixed top-0 left-0 right-0 z-[90] w-full translate-y-0 border-b ${headerFillClass}`}
+        className={`fixed top-0 left-0 right-0 z-[95] w-full translate-y-0 border-b ${headerFillClass}`}
       >
         <div className="mx-auto max-w-[1440px] px-4 sm:px-8 h-16 flex items-center justify-between gap-8">
           {/* Zone 1 (Left): Smart Council Wordmark (Logo) */}
@@ -361,7 +361,7 @@ export function Header({
             )}
           </nav>
 
-          {/* Zone 3 (Right): Primary Sign-In Action + Mavi Design Hamburger Button (3-Line <-> X) */}
+          {/* Zone 3 (Right): Primary Sign-In Action + Connected Cog Burger-to-X Button */}
           <div className="shrink-0 flex items-center justify-end gap-2.5">
             {!official && !student && (
               <button
@@ -378,7 +378,7 @@ export function Header({
               </button>
             )}
 
-            {/* Mavi Design Hamburger Menu Trigger (Rounded-Square Button with Smart-Animate 3-Line to X) */}
+            {/* Single Connected Mavi Design Hamburger-to-X Trigger (Rotates like a cog open & close) */}
             <button
               type="button"
               aria-label={
@@ -441,7 +441,7 @@ export function Header({
         </div>
       )}
 
-      {/* Portaled Mavi Design Navigation Overlay (Mobile Top-Center Dropdown + Desktop Top-Right Popover) */}
+      {/* Portaled Mavi Design Navigation Overlay (Mobile Top-Down Slide + Desktop Top-Right Popover) */}
       {typeof document !== 'undefined' &&
         createPortal(
           <AnimatePresence>
@@ -453,54 +453,46 @@ export function Header({
                 aria-label="Site navigation and account menu"
                 className="fixed inset-0 z-[80] overflow-hidden"
               >
-                {/* Dimmed Backdrop Overlay (Below Header Bar at top-16) */}
+                {/* Dimmed Backdrop Overlay */}
                 <motion.div
                   aria-hidden="true"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
                   onClick={() => setMenuDrawerOpen(false)}
-                  className="fixed inset-0 top-16 bg-black/40 lg:bg-black/25 backdrop-blur-[2px] touch-none select-none"
+                  className="fixed inset-0 bg-black/45 lg:bg-black/25 backdrop-blur-[2px] touch-none select-none"
                 />
 
                 {/* ============================================================
-                    1. MOBILE VIEW (< lg): Mavi Design Top-Center Overlay Menu
-                    Drops down cleanly beneath the top bar (Logo + X header) with
-                    centered full-width Menu Buttons and pressed/hover states.
+                    1. MOBILE VIEW (< lg): Mavi Design Top-Entering Menu Panel
+                    Slides down from the top (y: '-100%' -> '0%') in lockstep with
+                    the 420ms cog-turning burger-to-X icon in the top header bar.
                     ============================================================ */}
                 <motion.aside
-                  initial={{ opacity: 0, y: -24, scaleY: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scaleY: 1 }}
-                  exit={{ opacity: 0, y: -18, scaleY: 0.96 }}
+                  initial={{ y: '-100%' }}
+                  animate={{ y: '0%' }}
+                  exit={{ y: '-100%' }}
                   transition={{
-                    duration: 0.26,
+                    duration: 0.42,
                     ease: [0.22, 1, 0.36, 1],
                   }}
-                  style={{ transformOrigin: 'top center' }}
-                  className="lg:hidden fixed top-16 left-0 right-0 z-[85] max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain no-scrollbar border-b rounded-b-3xl mavi-menu-surface flex flex-col"
+                  className="lg:hidden fixed top-0 left-0 right-0 z-[85] pt-16 max-h-[100dvh] overflow-y-auto overscroll-contain no-scrollbar border-b rounded-b-3xl mavi-menu-surface flex flex-col will-change-transform"
                 >
                   {/* Centered Mavi Design Menu Button Stack */}
                   <nav
                     aria-label="Mobile navigation menu"
                     className="px-5 pt-5 pb-4 flex flex-col items-center space-y-1.5"
                   >
-                    {mobileNavOptions.map((option, idx) => {
+                    {mobileNavOptions.map((option) => {
                       const isActive = currentPage === option.value;
                       const isPressed = pressedItem === `mobile-${option.value}`;
                       const labelText =
                         option.value === 'home' ? 'Homepage' : option.rawLabel;
                       return (
-                        <motion.button
+                        <button
                           key={option.value}
                           type="button"
-                          initial={{ opacity: 0, y: -8 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{
-                            duration: 0.2,
-                            delay: idx * 0.025,
-                            ease: [0.22, 1, 0.36, 1],
-                          }}
                           aria-current={isActive ? 'page' : undefined}
                           onPointerDown={() =>
                             setPressedItem(`mobile-${option.value}`)
@@ -521,7 +513,7 @@ export function Header({
                               {option.badgeCount}
                             </span>
                           )}
-                        </motion.button>
+                        </button>
                       );
                     })}
                   </nav>
@@ -617,19 +609,18 @@ export function Header({
                 {/* ============================================================
                     2. DESKTOP VIEW (>= lg): Top-Right Anchored Mavi Overlay Card
                     Positioned directly below the top-right burger/X button.
-                    Combines account identity, centered Mavi Menu Buttons, and
-                    quick theme/session controls appropriate for desktop screens.
+                    Slides down in sync with the turning cog icon.
                     ============================================================ */}
                 <motion.aside
-                  initial={{ opacity: 0, y: -12, scale: 0.96 }}
+                  initial={{ opacity: 0, y: -28, scale: 0.96 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -8, scale: 0.96 }}
+                  exit={{ opacity: 0, y: -24, scale: 0.96 }}
                   transition={{
-                    duration: 0.22,
+                    duration: 0.38,
                     ease: [0.22, 1, 0.36, 1],
                   }}
                   style={{ transformOrigin: 'top right' }}
-                  className="hidden lg:flex fixed top-[74px] right-[max(2rem,calc((100vw-1440px)/2+2rem))] z-[85] w-[320px] max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain no-scrollbar rounded-2xl border mavi-menu-surface flex-col p-3.5"
+                  className="hidden lg:flex fixed top-[74px] right-[max(2rem,calc((100vw-1440px)/2+2rem))] z-[85] w-[320px] max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain no-scrollbar rounded-2xl border mavi-menu-surface flex-col p-3.5 will-change-transform"
                 >
                   {/* Account Identity Header Card */}
                   <div className="mb-2.5 rounded-xl border border-white/[0.12] bg-[#0b0e15] p-3">
