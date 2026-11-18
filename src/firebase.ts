@@ -1,63 +1,435 @@
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import {
-  EmailAuthProvider,
   GoogleAuthProvider,
-  User,
   createUserWithEmailAndPassword,
   getAuth,
-  linkWithCredential,
   onAuthStateChanged,
-  reload,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
   updateProfile,
+  type User,
 } from 'firebase/auth';
 import {
+  Timestamp,
   collection,
   deleteDoc,
   doc,
   getDoc,
-  getDocFromServer,
   getDocs,
-  getFirestore,
-  increment,
+  initializeFirestore,
+  limit,
   onSnapshot,
+  orderBy,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
+  startAfter,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
-import {
+import type {
   AnnouncementItem,
   CouncilTask,
   FaqItem,
+  ForumReply,
   ForumThread,
   GalleryEventItem,
   OfficerCommittee,
   OfficerMember,
-  OfficerTermRoster,
   OfficialAccount,
   OfficialProfile,
   PortalBranding,
   PortalFilters,
   StudentProfile,
-  siteConfig,
 } from './siteConfig';
-import { isCorruptedImageUrl } from './utils/imagekit';
+
+// Initialize Firebase App
+const app = initializeApp(firebaseConfig);
+
+// Initialize Firebase App Check when a reCAPTCHA v3 / Enterprise site key is configured
+const appCheckSiteKey = (
+  (import.meta.env.VITE_APP_CHECK_SITE_KEY as string | undefined) ||
+  firebaseConfig.recaptchaSiteKey ||
+  ''
+).trim();
+
+if (typeof window !== 'undefined' && appCheckSiteKey) {
+  try {
+    initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch {
+    // App Check already initialized or running in test sandbox
+  }
+}
+
+export const auth = getAuth(app);
+
+// Initialize Cloud Firestore with IndexedDB persistentLocalCache & multi-tab synchronization
+export const db = initializeFirestore(
+  app,
+  {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    }),
+  },
+  firebaseConfig.firestoreDatabaseId
+);
+
+export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({
+  prompt: 'select_account',
+});
+
+export {
+  Timestamp,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onAuthStateChanged,
+  onSnapshot,
+  orderBy,
+  query,
+  runTransaction,
+  sendPasswordResetEmail,
+  serverTimestamp,
+  setDoc,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  startAfter,
+  updateDoc,
+  where,
+  writeBatch,
+  type User,
+};
+
+// ============================================================================
+// 1. PRIMARY WEB ADMIN IDENTITY & ROLE HELPERS
+// ============================================================================
 
 export const PRIMARY_ADMIN_EMAIL = 'official.clarksadicon@gmail.com';
 export const PRIMARY_ADMIN_UID = 'r6KDRrPBerb0KiJ3M5QYpZ0Yjl62';
 
-// Initialize Firebase SDK for project smart-council-368be
-export const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
-googleProvider.setCustomParameters({ prompt: 'select_account' });
+export function isPrimaryAdminUser(email?: string | null): boolean {
+  if (!email) return false;
+  return email.trim().toLowerCase() === PRIMARY_ADMIN_EMAIL;
+}
+
+export function isFirebaseAuthenticated(): boolean {
+  return Boolean(auth.currentUser);
+}
+
+/**
+ * Reads the current user's custom role claim (`admin` or `official`) from their ID token,
+ * falling back to `councilAccounts/{uid}` or primary admin identity.
+ */
+export async function resolveUserRoleClaim(
+  user: User
+): Promise<'admin' | 'official' | null> {
+  if (
+    user.uid === PRIMARY_ADMIN_UID ||
+    (isPrimaryAdminUser(user.email) && user.emailVerified)
+  ) {
+    return 'admin';
+  }
+  try {
+    const tokenResult = await user.getIdTokenResult();
+    const claimRole = tokenResult.claims.role;
+    if (claimRole === 'admin' || claimRole === 'official') {
+      return claimRole;
+    }
+  } catch {
+    // Ignore token lookup error and fall back to councilAccounts
+  }
+
+  try {
+    const snap = await getDoc(doc(db, 'councilAccounts', user.uid));
+    if (snap.exists()) {
+      const data = snap.data();
+      return data.role === 'admin' ? 'admin' : 'official';
+    }
+  } catch {
+    // Ignore
+  }
+  return null;
+}
+
+/**
+ * Sends a Firebase Auth password setup / reset email link to an officer's email.
+ */
+export async function sendOfficerPasswordSetupEmail(
+  email: string
+): Promise<boolean> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail) return false;
+  await sendPasswordResetEmail(auth, cleanEmail);
+  return true;
+}
+
+/**
+ * Signs in a Student using Email & Password and synchronizes their `/students/{uid}` profile.
+ */
+export async function signInStudentWithEmail(params: {
+  email: string;
+  password: string;
+  yearCourse?: string;
+}): Promise<{
+  verified: boolean;
+  status: 'verified' | 'unverified';
+  student: StudentProfile;
+  email: string;
+}> {
+  const cleanEmail = params.email.trim().toLowerCase();
+  const cred = await signInWithEmailAndPassword(
+    auth,
+    cleanEmail,
+    params.password
+  );
+  await cred.user.reload();
+  const synced = await upsertStudentUserToFirestore(
+    cred.user,
+    params.yearCourse || 'SLAC Student'
+  );
+  const studentProfile: StudentProfile = {
+    id: synced.uid,
+    name: synced.name,
+    identifier: synced.email,
+    yearCourse: synced.yearCourse,
+    photoURL: synced.photoURL,
+  };
+  if (!cred.user.emailVerified) {
+    return {
+      verified: false,
+      status: 'unverified',
+      email: cleanEmail,
+      student: studentProfile,
+    };
+  }
+  return {
+    verified: true,
+    status: 'verified',
+    email: cleanEmail,
+    student: studentProfile,
+  };
+}
+
+/**
+ * Registers a new Student account with Email & Password and sends a verification email.
+ */
+export async function registerStudentWithEmail(params: {
+  name: string;
+  email: string;
+  password: string;
+  yearCourse?: string;
+}): Promise<{ email: string }> {
+  const cleanEmail = params.email.trim().toLowerCase();
+  const cleanName =
+    params.name.trim() || cleanEmail.split('@')[0] || 'SLAC Student';
+  const cred = await createUserWithEmailAndPassword(
+    auth,
+    cleanEmail,
+    params.password
+  );
+  await updateProfile(cred.user, { displayName: cleanName });
+  await upsertStudentUserToFirestore(
+    cred.user,
+    params.yearCourse || 'SLAC Student',
+    cleanName
+  );
+  await sendEmailVerification(cred.user);
+  return { email: cleanEmail };
+}
+
+export async function resendStudentVerificationEmail(): Promise<boolean> {
+  const user = auth.currentUser;
+  if (!user) return false;
+  await sendEmailVerification(user);
+  return true;
+}
+
+export async function checkAndCompleteStudentEmailVerification(
+  fallbackYearCourse = 'SLAC Student',
+  fallbackName = 'SLAC Student'
+): Promise<StudentProfile | null> {
+  const user = auth.currentUser;
+  if (!user) return null;
+  await user.reload();
+  if (!user.emailVerified) return null;
+  const synced = await upsertStudentUserToFirestore(
+    user,
+    fallbackYearCourse,
+    fallbackName
+  );
+  return {
+    id: synced.uid,
+    name: synced.name,
+    identifier: synced.email,
+    yearCourse: synced.yearCourse,
+    photoURL: synced.photoURL,
+  };
+}
+
+export async function signInStudentWithGoogle(
+  fallbackYearCourse = 'SLAC Student'
+): Promise<StudentProfile> {
+  const cred = await signInWithPopup(auth, googleProvider);
+  const synced = await upsertStudentUserToFirestore(
+    cred.user,
+    fallbackYearCourse
+  );
+  return {
+    id: synced.uid,
+    name: synced.name,
+    identifier: synced.email,
+    yearCourse: synced.yearCourse,
+    photoURL: synced.photoURL,
+  };
+}
+
+/**
+ * Authenticates a Council Official or Web Admin via Firebase Auth Email & Password
+ * and verifies their Custom Claim (`role: 'admin' | 'official'`) or `/councilAccounts/{uid}` record.
+ * Never accepts or stores plaintext passcodes.
+ */
+export async function signInOfficialWithFirebaseAuth(
+  email: string,
+  password: string,
+  fallbackDisplayName?: string
+): Promise<OfficialProfile | null> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail || !password) return null;
+
+  try {
+    const cred = await signInWithEmailAndPassword(auth, cleanEmail, password);
+    const user = cred.user;
+    const roleClaim = await resolveUserRoleClaim(user);
+
+    if (isPrimaryAdminUser(cleanEmail)) {
+      const adminProfile: OfficialProfile = {
+        id: 'acc-admin-1',
+        authUid: user.uid || PRIMARY_ADMIN_UID,
+        email: PRIMARY_ADMIN_EMAIL,
+        name: fallbackDisplayName || 'Clark Sadicon',
+        position: 'Head Of Technical',
+        role: 'admin',
+      };
+      await setDoc(
+        doc(db, 'councilAccounts', user.uid),
+        {
+          id: user.uid,
+          authUid: user.uid,
+          email: PRIMARY_ADMIN_EMAIL,
+          name: adminProfile.name,
+          position: adminProfile.position,
+          role: 'admin',
+          createdByEmail: PRIMARY_ADMIN_EMAIL,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      ).catch(() => undefined);
+      return adminProfile;
+    }
+
+    const uidSnap = await getDoc(doc(db, 'councilAccounts', user.uid));
+    if (uidSnap.exists()) {
+      const d = uidSnap.data();
+      return {
+        id: String(d.id ?? user.uid),
+        authUid: user.uid,
+        email: cleanEmail,
+        name: String(
+          d.name ?? fallbackDisplayName ?? user.displayName ?? 'SSC Official'
+        ),
+        position: String(d.position ?? 'SSC Officer'),
+        role: d.role === 'admin' || roleClaim === 'admin' ? 'admin' : 'official',
+      };
+    }
+
+    if (roleClaim === 'admin' || roleClaim === 'official') {
+      return {
+        id: user.uid,
+        authUid: user.uid,
+        email: cleanEmail,
+        name: fallbackDisplayName || user.displayName || 'SSC Official',
+        position: 'SSC Officer',
+        role: roleClaim,
+      };
+    }
+
+    await signOut(auth);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Authenticates a Council Official or Web Admin via Google Sign-In and verifies
+ * their Custom Role Claim (`role: 'admin' | 'official'`) or `/councilAccounts` entry.
+ */
+export async function signInOfficialWithGoogle(): Promise<OfficialProfile | null> {
+  const cred = await signInWithPopup(auth, googleProvider);
+  const user = cred.user;
+  const cleanEmail = (user.email || '').trim().toLowerCase();
+  const roleClaim = await resolveUserRoleClaim(user);
+
+  if (isPrimaryAdminUser(cleanEmail)) {
+    return {
+      id: 'acc-admin-1',
+      authUid: user.uid || PRIMARY_ADMIN_UID,
+      email: PRIMARY_ADMIN_EMAIL,
+      name: user.displayName || 'Clark Sadicon',
+      position: 'Head Of Technical',
+      role: 'admin',
+    };
+  }
+
+  const uidSnap = await getDoc(doc(db, 'councilAccounts', user.uid));
+  if (uidSnap.exists()) {
+    const d = uidSnap.data();
+    return {
+      id: String(d.id ?? user.uid),
+      authUid: user.uid,
+      email: cleanEmail,
+      name: String(d.name ?? user.displayName ?? 'SSC Official'),
+      position: String(d.position ?? 'SSC Officer'),
+      role: d.role === 'admin' || roleClaim === 'admin' ? 'admin' : 'official',
+    };
+  }
+
+  if (roleClaim === 'admin' || roleClaim === 'official') {
+    return {
+      id: user.uid,
+      authUid: user.uid,
+      email: cleanEmail,
+      name: user.displayName || 'SSC Official',
+      position: 'SSC Officer',
+      role: roleClaim,
+    };
+  }
+
+  await signOut(auth);
+  return null;
+}
+
+// ============================================================================
+// 2. STRUCTURED FIRESTORE ERROR HANDLING
+// ============================================================================
 
 export enum OperationType {
   CREATE = 'create',
@@ -111,1297 +483,872 @@ export function handleFirestoreError(
     operationType,
     path,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  console.error('Firestore Error:', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
 
-async function testConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.includes('the client is offline')
-    ) {
-      console.error('Please check your Firebase configuration.');
-    }
-  }
-}
-void testConnection();
-
-export function sanitizeFirestoreId(rawId: string): string {
-  const cleaned = rawId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 128);
-  return cleaned || `doc-${Date.now()}`;
-}
-
 /**
- * Ensures we never write a 500-char truncated base64 data URL to Firestore.
- * Only clean ImageKit / HTTPS URLs (<= 500 chars) are written to Firestore.
+ * Verifies there is an active authenticated Firebase Auth user before writes.
+ * Never performs silent background password sign-ins.
  */
-function sanitizeFirestoreImageUrl(
-  rawUrl?: string,
-  fallbackUrl?: string
-): string | undefined {
-  if (!rawUrl || !rawUrl.trim()) return fallbackUrl;
-  const trimmed = rawUrl.trim();
-  if (isCorruptedImageUrl(trimmed)) return fallbackUrl;
-  if (trimmed.startsWith('data:image/') || trimmed.length > 500) {
-    return fallbackUrl;
-  }
-  return trimmed;
-}
-
-export function inferCommitteeFromPosition(position: string): OfficerCommittee {
-  const normalized = position.toLowerCase();
-  if (normalized.includes('representative')) {
-    return 'Year Level Representatives';
-  }
-  if (normalized.includes('information')) {
-    return 'Information';
-  }
-  if (normalized.includes('document')) {
-    return 'Documentary';
-  }
-  if (normalized.includes('technical')) {
-    return 'Technical';
-  }
-  return 'Executive Board';
-}
-
-export function isPrimaryAdminUser(email?: string | null): boolean {
-  return (email ?? '').trim().toLowerCase() === PRIMARY_ADMIN_EMAIL;
-}
-
-export function isFirebaseAdminAuthenticated(): boolean {
-  return (
-    auth.currentUser?.uid === PRIMARY_ADMIN_UID ||
-    isPrimaryAdminUser(auth.currentUser?.email)
-  );
-}
-
-export function isFirebaseAuthenticated(): boolean {
+export async function ensureAdminFirebaseAuth(): Promise<boolean> {
   return Boolean(auth.currentUser);
 }
 
-export async function provisionOfficerInFirebaseAuth(
-  email: string,
-  passcode: string,
-  displayName: string
-): Promise<string | null> {
-  const cleanEmail = email.trim().toLowerCase();
-  const cleanPasscode =
-    passcode.trim().length >= 6
-      ? passcode.trim()
-      : passcode.trim().padEnd(6, '0');
+// ============================================================================
+// 3. COMMITTEE & DATE PARSING HELPERS
+// ============================================================================
 
-  try {
-    const res = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseConfig.apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cleanEmail,
-          password: cleanPasscode,
-          displayName: displayName.trim(),
-          returnSecureToken: true,
-        }),
-      }
-    );
-
-    const data = (await res.json().catch(() => ({}))) as {
-      localId?: string;
-      error?: { message?: string };
-    };
-
-    if (res.ok && data.localId) {
-      return data.localId;
-    }
-
-    if (data.error?.message === 'EMAIL_EXISTS') {
-      const signInRes = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseConfig.apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: cleanEmail,
-            password: cleanPasscode,
-            returnSecureToken: true,
-          }),
-        }
-      );
-      const signInData = (await signInRes.json().catch(() => ({}))) as {
-        localId?: string;
-      };
-      if (signInRes.ok && signInData.localId) {
-        return signInData.localId;
-      }
-    }
-
-    return null;
-  } catch {
-    return null;
+export function inferCommitteeFromPosition(position: string): OfficerCommittee {
+  const pos = position.trim().toLowerCase();
+  if (pos.includes('representative')) return 'Year Level Representatives';
+  if (pos.includes('information')) return 'Information';
+  if (pos.includes('documentary') || pos.includes('documentation')) {
+    return 'Documentary';
   }
+  if (pos.includes('technical')) return 'Technical';
+  return 'Executive Board';
 }
 
-export async function linkAdminPasswordIfPossible(
+export function isLegacySeededOfficerId(id: string | undefined | null): boolean {
+  if (!id) return false;
+  return /^(exec-|rep-|info-|doc-|tech-)/i.test(id.trim());
+}
+
+function parseDisplayDateToTimestamp(displayDate: string): Timestamp {
+  const cleaned = displayDate
+    .replace(/^[A-Za-z]+,\s*/, '')
+    .replace(/•.*$/, '')
+    .trim();
+  const parsed = Date.parse(cleaned);
+  if (!Number.isNaN(parsed) && parsed > 946684800000) {
+    return Timestamp.fromMillis(parsed);
+  }
+  return Timestamp.now();
+}
+
+// ============================================================================
+// 4. ATOMIC FIRESTORE WRITE & BATCH HELPERS (NO READ-THEN-WRITE LOOPS)
+// ============================================================================
+
+/**
+ * Upserts a Student user profile in `/students/{uid}` using `setDoc(..., { merge: true })`.
+ */
+export async function upsertStudentUserToFirestore(
   user: User,
-  passcode = '123456'
-): Promise<void> {
-  if (!isPrimaryAdminUser(user.email)) return;
-  const hasPasswordProvider = user.providerData.some(
-    (p) => p.providerId === 'password'
-  );
-  if (hasPasswordProvider) return;
-
-  try {
-    const cred = EmailAuthProvider.credential(PRIMARY_ADMIN_EMAIL, passcode);
-    await linkWithCredential(user, cred);
-  } catch {
-    // Ignore if already linked or requires recent login
-  }
-}
-
-export async function upsertOfficialUserToFirestore(
-  _authUid: string,
-  _account: OfficialAccount
-): Promise<void> {
-  // Retired duplicate officialUsers writes; all accounts live in councilAccounts.
-  return;
-}
-
-export async function signInOfficialWithFirebaseAuth(
-  email: string,
-  passcode: string,
-  displayName?: string
-): Promise<OfficialProfile | null> {
-  const cleanEmail = email.trim().toLowerCase();
-  const cleanPasscode =
-    passcode.trim().length >= 6
-      ? passcode.trim()
-      : passcode.trim().padEnd(6, '0');
-
-  if (
-    auth.currentUser &&
-    auth.currentUser.email?.toLowerCase() === cleanEmail
-  ) {
-    if (isPrimaryAdminUser(cleanEmail)) {
-      await linkAdminPasswordIfPossible(auth.currentUser, cleanPasscode);
-    }
-  } else {
-    try {
-      await signInWithEmailAndPassword(auth, cleanEmail, cleanPasscode);
-    } catch {
-      if (displayName) {
-        await provisionOfficerInFirebaseAuth(
-          cleanEmail,
-          cleanPasscode,
-          displayName
-        );
-        try {
-          await signInWithEmailAndPassword(auth, cleanEmail, cleanPasscode);
-        } catch {
-          // Ignore if Google provider without password linked yet
-        }
-      }
-    }
-  }
-
-  if (auth.currentUser) {
-    if (isPrimaryAdminUser(auth.currentUser.email)) {
-      return {
-        id: 'acc-admin-1',
-        authUid: auth.currentUser.uid || PRIMARY_ADMIN_UID,
-        email: PRIMARY_ADMIN_EMAIL,
-        name: 'Clark Sadicon',
-        position: 'Head Of Technical',
-        role: 'admin',
-      };
-    }
-
-    try {
-      const uidSnap = await getDoc(
-        doc(db, 'councilAccounts', auth.currentUser.uid)
-      );
-      if (uidSnap.exists()) {
-        const d = uidSnap.data();
-        return {
-          id: String(d.id ?? auth.currentUser.uid),
-          authUid: String(d.authUid ?? auth.currentUser.uid),
-          email: cleanEmail,
-          name: String(d.name ?? auth.currentUser.displayName ?? 'SSC Official'),
-          position: String(d.position ?? 'SSC Officer'),
-          role: d.role === 'admin' ? 'admin' : 'official',
-        };
-      }
-
-      const byEmailSnap = await getDocs(
-        query(collection(db, 'councilAccounts'), where('email', '==', cleanEmail))
-      );
-      if (!byEmailSnap.empty) {
-        const d = byEmailSnap.docs[0].data();
-        return {
-          id: String(d.id ?? byEmailSnap.docs[0].id),
-          authUid: String(d.authUid ?? auth.currentUser.uid),
-          email: cleanEmail,
-          name: String(d.name ?? auth.currentUser.displayName ?? 'SSC Official'),
-          position: String(d.position ?? 'SSC Officer'),
-          role: d.role === 'admin' ? 'admin' : 'official',
-        };
-      }
-    } catch {
-      // Fallback to caller's matched account if present
-    }
-  }
-
-  return null;
-}
-
-export async function ensureAdminFirebaseAuth(): Promise<User> {
-  if (auth.currentUser) {
-    if (isFirebaseAdminAuthenticated()) {
-      await linkAdminPasswordIfPossible(auth.currentUser);
-      return auth.currentUser;
-    }
-    try {
-      const offSnap = await getDoc(
-        doc(db, 'officialUsers', auth.currentUser.uid)
-      );
-      if (offSnap.exists() && offSnap.data()?.role === 'admin') {
-        return auth.currentUser;
-      }
-    } catch {
-      // Fall through to primary admin auth fallback
-    }
-  }
-
-  try {
-    const passCred = await signInWithEmailAndPassword(
-      auth,
-      PRIMARY_ADMIN_EMAIL,
-      '123456'
-    );
-    return passCred.user;
-  } catch {
-    const credential = await signInWithPopup(auth, googleProvider);
-    if (!isPrimaryAdminUser(credential.user.email)) {
-      await signOut(auth);
-      throw new Error(
-        `Only a Web Admin can manage officer accounts.`
-      );
-    }
-    await linkAdminPasswordIfPossible(credential.user);
-    return credential.user;
-  }
-}
-
-async function saveVerifiedStudentProfile(
-  user: User,
-  yearCourseInput?: string,
-  fallbackName?: string
-): Promise<StudentProfile> {
-  const uid = user.uid;
-  const email = (user.email ?? '').trim();
-  const displayName = (
-    user.displayName ||
-    fallbackName ||
-    email.split('@')[0] ||
-    'SLAC Student'
-  )
-    .trim()
-    .slice(0, 120);
-  const yearCourse =
-    (yearCourseInput ?? '').trim().slice(0, 100) || 'SLAC College Student';
-
-  const studentPath = `students/${uid}`;
-  const studentRef = doc(db, 'students', uid);
-
-  try {
-    const existingSnap = await getDoc(studentRef);
-    if (existingSnap.exists()) {
-      const existingData = existingSnap.data();
-      const resolvedName =
-        displayName ||
-        (typeof existingData.name === 'string' && existingData.name
-          ? existingData.name
-          : 'SLAC Student');
-      const resolvedCourse =
-        (yearCourseInput ?? '').trim() ||
-        (typeof existingData.yearCourse === 'string' && existingData.yearCourse
-          ? existingData.yearCourse
-          : 'SLAC College Student');
-
-      const updatePayload: Record<string, unknown> = {
-        uid,
-        name: resolvedName,
-        email: existingData.email || email,
-        yearCourse: resolvedCourse,
-        createdAt: existingData.createdAt,
-        updatedAt: serverTimestamp(),
-      };
-      if (user.photoURL && user.photoURL.length <= 500) {
-        updatePayload.photoURL = user.photoURL;
-      }
-
-      await setDoc(studentRef, updatePayload);
-      return {
-        id: uid,
-        name: resolvedName,
-        identifier: email,
-        yearCourse: resolvedCourse,
-        photoURL: user.photoURL ?? undefined,
-      };
-    } else {
-      const createPayload: Record<string, unknown> = {
-        uid,
-        name: displayName,
-        email,
-        yearCourse,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-      if (user.photoURL && user.photoURL.length <= 500) {
-        createPayload.photoURL = user.photoURL;
-      }
-
-      await setDoc(studentRef, createPayload);
-      return {
-        id: uid,
-        name: displayName,
-        identifier: email,
-        yearCourse,
-        photoURL: user.photoURL ?? undefined,
-      };
-    }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, studentPath);
-  }
-}
-
-export async function signInStudentWithGoogle(
-  yearCourseInput?: string
-): Promise<StudentProfile> {
-  const credential = await signInWithPopup(auth, googleProvider);
-  return saveVerifiedStudentProfile(credential.user, yearCourseInput);
-}
-
-export async function registerStudentWithEmail(params: {
+  yearCourse = 'SLAC Student',
+  customDisplayName?: string
+): Promise<{
+  uid: string;
   name: string;
   email: string;
-  password: string;
-  yearCourse?: string;
-}): Promise<{ verificationSent: true; email: string }> {
-  const cleanEmail = params.email.trim().toLowerCase();
-  const cleanName = params.name.trim().slice(0, 120) || 'SLAC Student';
+  yearCourse: string;
+  photoURL?: string;
+}> {
+  const studentRef = doc(db, 'students', user.uid);
+  const existingSnap = await getDoc(studentRef);
+  const existingData = existingSnap.exists() ? existingSnap.data() : null;
+
+  const resolvedName = (
+    customDisplayName?.trim() ||
+    (typeof existingData?.name === 'string' ? existingData.name.trim() : '') ||
+    user.displayName?.trim() ||
+    user.email?.split('@')[0] ||
+    'SLAC Student'
+  ).slice(0, 120);
+
+  const resolvedYearCourse = (
+    (typeof existingData?.yearCourse === 'string' &&
+    existingData.yearCourse !== 'SLAC Student'
+      ? existingData.yearCourse
+      : yearCourse.trim()) || 'SLAC Student'
+  ).slice(0, 100);
+
+  const resolvedEmail = (user.email || 'student@slac.edu.ph').slice(0, 160);
+  const photoURL = (user.photoURL || '').slice(0, 500);
 
   try {
-    const credential = await createUserWithEmailAndPassword(
-      auth,
-      cleanEmail,
-      params.password
-    );
-    await updateProfile(credential.user, { displayName: cleanName }).catch(
-      () => undefined
-    );
-    await sendEmailVerification(credential.user).catch(() => undefined);
-    return {
-      verificationSent: true,
-      email: credential.user.email ?? cleanEmail,
+    const payload: Record<string, unknown> = {
+      uid: user.uid,
+      name: resolvedName,
+      email: resolvedEmail,
+      yearCourse: resolvedYearCourse,
+      updatedAt: serverTimestamp(),
+      createdAt: existingData?.createdAt ?? serverTimestamp(),
     };
-  } catch (err) {
-    const rawMsg = err instanceof Error ? err.message.toLowerCase() : '';
-    if (rawMsg.includes('email-already-in-use')) {
-      try {
-        const existingCred = await signInWithEmailAndPassword(
-          auth,
-          cleanEmail,
-          params.password
-        );
-        await reload(existingCred.user).catch(() => undefined);
-        if (!existingCred.user.emailVerified) {
-          await updateProfile(existingCred.user, {
-            displayName: cleanName,
-          }).catch(() => undefined);
-          await sendEmailVerification(existingCred.user).catch(() => undefined);
-          return {
-            verificationSent: true,
-            email: existingCred.user.email ?? cleanEmail,
-          };
-        }
-      } catch {
-        // Fall through
-      }
+    if (photoURL) {
+      payload.photoURL = photoURL;
     }
-    throw err;
-  }
-}
-
-export async function signInStudentWithEmail(params: {
-  email: string;
-  password: string;
-  yearCourse?: string;
-}): Promise<
-  | { verified: true; student: StudentProfile }
-  | { verified: false; email: string }
-> {
-  const cleanEmail = params.email.trim().toLowerCase();
-  const credential = await signInWithEmailAndPassword(
-    auth,
-    cleanEmail,
-    params.password
-  );
-  await reload(credential.user);
-
-  if (!credential.user.emailVerified) {
-    return {
-      verified: false,
-      email: credential.user.email ?? cleanEmail,
-    };
+    await setDoc(studentRef, payload, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `students/${user.uid}`);
   }
 
-  await credential.user.getIdToken(true);
-  const student = await saveVerifiedStudentProfile(
-    credential.user,
-    params.yearCourse
-  );
   return {
-    verified: true,
-    student,
+    uid: user.uid,
+    name: resolvedName,
+    email: resolvedEmail,
+    yearCourse: resolvedYearCourse,
+    photoURL: photoURL || undefined,
   };
-}
-
-export async function resendStudentVerificationEmail(): Promise<void> {
-  if (!auth.currentUser) {
-    throw new Error('Sign in with your email and password first.');
-  }
-  await reload(auth.currentUser);
-  if (auth.currentUser.emailVerified) return;
-  await sendEmailVerification(auth.currentUser);
-}
-
-export async function checkAndCompleteStudentEmailVerification(
-  yearCourseInput?: string,
-  fallbackName?: string
-): Promise<StudentProfile | null> {
-  if (!auth.currentUser) return null;
-  await reload(auth.currentUser);
-  if (!auth.currentUser.emailVerified) {
-    return null;
-  }
-  await auth.currentUser.getIdToken(true);
-  return saveVerifiedStudentProfile(
-    auth.currentUser,
-    yearCourseInput,
-    fallbackName
-  );
 }
 
 export async function updateStudentIdentityInFirestore(
   name: string,
   yearCourse: string
-): Promise<StudentProfile | null> {
-  if (!auth.currentUser) return null;
-  const cleanName = name.trim().slice(0, 120) || 'SLAC Student';
-  const cleanCourse = yearCourse.trim().slice(0, 100) || 'SLAC Student';
+) {
+  const user = auth.currentUser;
+  if (!user) return;
+  const studentRef = doc(db, 'students', user.uid);
   try {
-    await updateProfile(auth.currentUser, { displayName: cleanName }).catch(
-      () => undefined
-    );
-  } catch {
-    // Ignore
-  }
-  return saveVerifiedStudentProfile(auth.currentUser, cleanCourse, cleanName);
-}
-
-const LEGACY_SEEDED_OFFICER_ID_REGEX =
-  /^(2019-2020|2020-2021|2021-2022|2022-2023|2023-2024|2024-2025|2025-2026)-(pres|vp|sec|asec|tres|aud|bm|rep1|rep2|rep3|rep4|hinfo|minfo|einfo|hdoc|doc|htech|tech)$/;
-
-export function isLegacySeededOfficerId(id: string): boolean {
-  return LEGACY_SEEDED_OFFICER_ID_REGEX.test(id.trim());
-}
-
-export async function upsertCouncilOfficerToFirestore(
-  member: OfficerMember,
-  termLabel: string,
-  accountId?: string
-): Promise<void> {
-  if (!isFirebaseAuthenticated()) return;
-
-  const cleanId = sanitizeFirestoreId(member.id);
-  const officerRef = doc(db, 'councilOfficers', cleanId);
-  const officerPath = `councilOfficers/${cleanId}`;
-
-  try {
-    const snap = await getDoc(officerRef);
-    const basePayload: Record<string, unknown> = {
-      id: cleanId,
-      term: termLabel.trim().slice(0, 32) || '2025–2026',
-      name: member.name.trim().slice(0, 120),
-      position: member.position.trim().slice(0, 80) || 'SSC Officer',
-      committee: member.committee,
-      visibility: 'public',
+    const snap = await getDoc(studentRef);
+    const payload: Record<string, unknown> = {
+      uid: user.uid,
+      name: (name.trim() || 'SLAC Student').slice(0, 120),
+      email: (user.email || 'student@slac.edu.ph').slice(0, 160),
+      yearCourse: (yearCourse.trim() || 'SLAC Student').slice(0, 100),
       updatedAt: serverTimestamp(),
+      createdAt: snap.exists()
+        ? snap.data().createdAt ?? serverTimestamp()
+        : serverTimestamp(),
     };
-
-    const safeImg = sanitizeFirestoreImageUrl(member.image);
-    if (safeImg) {
-      basePayload.image = safeImg;
+    if (user.photoURL) {
+      payload.photoURL = user.photoURL.slice(0, 500);
     }
-    if (typeof member.optional === 'boolean') {
-      basePayload.optional = member.optional;
-    }
-    if (accountId) {
-      basePayload.accountId = sanitizeFirestoreId(accountId);
-    }
-
-    if (snap.exists()) {
-      const existingData = snap.data();
-      await setDoc(officerRef, {
-        ...basePayload,
-        createdAt: existingData.createdAt,
-      });
-    } else {
-      await setDoc(officerRef, {
-        ...basePayload,
-        createdAt: serverTimestamp(),
-      });
-    }
+    await setDoc(studentRef, payload, { merge: true });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, officerPath);
-  }
-}
-
-export async function deleteCouncilOfficerFromFirestore(
-  officerId: string
-): Promise<void> {
-  if (!isFirebaseAuthenticated()) return;
-  const cleanId = sanitizeFirestoreId(officerId);
-  const path = `councilOfficers/${cleanId}`;
-  try {
-    await deleteDoc(doc(db, 'councilOfficers', cleanId));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
-  }
-}
-
-export async function deleteCouncilTermFromFirestore(
-  termLabel: string
-): Promise<void> {
-  if (!isFirebaseAuthenticated()) return;
-  try {
-    const snap = await getDocs(
-      query(
-        collection(db, 'councilOfficers'),
-        where('visibility', '==', 'public')
-      )
-    );
-    for (const docSnap of snap.docs) {
-      const d = docSnap.data();
-      if (String(d.term ?? '').trim() === termLabel.trim()) {
-        await deleteDoc(doc(db, 'councilOfficers', docSnap.id));
-      }
-    }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, 'councilOfficers');
-  }
-}
-
-export async function upsertAnnouncementToFirestore(
-  item: AnnouncementItem
-): Promise<void> {
-  if (!isFirebaseAuthenticated()) return;
-
-  const cleanId = sanitizeFirestoreId(item.id);
-  const ref = doc(db, 'announcements', cleanId);
-  const path = `announcements/${cleanId}`;
-
-  try {
-    const snap = await getDoc(ref);
-    const basePayload: Record<string, unknown> = {
-      id: cleanId,
-      title: item.title.trim().slice(0, 200) || 'Announcement',
-      date: item.date.trim().slice(0, 60) || 'Today',
-      category: item.category.trim().slice(0, 80) || 'Campus Life',
-      summary: item.summary.trim().slice(0, 2000) || 'Official SLAC SSC memo.',
-      issuedBy: item.issuedBy.trim().slice(0, 160) || 'SLAC SSC',
-      visibility: 'public',
-      updatedAt: serverTimestamp(),
-    };
-
-    const safeImg = sanitizeFirestoreImageUrl(item.image);
-    if (safeImg) {
-      basePayload.image = safeImg;
-    }
-
-    if (snap.exists()) {
-      await setDoc(ref, {
-        ...basePayload,
-        createdAt: snap.data().createdAt,
-      });
-    } else {
-      await setDoc(ref, {
-        ...basePayload,
-        createdAt: serverTimestamp(),
-      });
-    }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
-  }
-}
-
-export async function deleteAnnouncementFromFirestore(
-  announcementId: string
-): Promise<void> {
-  if (!isFirebaseAuthenticated()) return;
-  const cleanId = sanitizeFirestoreId(announcementId);
-  const path = `announcements/${cleanId}`;
-  try {
-    await deleteDoc(doc(db, 'announcements', cleanId));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
-  }
-}
-
-export async function upsertEventToFirestore(
-  item: GalleryEventItem
-): Promise<void> {
-  if (!isFirebaseAuthenticated()) return;
-
-  const cleanId = sanitizeFirestoreId(item.id);
-  const ref = doc(db, 'events', cleanId);
-  const path = `events/${cleanId}`;
-  const fallbackImg = siteConfig.councilSection.image;
-  const safeImg =
-    sanitizeFirestoreImageUrl(item.image, fallbackImg) || fallbackImg;
-
-  try {
-    const snap = await getDoc(ref);
-    const basePayload: Record<string, unknown> = {
-      id: cleanId,
-      title: item.title.trim().slice(0, 200) || 'Campus Event',
-      date: item.date.trim().slice(0, 80) || 'TBA',
-      time: item.time.trim().slice(0, 80) || 'TBA',
-      location: item.location.trim().slice(0, 160) || 'SLAC Campus',
-      category: item.category.trim().slice(0, 80) || 'Governance',
-      description:
-        item.description.trim().slice(0, 2000) ||
-        'Upcoming SLAC SSC campus activity.',
-      image: safeImg,
-      imageAlt: (
-        item.imageAlt?.trim() || `${item.title.trim()} campus event`
-      ).slice(0, 240),
-      visibility: 'public',
-      updatedAt: serverTimestamp(),
-    };
-
-    if (snap.exists()) {
-      await setDoc(ref, {
-        ...basePayload,
-        createdAt: snap.data().createdAt,
-      });
-    } else {
-      await setDoc(ref, {
-        ...basePayload,
-        createdAt: serverTimestamp(),
-      });
-    }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
-  }
-}
-
-export async function deleteEventFromFirestore(eventId: string): Promise<void> {
-  if (!isFirebaseAuthenticated()) return;
-  const cleanId = sanitizeFirestoreId(eventId);
-  const path = `events/${cleanId}`;
-  try {
-    await deleteDoc(doc(db, 'events', cleanId));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
-  }
-}
-
-export async function upsertForumThreadToFirestore(
-  thread: ForumThread,
-  allowModerationFields = false
-): Promise<void> {
-  if (!isFirebaseAuthenticated()) return;
-
-  const cleanId = sanitizeFirestoreId(thread.id);
-  const ref = doc(db, 'forumThreads', cleanId);
-  const path = `forumThreads/${cleanId}`;
-
-  const sanitizedReplies = (thread.replies ?? []).slice(0, 100).map((rep) => ({
-    id: String(rep.id || `rep-${Date.now()}`).slice(0, 128),
-    author: String(rep.author || 'SLAC Student').trim().slice(0, 120),
-    yearLevel: String(rep.yearLevel || 'SLAC Student').trim().slice(0, 100),
-    time: String(rep.time || 'Just now').trim().slice(0, 60),
-    message: String(rep.message || '').trim().slice(0, 2000),
-  }));
-
-  const safeSupportCount = Math.max(
-    0,
-    Math.min(100000, Math.floor(Number(thread.supportCount) || 0))
-  );
-
-  try {
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const existingData = snap.data();
-      if (allowModerationFields) {
-        await setDoc(ref, {
-          id: existingData.id,
-          author: existingData.author,
-          yearLevel: existingData.yearLevel,
-          postedAt: existingData.postedAt,
-          topic: thread.topic.trim().slice(0, 80) || existingData.topic,
-          title: thread.title.trim().slice(0, 200) || existingData.title,
-          body: thread.body.trim().slice(0, 3000) || existingData.body,
-          supportCount: safeSupportCount,
-          replies: sanitizedReplies,
-          visibility: 'public',
-          createdAt: existingData.createdAt,
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        await setDoc(ref, {
-          id: existingData.id,
-          author: existingData.author,
-          yearLevel: existingData.yearLevel,
-          postedAt: existingData.postedAt,
-          topic: existingData.topic,
-          title: existingData.title,
-          body: existingData.body,
-          supportCount: safeSupportCount,
-          replies: sanitizedReplies,
-          visibility: existingData.visibility,
-          createdAt: existingData.createdAt,
-          updatedAt: serverTimestamp(),
-        });
-      }
-    } else {
-      await setDoc(ref, {
-        id: cleanId,
-        author: thread.author.trim().slice(0, 120) || 'SLAC Student',
-        yearLevel: thread.yearLevel.trim().slice(0, 100) || 'SLAC Student',
-        postedAt: thread.postedAt.trim().slice(0, 60) || 'Just now',
-        topic: thread.topic.trim().slice(0, 80) || 'Suggestions',
-        title: thread.title.trim().slice(0, 200) || 'Student Discussion',
-        body: thread.body.trim().slice(0, 3000) || 'Discussion details.',
-        supportCount: safeSupportCount,
-        replies: sanitizedReplies,
-        visibility: 'public',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
-  }
-}
-
-export async function deleteForumThreadFromFirestore(
-  threadId: string
-): Promise<void> {
-  if (!isFirebaseAuthenticated()) return;
-  const cleanId = sanitizeFirestoreId(threadId);
-  const path = `forumThreads/${cleanId}`;
-  try {
-    await deleteDoc(doc(db, 'forumThreads', cleanId));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
-  }
-}
-
-export async function upsertFaqToFirestore(
-  item: FaqItem,
-  orderIndex = 0
-): Promise<void> {
-  if (!isFirebaseAuthenticated()) return;
-
-  const cleanId = sanitizeFirestoreId(item.id);
-  const ref = doc(db, 'faqs', cleanId);
-  const path = `faqs/${cleanId}`;
-  const safeOrder = Math.max(
-    0,
-    Math.min(10000, Math.floor(Number(orderIndex) || 0))
-  );
-
-  try {
-    const snap = await getDoc(ref);
-    const basePayload = {
-      id: cleanId,
-      category: item.category.trim().slice(0, 80) || 'Council Office',
-      question:
-        item.question.trim().slice(0, 300) ||
-        'Frequently Asked Student Question',
-      answer:
-        item.answer.trim().slice(0, 2000) ||
-        'Official SLAC Supreme Student Council response.',
-      order:
-        snap.exists() && typeof snap.data().order === 'number'
-          ? snap.data().order
-          : safeOrder,
-      visibility: 'public',
-      updatedAt: serverTimestamp(),
-    };
-
-    if (snap.exists()) {
-      await setDoc(ref, {
-        ...basePayload,
-        createdAt: snap.data().createdAt,
-      });
-    } else {
-      await setDoc(ref, {
-        ...basePayload,
-        createdAt: serverTimestamp(),
-      });
-    }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
-  }
-}
-
-export async function deleteFaqFromFirestore(faqId: string): Promise<void> {
-  if (!isFirebaseAuthenticated()) return;
-  const cleanId = sanitizeFirestoreId(faqId);
-  const path = `faqs/${cleanId}`;
-  try {
-    await deleteDoc(doc(db, 'faqs', cleanId));
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    handleFirestoreError(error, OperationType.UPDATE, `students/${user.uid}`);
   }
 }
 
 /**
- * Upserts synchronized category filter settings & branding photos in /portalSettings/config.
+ * Provisions a new Council Officer account in `/councilAccounts` (without any passcode),
+ * adds their public entry in `/councilOfficers` via an atomic `writeBatch`,
+ * and triggers the backend onboarding endpoint (`/api/admin/onboard-officer`) to send a password setup link.
  */
-export async function upsertPortalSettingsToFirestore(
-  filters: PortalFilters,
-  aiAutoSync: boolean,
-  branding?: Partial<PortalBranding>
-): Promise<void> {
-  if (!isFirebaseAuthenticated()) return;
-
-  const ref = doc(db, 'portalSettings', 'config');
-  const path = 'portalSettings/config';
-
-  const sanitizeList = (arr: string[], fallback: string[]) => {
-    const source = Array.isArray(arr) && arr.length > 0 ? arr : fallback;
-    return source
-      .map((s) => String(s).trim().slice(0, 80))
-      .filter(Boolean)
-      .slice(0, 25);
-  };
-
-  try {
-    const snap = await getDoc(ref);
-    const existing = snap.exists() ? snap.data() : {};
-
-    const basePayload: Record<string, unknown> = {
-      id: 'config',
-      announcementFilters: sanitizeList(
-        filters.announcements,
-        siteConfig.defaultFilters.announcements
-      ),
-      eventFilters: sanitizeList(
-        filters.events,
-        siteConfig.defaultFilters.events
-      ),
-      forumFilters: sanitizeList(
-        filters.forum,
-        siteConfig.defaultFilters.forum
-      ),
-      aiAutoSync: Boolean(aiAutoSync),
-      visibility: 'public',
-      updatedAt: serverTimestamp(),
-    };
-
-    const resolvedLogo = sanitizeFirestoreImageUrl(
-      branding?.customLogoUrl ?? existing.customLogoUrl
-    );
-    if (resolvedLogo) basePayload.customLogoUrl = resolvedLogo;
-
-    const resolvedAbout = sanitizeFirestoreImageUrl(
-      branding?.aboutSlacImage ?? existing.aboutSlacImage
-    );
-    if (resolvedAbout) basePayload.aboutSlacImage = resolvedAbout;
-
-    if (snap.exists()) {
-      await setDoc(ref, {
-        ...basePayload,
-        createdAt: existing.createdAt,
-      });
-    } else {
-      await setDoc(ref, {
-        ...basePayload,
-        createdAt: serverTimestamp(),
-      });
-    }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
-  }
-}
-
-export async function autoSeedPortalToFirestore(params: {
-  accounts: OfficialAccount[];
-  officerTerms: OfficerTermRoster[];
-  announcements: AnnouncementItem[];
-  events: GalleryEventItem[];
-  forumThreads: ForumThread[];
-  faqs: FaqItem[];
-  filters: PortalFilters;
-  branding?: PortalBranding;
-  aiAutoSync: boolean;
-}): Promise<void> {
-  if (!isFirebaseAuthenticated() || !auth.currentUser) return;
-
-  let isAdmin = isFirebaseAdminAuthenticated();
-  let isOfficial = isAdmin;
-
-  if (!isAdmin) {
-    try {
-      const offSnap = await getDoc(
-        doc(db, 'councilAccounts', auth.currentUser.uid)
-      );
-      if (offSnap.exists()) {
-        isOfficial = true;
-        if (offSnap.data()?.role === 'admin') {
-          isAdmin = true;
-        }
-      }
-    } catch {
-      isOfficial = false;
-    }
-  }
-
-  if (!isOfficial) return;
-
-  if (isAdmin && auth.currentUser) {
-    if (isPrimaryAdminUser(auth.currentUser.email)) {
-      await linkAdminPasswordIfPossible(auth.currentUser);
-    }
-
-    // ONLY ensure the primary admin account (official.clarksadicon@gmail.com) exists in councilAccounts.
-    // NEVER re-upload deleted or cached non-admin accounts from localStorage!
-    const adminAccRef = doc(db, 'councilAccounts', 'acc-admin-1');
-    try {
-      const snap = await getDoc(adminAccRef);
-      if (!snap.exists()) {
-        await setDoc(adminAccRef, {
-          id: 'acc-admin-1',
-          email: PRIMARY_ADMIN_EMAIL,
-          passcode: '123456',
-          name: 'Clark Sadicon',
-          position: 'Head Of Technical',
-          role: 'admin',
-          authUid: sanitizeFirestoreId(auth.currentUser.uid),
-          createdByEmail: PRIMARY_ADMIN_EMAIL,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      }
-    } catch {
-      // Ignore
-    }
-
-    // Automatically remove any legacy duplicate officialUsers documents
-    try {
-      const legacyOfficialSnaps = await getDocs(collection(db, 'officialUsers'));
-      for (const docSnap of legacyOfficialSnaps.docs) {
-        await deleteDoc(doc(db, 'officialUsers', docSnap.id)).catch(
-          () => undefined
-        );
-      }
-    } catch {
-      // Ignore
-    }
-  }
-
-  try {
-    const officersSnap = await getDocs(
-      query(
-        collection(db, 'councilOfficers'),
-        where('visibility', '==', 'public')
-      )
-    );
-    for (const docSnap of officersSnap.docs) {
-      if (isLegacySeededOfficerId(docSnap.id)) {
-        await deleteDoc(doc(db, 'councilOfficers', docSnap.id));
-      }
-    }
-  } catch {
-    // Ignore
-  }
-
-  try {
-    const settingsSnap = await getDoc(doc(db, 'portalSettings', 'config'));
-    if (!settingsSnap.exists()) {
-      await upsertPortalSettingsToFirestore(
-        params.filters,
-        params.aiAutoSync,
-        params.branding
-      );
-    }
-  } catch {
-    // Ignore
-  }
-
-  try {
-    const faqsSnap = await getDocs(
-      query(collection(db, 'faqs'), where('visibility', '==', 'public'))
-    );
-    if (faqsSnap.empty && params.faqs.length > 0) {
-      for (let i = 0; i < params.faqs.length; i += 1) {
-        await upsertFaqToFirestore(params.faqs[i], i);
-      }
-    }
-  } catch {
-    // Ignore
-  }
-}
-
-export async function syncFullPortalStateToFirestore(params: {
-  announcements: AnnouncementItem[];
-  events: GalleryEventItem[];
-  forumThreads: ForumThread[];
-  officerTerms: OfficerTermRoster[];
-  faqs: FaqItem[];
-  filters: PortalFilters;
-  branding?: PortalBranding;
-  aiAutoSync: boolean;
-}): Promise<void> {
-  if (!isFirebaseAuthenticated()) return;
-
-  try {
-    for (const item of params.announcements) {
-      await upsertAnnouncementToFirestore(item);
-    }
-    for (const evt of params.events) {
-      await upsertEventToFirestore(evt);
-    }
-    for (const thread of params.forumThreads) {
-      await upsertForumThreadToFirestore(thread, true);
-    }
-    for (const roster of params.officerTerms) {
-      for (const member of roster.officers) {
-        await upsertCouncilOfficerToFirestore(member, roster.term);
-      }
-    }
-    for (let i = 0; i < params.faqs.length; i += 1) {
-      await upsertFaqToFirestore(params.faqs[i], i);
-    }
-    await upsertPortalSettingsToFirestore(
-      params.filters,
-      params.aiAutoSync,
-      params.branding
-    );
-  } catch {
-    // Errors logged by individual helpers
-  }
-}
-
 export async function pushNewCouncilMemberToFirestore(
   account: OfficialAccount,
-  termLabel: string,
-  officerId: string,
-  image?: string
-): Promise<void> {
-  const authUid = await provisionOfficerInFirebaseAuth(
-    account.email,
-    account.passcode,
-    account.name
-  );
-
-  const adminUser = await ensureAdminFirebaseAuth();
-
-  // Store inside the single unified councilAccounts collection
-  const docKey = sanitizeFirestoreId(authUid || account.id);
-  const accRef = doc(db, 'councilAccounts', docKey);
-  const accPath = `councilAccounts/${docKey}`;
-  const creatorEmail =
-    adminUser.email?.trim().toLowerCase() || PRIMARY_ADMIN_EMAIL;
-
-  try {
-    const snap = await getDoc(accRef);
-    const payload: Record<string, unknown> = {
-      id: docKey,
-      email: account.email.trim().toLowerCase(),
-      passcode: account.passcode,
-      name: account.name.trim().slice(0, 120),
-      position: account.position.trim().slice(0, 80),
-      role: account.role,
-      createdByEmail: creatorEmail,
-      updatedAt: serverTimestamp(),
-    };
-    if (authUid) {
-      payload.authUid = sanitizeFirestoreId(authUid);
-    }
-
-    if (snap.exists()) {
-      const existingData = snap.data();
-      await setDoc(accRef, {
-        ...payload,
-        createdByEmail: existingData.createdByEmail || creatorEmail,
-        createdAt: existingData.createdAt,
-      });
-    } else {
-      await setDoc(accRef, {
-        ...payload,
-        createdAt: serverTimestamp(),
-      });
-    }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, accPath);
+  term = '2025–2026',
+  officerSlotId?: string,
+  existingImage?: string
+) {
+  if (!auth.currentUser) {
+    throw new Error('Admin authentication required.');
   }
 
-  const committee = inferCommitteeFromPosition(account.position);
-  await upsertCouncilOfficerToFirestore(
-    {
-      id: officerId,
-      position: account.position,
-      committee,
-      name: account.name,
-      image,
-      optional: account.position === 'Asst. Secretary' ? true : undefined,
-    },
-    termLabel,
-    docKey
+  const cleanEmail = account.email.trim().toLowerCase().slice(0, 160);
+  const cleanName = (account.name.trim() || 'SSC Official').slice(0, 120);
+  const cleanPos = (account.position.trim() || 'Head Of Technical').slice(
+    0,
+    80
   );
+  const cleanRole: 'admin' | 'official' =
+    account.role === 'admin' ? 'admin' : 'official';
+
+  // 1. Call backend / Cloud Function to provision Firebase Auth user + Custom Claim + password-setup email
+  let provisionedUid = account.authUid?.trim() || account.id;
+  try {
+    const idToken = await auth.currentUser.getIdToken();
+    const res = await fetch('/api/admin/onboard-officer', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        email: cleanEmail,
+        name: cleanName,
+        position: cleanPos,
+        role: cleanRole,
+      }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { uid?: string };
+      if (data.uid) {
+        provisionedUid = data.uid;
+      }
+    }
+  } catch {
+    // Continue with Firestore batch write even if Functions endpoint is in local preview mode
+  }
+
+  const accountDocId = provisionedUid || account.id;
+  const resolvedOfficerId = officerSlotId || `off-${account.id}`;
+  const committee = inferCommitteeFromPosition(cleanPos);
+
+  try {
+    const batch = writeBatch(db);
+    const accRef = doc(db, 'councilAccounts', accountDocId);
+
+    batch.set(
+      accRef,
+      {
+        id: accountDocId,
+        authUid: accountDocId,
+        email: cleanEmail,
+        name: cleanName,
+        position: cleanPos,
+        role: cleanRole,
+        createdByEmail: auth.currentUser.email || PRIMARY_ADMIN_EMAIL,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    const offRef = doc(db, 'councilOfficers', resolvedOfficerId);
+    const officerPayload: Record<string, unknown> = {
+      id: resolvedOfficerId,
+      term: (term.trim() || '2025–2026').slice(0, 32),
+      name: cleanName,
+      position: cleanPos,
+      committee,
+      accountId: accountDocId,
+      visibility: 'public',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    if (existingImage?.trim()) {
+      officerPayload.image = existingImage.trim().slice(0, 500);
+    }
+
+    batch.set(offRef, officerPayload, { merge: true });
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(
+      error,
+      OperationType.WRITE,
+      `councilAccounts/${accountDocId}`
+    );
+  }
 }
 
 export async function updateCouncilAccountInFirestore(
   account: OfficialAccount
-): Promise<void> {
-  if (!isFirebaseAuthenticated()) {
-    await ensureAdminFirebaseAuth().catch(() => undefined);
+) {
+  if (!auth.currentUser) {
+    throw new Error('Admin authentication required.');
   }
-  if (!isFirebaseAuthenticated()) return;
 
-  const cleanAccountId = sanitizeFirestoreId(account.id);
-  const accRef = doc(db, 'councilAccounts', cleanAccountId);
-  const accPath = `councilAccounts/${cleanAccountId}`;
+  const targetDocId = isPrimaryAdminUser(account.email)
+    ? PRIMARY_ADMIN_UID
+    : account.authUid?.trim() || account.id;
 
+  const ref = doc(db, 'councilAccounts', targetDocId);
   try {
-    const snap = await getDoc(accRef);
-    if (snap.exists()) {
-      const existingData = snap.data();
-      await setDoc(accRef, {
-        ...existingData,
-        email: account.email.trim().toLowerCase(),
-        passcode: account.passcode,
-        name: account.name.trim().slice(0, 120),
-        position: account.position.trim().slice(0, 80),
-        role: account.role,
+    const snap = await getDoc(ref);
+    const existing = snap.exists() ? snap.data() : null;
+    await setDoc(
+      ref,
+      {
+        id: targetDocId,
+        authUid: targetDocId,
+        email: account.email.trim().toLowerCase().slice(0, 160),
+        name: (account.name.trim() || 'SSC Official').slice(0, 120),
+        position: (account.position.trim() || 'Head Of Technical').slice(0, 80),
+        role: account.role === 'admin' ? 'admin' : 'official',
+        createdByEmail:
+          existing?.createdByEmail ||
+          auth.currentUser.email ||
+          PRIMARY_ADMIN_EMAIL,
+        createdAt: existing?.createdAt ?? serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
-      return;
-    }
-
-    const byEmailSnap = await getDocs(
-      query(
-        collection(db, 'councilAccounts'),
-        where('email', '==', account.email.trim().toLowerCase())
-      )
+      },
+      { merge: true }
     );
-    for (const d of byEmailSnap.docs) {
-      const existingData = d.data();
-      await setDoc(doc(db, 'councilAccounts', d.id), {
-        ...existingData,
-        email: account.email.trim().toLowerCase(),
-        passcode: account.passcode,
-        name: account.name.trim().slice(0, 120),
-        position: account.position.trim().slice(0, 80),
-        role: account.role,
-        updatedAt: serverTimestamp(),
-      });
-    }
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, accPath);
+    handleFirestoreError(
+      error,
+      OperationType.WRITE,
+      `councilAccounts/${targetDocId}`
+    );
   }
 }
 
 export async function deleteCouncilAccountFromFirestore(
   accountId: string,
-  accountEmail?: string,
-  accountName?: string
-): Promise<void> {
-  if (!isFirebaseAuthenticated()) {
-    await ensureAdminFirebaseAuth().catch(() => undefined);
+  email?: string,
+  officerName?: string
+) {
+  if (!auth.currentUser) {
+    throw new Error('Admin authentication required.');
   }
-  if (!isFirebaseAuthenticated()) return;
+  if (isPrimaryAdminUser(email) || accountId === PRIMARY_ADMIN_UID) {
+    return;
+  }
 
-  const cleanId = sanitizeFirestoreId(accountId);
-  const accPath = `councilAccounts/${cleanId}`;
   try {
-    await deleteDoc(doc(db, 'councilAccounts', cleanId)).catch(() => undefined);
-    await deleteDoc(doc(db, 'officialUsers', cleanId)).catch(() => undefined);
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'councilAccounts', accountId));
 
-    if (accountEmail) {
-      const cleanEmail = accountEmail.trim().toLowerCase();
-      const matchingAccounts = await getDocs(
-        query(collection(db, 'councilAccounts'), where('email', '==', cleanEmail))
+    if (email) {
+      const cleanEmail = email.trim().toLowerCase();
+      const emailSnap = await getDocs(
+        query(
+          collection(db, 'councilAccounts'),
+          where('email', '==', cleanEmail)
+        )
       );
-      for (const docSnap of matchingAccounts.docs) {
-        const d = docSnap.data();
-        if (typeof d.authUid === 'string' && d.authUid) {
-          await deleteDoc(doc(db, 'officialUsers', d.authUid)).catch(
-            () => undefined
-          );
-        }
-        await deleteDoc(doc(db, 'councilAccounts', docSnap.id)).catch(
-          () => undefined
-        );
-      }
+      emailSnap.docs.forEach((d) => batch.delete(d.ref));
     }
 
-    // Also remove any linked officer entry in councilOfficers
-    const officersSnap = await getDocs(
-      query(collection(db, 'councilOfficers'), where('visibility', '==', 'public'))
+    const byAccSnap = await getDocs(
+      query(
+        collection(db, 'councilOfficers'),
+        where('accountId', '==', accountId)
+      )
     );
-    for (const offDoc of officersSnap.docs) {
-      const d = offDoc.data();
-      const matchesAccId = d.accountId === cleanId;
-      const matchesName =
-        accountName &&
-        typeof d.name === 'string' &&
-        d.name.trim().toLowerCase() === accountName.trim().toLowerCase();
-      if (matchesAccId || matchesName) {
-        await deleteDoc(doc(db, 'councilOfficers', offDoc.id)).catch(
-          () => undefined
-        );
-      }
+    byAccSnap.docs.forEach((d) => batch.delete(d.ref));
+
+    if (officerName?.trim()) {
+      const byNameSnap = await getDocs(
+        query(
+          collection(db, 'councilOfficers'),
+          where('name', '==', officerName.trim())
+        )
+      );
+      byNameSnap.docs.forEach((d) => batch.delete(d.ref));
     }
+
+    await batch.commit();
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, accPath);
+    handleFirestoreError(
+      error,
+      OperationType.DELETE,
+      `councilAccounts/${accountId}`
+    );
+  }
+}
+
+export async function upsertCouncilOfficerToFirestore(
+  member: OfficerMember,
+  term: string,
+  accountId?: string
+) {
+  if (!auth.currentUser) {
+    throw new Error('Official authentication required.');
+  }
+  if (isLegacySeededOfficerId(member.id) || !member.name.trim()) return;
+
+  const ref = doc(db, 'councilOfficers', member.id);
+  try {
+    const snap = await getDoc(ref);
+    const existing = snap.exists() ? snap.data() : null;
+    const payload: Record<string, unknown> = {
+      id: member.id,
+      term: (term.trim() || '2025–2026').slice(0, 32),
+      name: member.name.trim().slice(0, 120),
+      position: (member.position.trim() || 'SSC Officer').slice(0, 80),
+      committee:
+        member.committee || inferCommitteeFromPosition(member.position),
+      visibility: 'public',
+      createdAt: existing?.createdAt ?? serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    if (member.image?.trim()) {
+      payload.image = member.image.trim().slice(0, 500);
+    }
+    if (typeof member.optional === 'boolean') {
+      payload.optional = member.optional;
+    }
+    if (accountId || existing?.accountId) {
+      payload.accountId = String(accountId || existing?.accountId).slice(
+        0,
+        128
+      );
+    }
+    await setDoc(ref, payload);
+  } catch (error) {
+    handleFirestoreError(
+      error,
+      OperationType.WRITE,
+      `councilOfficers/${member.id}`
+    );
+  }
+}
+
+export async function deleteCouncilOfficerFromFirestore(officerId: string) {
+  if (!auth.currentUser) {
+    throw new Error('Official authentication required.');
+  }
+  try {
+    await deleteDoc(doc(db, 'councilOfficers', officerId));
+  } catch (error) {
+    handleFirestoreError(
+      error,
+      OperationType.DELETE,
+      `councilOfficers/${officerId}`
+    );
+  }
+}
+
+/**
+ * Deletes all officers belonging to a specific academic term using a single `writeBatch`.
+ */
+export async function deleteCouncilTermFromFirestore(term: string) {
+  if (!auth.currentUser) {
+    throw new Error('Official authentication required.');
+  }
+  const cleanTerm = term.trim();
+  if (!cleanTerm) return;
+
+  try {
+    const q = query(
+      collection(db, 'councilOfficers'),
+      where('term', '==', cleanTerm)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) return;
+
+    const batch = writeBatch(db);
+    snap.docs.forEach((docSnap) => batch.delete(docSnap.ref));
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(
+      error,
+      OperationType.DELETE,
+      `councilOfficers?term=${cleanTerm}`
+    );
+  }
+}
+
+/**
+ * Upserts an Announcement with a real `publishedAt` Timestamp alongside the display `date` string.
+ */
+export async function upsertAnnouncementToFirestore(item: AnnouncementItem) {
+  if (!auth.currentUser) {
+    throw new Error('Official authentication required.');
+  }
+  const ref = doc(db, 'announcements', item.id);
+  try {
+    const snap = await getDoc(ref);
+    const existing = snap.exists() ? snap.data() : null;
+    const publishedAtTs = item.publishedAt
+      ? Timestamp.fromMillis(item.publishedAt)
+      : existing?.publishedAt ?? parseDisplayDateToTimestamp(item.date);
+
+    const payload: Record<string, unknown> = {
+      id: item.id,
+      title: (item.title.trim() || 'Official Advisory').slice(0, 200),
+      date: (item.date.trim() || 'Today').slice(0, 60),
+      publishedAt: publishedAtTs,
+      category: (item.category.trim() || 'Campus Life').slice(0, 80),
+      summary: (item.summary.trim() || 'See full council memo.').slice(0, 2000),
+      issuedBy: (item.issuedBy.trim() || 'SLAC SSC').slice(0, 160),
+      visibility: 'public',
+      createdAt: existing?.createdAt ?? serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    if (item.image?.trim()) {
+      payload.image = item.image.trim().slice(0, 500);
+    }
+    await setDoc(ref, payload);
+  } catch (error) {
+    handleFirestoreError(
+      error,
+      OperationType.WRITE,
+      `announcements/${item.id}`
+    );
+  }
+}
+
+export async function deleteAnnouncementFromFirestore(announcementId: string) {
+  if (!auth.currentUser) {
+    throw new Error('Official authentication required.');
+  }
+  try {
+    await deleteDoc(doc(db, 'announcements', announcementId));
+  } catch (error) {
+    handleFirestoreError(
+      error,
+      OperationType.DELETE,
+      `announcements/${announcementId}`
+    );
+  }
+}
+
+/**
+ * Upserts a PortalEvent with a real `startsAt` Timestamp alongside the display `date` string.
+ */
+export async function upsertEventToFirestore(item: GalleryEventItem) {
+  if (!auth.currentUser) {
+    throw new Error('Official authentication required.');
+  }
+  const ref = doc(db, 'events', item.id);
+  try {
+    const snap = await getDoc(ref);
+    const existing = snap.exists() ? snap.data() : null;
+    const startsAtTs = item.startsAt
+      ? Timestamp.fromMillis(item.startsAt)
+      : existing?.startsAt ?? parseDisplayDateToTimestamp(item.date);
+
+    const payload: Record<string, unknown> = {
+      id: item.id,
+      title: (item.title.trim() || 'SLAC Campus Event').slice(0, 200),
+      date: (item.date.trim() || 'TBA').slice(0, 80),
+      startsAt: startsAtTs,
+      time: (item.time.trim() || 'TBA').slice(0, 80),
+      location: (item.location.trim() || 'SLAC Campus').slice(0, 160),
+      category: (item.category.trim() || 'Governance').slice(0, 80),
+      description: (
+        item.description.trim() || 'Upcoming campus activity.'
+      ).slice(0, 2000),
+      image: (
+        item.image.trim() ||
+        'https://ik.imagekit.io/slacssc/smart-council/council-stock/council-office_axkKY8UNt.jpg'
+      ).slice(0, 500),
+      imageAlt: (item.imageAlt.trim() || `${item.title} cover photo`).slice(
+        0,
+        240
+      ),
+      visibility: 'public',
+      createdAt: existing?.createdAt ?? serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    await setDoc(ref, payload);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `events/${item.id}`);
+  }
+}
+
+export async function deleteEventFromFirestore(eventId: string) {
+  if (!auth.currentUser) {
+    throw new Error('Official authentication required.');
+  }
+  try {
+    await deleteDoc(doc(db, 'events', eventId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `events/${eventId}`);
+  }
+}
+
+export async function upsertFaqToFirestore(item: FaqItem, order = 0) {
+  if (!auth.currentUser) {
+    throw new Error('Official authentication required.');
+  }
+  const ref = doc(db, 'faqs', item.id);
+  try {
+    const snap = await getDoc(ref);
+    const existing = snap.exists() ? snap.data() : null;
+    await setDoc(ref, {
+      id: item.id,
+      category: (item.category.trim() || 'Council Office').slice(0, 80),
+      question: (item.question.trim() || 'Student FAQ').slice(0, 300),
+      answer: (item.answer.trim() || 'Official answer pending.').slice(0, 2000),
+      order: Math.max(0, Math.min(10000, Math.round(order))),
+      visibility: 'public',
+      createdAt: existing?.createdAt ?? serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `faqs/${item.id}`);
+  }
+}
+
+export async function deleteFaqFromFirestore(faqId: string) {
+  if (!auth.currentUser) {
+    throw new Error('Official authentication required.');
+  }
+  try {
+    await deleteDoc(doc(db, 'faqs', faqId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `faqs/${faqId}`);
+  }
+}
+
+/**
+ * Upserts a ForumThread with `authorUid` ownership and bounded replies.
+ */
+export async function upsertForumThreadToFirestore(
+  thread: ForumThread,
+  _requireAdminAuth = false
+) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Please sign in to post or update forum discussions.');
+  }
+
+  const ref = doc(db, 'forumThreads', thread.id);
+  try {
+    const snap = await getDoc(ref);
+    const existing = snap.exists() ? snap.data() : null;
+    const boundedReplies = (thread.replies || []).slice(0, 100).map((r) => ({
+      id: String(r.id).slice(0, 80),
+      author: String(r.author || 'SLAC Student').slice(0, 120),
+      authorUid: String(r.authorUid || currentUser.uid).slice(0, 128),
+      yearLevel: String(r.yearLevel || 'SLAC Student').slice(0, 100),
+      time: String(r.time || 'Just now').slice(0, 60),
+      message: String(r.message || '').slice(0, 2000),
+    }));
+
+    const payload: Record<string, unknown> = {
+      id: thread.id,
+      author: existing
+        ? existing.author
+        : (thread.author.trim() || 'SLAC Student').slice(0, 120),
+      authorUid: existing?.authorUid || thread.authorUid || currentUser.uid,
+      yearLevel: existing
+        ? existing.yearLevel
+        : (thread.yearLevel.trim() || 'SLAC Student').slice(0, 100),
+      postedAt: existing
+        ? existing.postedAt
+        : (thread.postedAt.trim() || 'Just now').slice(0, 60),
+      topic: (thread.topic.trim() || 'Suggestions').slice(0, 80),
+      title: existing
+        ? existing.title
+        : (thread.title.trim() || 'Discussion Topic').slice(0, 200),
+      body: existing
+        ? existing.body
+        : (thread.body.trim() || 'Student inquiry.').slice(0, 3000),
+      supportCount: existing
+        ? Math.max(
+            0,
+            Math.min(1000000, Math.round(Number(thread.supportCount) || 0))
+          )
+        : 0,
+      replies: boundedReplies,
+      visibility: 'public',
+      createdAt: existing?.createdAt ?? serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    await setDoc(ref, payload);
+  } catch (error) {
+    handleFirestoreError(
+      error,
+      OperationType.WRITE,
+      `forumThreads/${thread.id}`
+    );
+  }
+}
+
+/**
+ * Adds a reply both to `/forumThreads/{threadId}/replies/{replyId}` subcollection
+ * and the thread's summary replies list inside an atomic batch.
+ */
+export async function addForumReplyInFirestore(
+  thread: ForumThread,
+  reply: ForumReply
+) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Please sign in to reply to forum discussions.');
+  }
+
+  const replyRef = doc(db, 'forumThreads', thread.id, 'replies', reply.id);
+  try {
+    await setDoc(replyRef, {
+      id: reply.id,
+      threadId: thread.id,
+      author: (reply.author.trim() || 'SLAC Student').slice(0, 120),
+      authorUid: currentUser.uid,
+      yearLevel: (reply.yearLevel.trim() || 'SLAC Student').slice(0, 100),
+      time: (reply.time.trim() || 'Just now').slice(0, 60),
+      message: reply.message.trim().slice(0, 2000),
+      createdAt: serverTimestamp(),
+    });
+    await upsertForumThreadToFirestore(thread, false);
+  } catch (error) {
+    handleFirestoreError(
+      error,
+      OperationType.WRITE,
+      `forumThreads/${thread.id}/replies/${reply.id}`
+    );
+  }
+}
+
+/**
+ * Atomically toggles a user's support vote on `/forumThreads/{threadId}` using a Firestore
+ * transaction and a per-user support document `/forumThreads/{threadId}/supports/{uid}`
+ * so a user can support at most once.
+ */
+export async function toggleForumSupportTransactionInFirestore(
+  threadId: string,
+  fallbackDelta: number
+): Promise<number> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Please sign in to support a forum discussion.');
+  }
+
+  const threadRef = doc(db, 'forumThreads', threadId);
+  const supportRef = doc(
+    db,
+    'forumThreads',
+    threadId,
+    'supports',
+    currentUser.uid
+  );
+
+  return runTransaction(db, async (tx) => {
+    const [threadSnap, supportSnap] = await Promise.all([
+      tx.get(threadRef),
+      tx.get(supportRef),
+    ]);
+    if (!threadSnap.exists()) {
+      throw new Error('Discussion thread does not exist.');
+    }
+    const data = threadSnap.data();
+    const currentCount = Math.max(0, Number(data.supportCount) || 0);
+
+    let nextCount = currentCount;
+    if (supportSnap.exists()) {
+      tx.delete(supportRef);
+      nextCount = Math.max(0, currentCount - 1);
+    } else if (fallbackDelta < 0 && currentCount > 0) {
+      nextCount = Math.max(0, currentCount - 1);
+    } else {
+      tx.set(supportRef, {
+        uid: currentUser.uid,
+        threadId,
+        createdAt: serverTimestamp(),
+      });
+      nextCount = currentCount + 1;
+    }
+
+    tx.update(threadRef, {
+      supportCount: nextCount,
+      updatedAt: serverTimestamp(),
+    });
+
+    return nextCount;
+  });
+}
+
+export async function deleteForumThreadFromFirestore(threadId: string) {
+  if (!auth.currentUser) {
+    throw new Error('Authentication required to delete a forum thread.');
+  }
+  try {
+    await deleteDoc(doc(db, 'forumThreads', threadId));
+  } catch (error) {
+    handleFirestoreError(
+      error,
+      OperationType.DELETE,
+      `forumThreads/${threadId}`
+    );
+  }
+}
+
+export async function upsertPortalSettingsToFirestore(
+  filters: PortalFilters,
+  aiAutoSync: boolean,
+  branding?: PortalBranding
+) {
+  if (!auth.currentUser) {
+    throw new Error('Official authentication required.');
+  }
+  const ref = doc(db, 'portalSettings', 'config');
+  try {
+    const snap = await getDoc(ref);
+    const existing = snap.exists() ? snap.data() : null;
+    const payload: Record<string, unknown> = {
+      id: 'config',
+      announcementFilters: (filters.announcements || [])
+        .slice(0, 40)
+        .map((s) => s.slice(0, 60)),
+      eventFilters: (filters.events || [])
+        .slice(0, 40)
+        .map((s) => s.slice(0, 60)),
+      forumFilters: (filters.forum || [])
+        .slice(0, 40)
+        .map((s) => s.slice(0, 60)),
+      aiAutoSync: Boolean(aiAutoSync),
+      visibility: 'public',
+      createdAt: existing?.createdAt ?? serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    const resolvedLogo = branding?.customLogoUrl ?? existing?.customLogoUrl;
+    const resolvedAbout = branding?.aboutSlacImage ?? existing?.aboutSlacImage;
+
+    if (typeof resolvedLogo === 'string') {
+      payload.customLogoUrl = resolvedLogo.trim().slice(0, 500);
+    }
+    if (typeof resolvedAbout === 'string') {
+      payload.aboutSlacImage = resolvedAbout.trim().slice(0, 500);
+    }
+
+    await setDoc(ref, payload);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'portalSettings/config');
+  }
+}
+
+// ============================================================================
+// 5. SSC SUITE ASSIGNED TASKS & SITE VISIT ANALYTICS
+// ============================================================================
+
+export const SITE_VISITS_DOC_ID = 'visits';
+
+/**
+ * Increments the portal visit counter once per browser session.
+ * Uses the server endpoint `/api/stats/visit` for unauthenticated visitors,
+ * or a guarded Firestore transaction (+1 only) when authenticated.
+ */
+export async function incrementSiteVisitsInFirestore(): Promise<void> {
+  if (!auth.currentUser) {
+    try {
+      await fetch('/api/stats/visit', { method: 'POST' });
+    } catch {
+      // Ignore offline/network telemetry errors
+    }
+    return;
+  }
+
+  const ref = doc(db, 'siteStats', SITE_VISITS_DOC_ID);
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) {
+        tx.set(ref, {
+          visits: 1,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        const currentVisits = Number(snap.data().visits) || 0;
+        tx.update(ref, {
+          visits: currentVisits + 1,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    });
+  } catch {
+    // Non-blocking analytics counter
   }
 }
 
 export async function createAssignedTaskInFirestore(
   task: CouncilTask
 ): Promise<void> {
-  if (!isFirebaseAuthenticated() || !auth.currentUser) return;
+  if (!auth.currentUser) {
+    throw new Error('Admin authentication required.');
+  }
 
-  const cleanId = sanitizeFirestoreId(task.id);
-  const ref = doc(db, 'tasks', cleanId);
-  const path = `tasks/${cleanId}`;
-
+  const ref = doc(db, 'tasks', task.id);
   try {
-    const payload = {
-      id: cleanId,
-      title: task.title.trim().slice(0, 300) || 'Council Task',
-      description: task.description.trim().slice(0, 2000),
-      assignedToUid: sanitizeFirestoreId(task.assignedToUid),
-      assignedToName: task.assignedToName.trim().slice(0, 120) || 'SSC Officer',
-      status: 'pending' as const,
-      createdBy: auth.currentUser.uid,
+    await setDoc(ref, {
+      id: task.id,
+      title: (task.title.trim() || 'Council Task').slice(0, 300),
+      description: (task.description || '').trim().slice(0, 2000),
+      assignedToUid: task.assignedToUid.trim().slice(0, 128),
+      assignedToName: (task.assignedToName.trim() || 'SSC Officer').slice(
+        0,
+        160
+      ),
+      status: task.status === 'completed' ? 'completed' : 'pending',
+      createdBy: (
+        task.createdBy ||
+        auth.currentUser.uid ||
+        PRIMARY_ADMIN_EMAIL
+      )
+        .trim()
+        .slice(0, 160),
       createdAt: serverTimestamp(),
-      completedAt: null,
-    };
-    await setDoc(ref, payload);
+      completedAt: task.status === 'completed' ? serverTimestamp() : null,
+    });
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+    handleFirestoreError(error, OperationType.CREATE, `tasks/${task.id}`);
   }
 }
 
@@ -1409,66 +1356,32 @@ export async function updateAssignedTaskStatusInFirestore(
   taskId: string,
   nextStatus: 'pending' | 'completed'
 ): Promise<void> {
-  if (!isFirebaseAuthenticated() || !auth.currentUser) return;
+  if (!auth.currentUser) {
+    throw new Error('Official authentication required.');
+  }
 
-  const cleanId = sanitizeFirestoreId(taskId);
-  const ref = doc(db, 'tasks', cleanId);
-  const path = `tasks/${cleanId}`;
-
+  const ref = doc(db, 'tasks', taskId);
   try {
     await updateDoc(ref, {
       status: nextStatus,
       completedAt: nextStatus === 'completed' ? serverTimestamp() : null,
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+    handleFirestoreError(error, OperationType.UPDATE, `tasks/${taskId}`);
   }
 }
 
 export async function deleteAssignedTaskFromFirestore(
   taskId: string
 ): Promise<void> {
-  if (!isFirebaseAuthenticated()) return;
-  const cleanId = sanitizeFirestoreId(taskId);
-  const path = `tasks/${cleanId}`;
+  if (!auth.currentUser) {
+    throw new Error('Admin authentication required.');
+  }
+
+  const ref = doc(db, 'tasks', taskId);
   try {
-    await deleteDoc(doc(db, 'tasks', cleanId));
+    await deleteDoc(ref);
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    handleFirestoreError(error, OperationType.DELETE, `tasks/${taskId}`);
   }
 }
-
-export const SITE_VISITS_DOC_ID = 'visits';
-
-export async function incrementSiteVisitsInFirestore(): Promise<void> {
-  const ref = doc(db, 'siteStats', SITE_VISITS_DOC_ID);
-  const path = `siteStats/${SITE_VISITS_DOC_ID}`;
-
-  try {
-    await setDoc(
-      ref,
-      {
-        visits: increment(1),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-  } catch (error) {
-    try {
-      handleFirestoreError(error, OperationType.WRITE, path);
-    } catch {
-      // Logged via handleFirestoreError
-    }
-  }
-}
-
-export {
-  collection,
-  doc,
-  getDoc,
-  onAuthStateChanged,
-  onSnapshot,
-  query,
-  signOut,
-  where,
-};

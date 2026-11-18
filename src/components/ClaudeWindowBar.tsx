@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { getCurrentAcademicYearLabel } from '../siteConfig';
 
 export interface ClaudeWindowTab {
   label: string;
@@ -23,14 +24,13 @@ const TONE_CLASS: Record<NonNullable<ClaudeWindowTab['tone']>, string> = {
 };
 
 /**
- * CLAUDE-INSPIRED ARCHITECTURAL WINDOW BAR (image_5866d37d.png)
+ * ARCHITECTURAL WINDOW BAR
  * Renders the 3 tactile traffic-light dots (Terracotta Red, Ochre Yellow, Botanical Green),
- * crisp 1px dark-outlined monospace status/tab boxes ("PROMPT", "CODE", "AGENTS" style),
- * and right-aligned version pill or status badges ("v1.0.0" / "FINAL" style).
+ * crisp 1px dark-outlined monospace status/tab boxes, and a dynamic academic year badge.
  */
 export function ClaudeWindowBar({
   tabs,
-  versionLabel = 'A.Y. 2025–2026',
+  versionLabel = getCurrentAcademicYearLabel(),
   rightSlot,
   className = '',
 }: ClaudeWindowBarProps) {

@@ -70,6 +70,7 @@ import {
   inferCommitteeFromPosition,
   isPrimaryAdminUser,
   pushNewCouncilMemberToFirestore,
+  sendOfficerPasswordSetupEmail,
   updateCouncilAccountInFirestore,
   upsertAnnouncementToFirestore,
   upsertCouncilOfficerToFirestore,
@@ -112,7 +113,6 @@ interface AdminDashboardPageProps {
   onAddTask?: (task: CouncilTask) => void;
   onToggleTask?: (taskId: string) => void;
   onDeleteTask?: (taskId: string) => void;
-  onResetDefaults: () => void;
   onNotify?: (message: string, type?: 'login' | 'logout' | 'refresh') => void;
 }
 
@@ -151,15 +151,6 @@ const SSC_POSITIONS = [
   'Head Of Technical',
   'Technical Officer',
 ];
-
-function createPasscode(role: 'admin' | 'official'): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let suffix = '';
-  for (let i = 0; i < 6; i += 1) {
-    suffix += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return role === 'admin' ? `SLAC-ADM-${suffix}` : `SLAC-SSC-${suffix}`;
-}
 
 function getInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -262,7 +253,7 @@ export function AdminDashboardPage({
   const [officerNameInput, setOfficerNameInput] = useState('');
   const [officerImageInput, setOfficerImageInput] = useState('');
 
-  // Official & Admin Logins Generator State
+  // Official & Admin Logins Generator State (Firebase Auth + Custom Claims)
   const [newAccName, setNewAccName] = useState('');
   const [newAccEmail, setNewAccEmail] = useState('');
   const [newAccPosition, setNewAccPosition] = useState(SSC_POSITIONS[0]);
@@ -270,13 +261,7 @@ export function AdminDashboardPage({
     officerTerms[0]?.term || '2025–2026'
   );
   const [newAccRole, setNewAccRole] = useState<'admin' | 'official'>('admin');
-  const [newAccPasscode, setNewAccPasscode] = useState(() =>
-    createPasscode('admin')
-  );
   const [accError, setAccError] = useState('');
-  const [revealedAccIds, setRevealedAccIds] = useState<Record<string, boolean>>(
-    {}
-  );
   const [copiedAccId, setCopiedAccId] = useState<string | null>(null);
   const [accFormOpen, setAccFormOpen] = useState(false);
 
@@ -350,7 +335,6 @@ export function AdminDashboardPage({
         setNewAccPosition(draft.newAccPosition ?? SSC_POSITIONS[0]);
         setNewAccTerm(draft.newAccTerm ?? '2025–2026');
         setNewAccRole(draft.newAccRole ?? 'admin');
-        setNewAccPasscode(draft.newAccPasscode ?? createPasscode('admin'));
         setAccFormOpen(true);
       } else if (draft.faqFormOpen) {
         setEditingFaqId(draft.editingFaqId ?? null);
@@ -418,7 +402,6 @@ export function AdminDashboardPage({
         newAccPosition,
         newAccTerm,
         newAccRole,
-        newAccPasscode,
         faqFormOpen,
         editingFaqId,
         faqCategory,
@@ -465,7 +448,6 @@ export function AdminDashboardPage({
     newAccPosition,
     newAccTerm,
     newAccRole,
-    newAccPasscode,
     faqFormOpen,
     editingFaqId,
     faqCategory,
@@ -931,15 +913,14 @@ export function AdminDashboardPage({
 
     const cleanEmail = newAccEmail.trim().toLowerCase();
     const cleanName = newAccName.trim();
-    const cleanPasscode = newAccPasscode.trim();
     const targetTerm = (
       newAccTerm.trim() ||
       officerTerms[0]?.term ||
       '2025–2026'
     ).slice(0, 32);
 
-    if (!cleanName || !cleanEmail || !cleanPasscode) {
-      setAccError('Fill in name, email, and passcode.');
+    if (!cleanName || !cleanEmail) {
+      setAccError('Fill in full name and official email.');
       return;
     }
 
@@ -954,11 +935,11 @@ export function AdminDashboardPage({
       email: cleanEmail,
       position: newAccPosition,
       role: newAccRole,
-      passcode: cleanPasscode,
     };
 
-    const nextAccounts = [created, ...accounts];
-    onSetAccounts(nextAccounts);
+    const prevAccounts = accounts;
+    const prevTerms = officerTerms;
+    onSetAccounts([created, ...accounts]);
 
     const existingRoster = officerTerms.find((r) => r.term === targetTerm);
     const existingSlot = existingRoster?.officers.find(
@@ -1004,7 +985,6 @@ export function AdminDashboardPage({
     setAccError('');
     setNewAccName('');
     setNewAccEmail('');
-    setNewAccPasscode(createPasscode(newAccRole));
     setDiscardPromptTarget(null);
     setAccFormOpen(false);
 
@@ -1015,27 +995,27 @@ export function AdminDashboardPage({
         targetOfficerId,
         targetOfficerImage
       );
-      onNotify?.('Officer account added.', 'login');
+      await sendOfficerPasswordSetupEmail(cleanEmail).catch(() => undefined);
+      onNotify?.(
+        `Officer account added and setup link sent to ${cleanEmail}.`,
+        'login'
+      );
     } catch {
-      onNotify?.('Officer account added.', 'login');
+      onSetAccounts(prevAccounts);
+      onSetOfficerTerms(prevTerms);
+      onNotify?.('Failed to save officer account. Changes rolled back.', 'logout');
     }
   };
 
-  const rotateAccountPasscode = (accId: string, role: 'admin' | 'official') => {
+  const sendAccountPasswordSetup = async (emailAddr: string) => {
     if (!isWebAdmin) return;
-    const nextCode = createPasscode(role);
-    let updatedAccount: OfficialAccount | null = null;
-    onSetAccounts(
-      accounts.map((a) => {
-        if (a.id !== accId) return a;
-        updatedAccount = { ...a, passcode: nextCode };
-        return updatedAccount;
-      })
-    );
-    setRevealedAccIds((prev) => ({ ...prev, [accId]: true }));
-    if (updatedAccount) {
-      void updateCouncilAccountInFirestore(updatedAccount).catch(
-        () => undefined
+    try {
+      await sendOfficerPasswordSetupEmail(emailAddr);
+      onNotify?.(`Password setup link sent to ${emailAddr}.`, 'login');
+    } catch {
+      onNotify?.(
+        'Could not send password setup link. Ensure the email is registered in Firebase Auth.',
+        'logout'
       );
     }
   };
@@ -1044,6 +1024,7 @@ export function AdminDashboardPage({
     if (!isWebAdmin) return;
     const target = accounts.find((a) => a.id === accId);
     if (!target || isPrimaryAdminUser(target.email)) return;
+    const prevAccounts = accounts;
     let updatedAccount: OfficialAccount | null = null;
     onSetAccounts(
       accounts.map((a) => {
@@ -1053,9 +1034,10 @@ export function AdminDashboardPage({
       })
     );
     if (updatedAccount) {
-      void updateCouncilAccountInFirestore(updatedAccount).catch(
-        () => undefined
-      );
+      void updateCouncilAccountInFirestore(updatedAccount).catch(() => {
+        onSetAccounts(prevAccounts);
+        onNotify?.('Failed to update role. Changes rolled back.', 'logout');
+      });
     }
   };
 
@@ -1063,7 +1045,7 @@ export function AdminDashboardPage({
     if (!isWebAdmin) return;
     try {
       await navigator.clipboard.writeText(
-        `Email: ${acc.email}\nPasscode: ${acc.passcode}`
+        `Email: ${acc.email}\nRole: ${acc.role === 'admin' ? 'Web Admin' : 'SSC Official'}\nPosition: ${acc.position}`
       );
       setCopiedAccId(acc.id);
       window.setTimeout(() => setCopiedAccId(null), 1800);
@@ -2949,7 +2931,6 @@ export function AdminDashboardPage({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {accounts.map((acc) => {
-                const isRevealed = Boolean(revealedAccIds[acc.id]);
                 const isCopied = copiedAccId === acc.id;
                 const adminCount = accounts.filter(
                   (a) => a.role === 'admin'
@@ -3015,41 +2996,17 @@ export function AdminDashboardPage({
                     </div>
 
                     {isWebAdmin && (
-                      <div className="pt-2 border-t border-white/[0.08] flex flex-wrap items-center justify-between gap-2">
-                        <code className="text-xs font-mono text-[#3ddc97]">
-                          {isRevealed ? acc.passcode : '••••••••••••'}
-                        </code>
-
+                      <div className="pt-2 border-t border-white/[0.08] flex flex-wrap items-center justify-start gap-2">
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
-                            aria-label={
-                              isRevealed ? 'Hide passcode' : 'Show passcode'
-                            }
                             onClick={() =>
-                              setRevealedAccIds((prev) => ({
-                                ...prev,
-                                [acc.id]: !prev[acc.id],
-                              }))
-                            }
-                            className="inline-flex items-center justify-center min-h-[32px] min-w-[32px] rounded-lg border border-white/[0.1] bg-[#0b0e15] text-[#b4bac6] hover:text-[#f5f4f0] cursor-pointer"
-                          >
-                            {isRevealed ? (
-                              <EyeOff className="h-3.5 w-3.5" />
-                            ) : (
-                              <Eye className="h-3.5 w-3.5" />
-                            )}
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              rotateAccountPasscode(acc.id, acc.role)
+                              void sendAccountPasswordSetup(acc.email)
                             }
                             className="inline-flex items-center gap-1 min-h-[32px] px-2.5 py-1 text-xs font-medium rounded-lg border border-white/[0.1] bg-[#0b0e15] text-[#b4bac6] hover:text-[#f5f4f0] cursor-pointer"
                           >
-                            <RefreshCw className="h-3 w-3" aria-hidden="true" />
-                            <span>Rotate</span>
+                            <KeyRound className="h-3 w-3" aria-hidden="true" />
+                            <span>Send Setup Link</span>
                           </button>
 
                           <button
@@ -3068,7 +3025,7 @@ export function AdminDashboardPage({
                             ) : (
                               <>
                                 <Copy className="h-3 w-3" aria-hidden="true" />
-                                <span>Copy</span>
+                                <span>Copy Info</span>
                               </>
                             )}
                           </button>
@@ -3919,7 +3876,6 @@ export function AdminDashboardPage({
                           onChange={(e) => {
                             const role = e.target.value as 'admin' | 'official';
                             setNewAccRole(role);
-                            setNewAccPasscode(createPasscode(role));
                           }}
                           className="w-full min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm text-[#f5f4f0]"
                         >
@@ -3944,30 +3900,9 @@ export function AdminDashboardPage({
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-semibold text-[#b4bac6] mb-1">
-                        Generated Passcode
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          required
-                          value={newAccPasscode}
-                          onChange={(e) => setNewAccPasscode(e.target.value)}
-                          className="flex-1 min-h-[40px] rounded-lg border border-white/[0.12] bg-[#0b0e15] px-3 py-2 text-sm font-mono text-[#3ddc97]"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setNewAccPasscode(createPasscode(newAccRole))
-                          }
-                          className="inline-flex items-center gap-1.5 min-h-[40px] px-3 py-1.5 text-xs font-medium rounded-lg border border-white/[0.12] bg-[#181d29] text-[#f5f4f0] hover:border-white/[0.24] whitespace-nowrap shrink-0 cursor-pointer"
-                        >
-                          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                          <span>New Code</span>
-                        </button>
-                      </div>
-                    </div>
+                    <p className="rounded-lg border border-white/[0.08] bg-[#0b0e15] px-3 py-2 text-xs text-[#949ba8]">
+                      Creating this account sends a password setup email link directly to the officer&apos;s official email.
+                    </p>
 
                     {accError && (
                       <p

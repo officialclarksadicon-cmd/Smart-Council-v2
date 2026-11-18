@@ -17,7 +17,9 @@ import {
   checkAndCompleteStudentEmailVerification,
   registerStudentWithEmail,
   resendStudentVerificationEmail,
+  sendOfficerPasswordSetupEmail,
   signInOfficialWithFirebaseAuth,
+  signInOfficialWithGoogle,
   signInStudentWithEmail,
   signInStudentWithGoogle,
 } from '../firebase';
@@ -108,11 +110,12 @@ export function OfficialAuthModal({
 }: OfficialAuthModalProps) {
   const [mode, setMode] = useState<AuthModalMode>(initialMode);
 
-  // Official Sign-In State
+  // Official Sign-In State (Firebase Auth Email/Password + Google + Password Reset Link)
   const [email, setEmail] = useState('');
-  const [passcode, setPasscode] = useState('');
-  const [showPasscode, setShowPasscode] = useState(false);
+  const [officialPassword, setOfficialPassword] = useState('');
+  const [showOfficialPassword, setShowOfficialPassword] = useState(false);
   const [officialError, setOfficialError] = useState('');
+  const [officialNotice, setOfficialNotice] = useState('');
   const [isOfficialLoading, setIsOfficialLoading] = useState(false);
 
   // Student Email/Password & Google Auth State
@@ -351,14 +354,14 @@ export function OfficialAuthModal({
   const handleOfficialSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const normalizedUser = email.trim().toLowerCase();
-    const trimmedPasscode = passcode.trim();
+    const trimmedPassword = officialPassword.trim();
 
     if (!normalizedUser) {
-      setOfficialError('Enter your user or email.');
+      setOfficialError('Enter your official email.');
       return;
     }
-    if (!trimmedPasscode) {
-      setOfficialError('Enter your passcode.');
+    if (!trimmedPassword) {
+      setOfficialError('Enter your password.');
       return;
     }
 
@@ -367,47 +370,96 @@ export function OfficialAuthModal({
       const accName = acc.name.toLowerCase();
       const accUsername = accEmail.split('@')[0] ?? '';
       return (
-        (accEmail === normalizedUser ||
-          accName === normalizedUser ||
-          accUsername === normalizedUser) &&
-        acc.passcode === trimmedPasscode
+        accEmail === normalizedUser ||
+        accName === normalizedUser ||
+        accUsername === normalizedUser
       );
     });
 
     const targetEmail = matchedAccount?.email ?? normalizedUser;
-
-    setOfficialError('');
-    setIsOfficialLoading(true);
-    let firebaseProfile: OfficialProfile | null = null;
-    try {
-      if (targetEmail.includes('@')) {
-        firebaseProfile = await signInOfficialWithFirebaseAuth(
-          targetEmail,
-          trimmedPasscode,
-          matchedAccount?.name
-        );
-      }
-    } finally {
-      setIsOfficialLoading(false);
-    }
-
-    if (!matchedAccount && !firebaseProfile) {
-      setOfficialError('Invalid user or passcode.');
+    if (!targetEmail.includes('@')) {
+      setOfficialError('Enter a valid official email address.');
       return;
     }
 
-    setPasscode('');
-    setShowPasscode(false);
-    onSignInOfficial(
-      firebaseProfile ?? {
-        id: matchedAccount!.id,
-        email: matchedAccount!.email,
-        name: matchedAccount!.name,
-        position: matchedAccount!.position,
-        role: matchedAccount!.role,
+    setOfficialError('');
+    setOfficialNotice('');
+    setIsOfficialLoading(true);
+    try {
+      const firebaseProfile = await signInOfficialWithFirebaseAuth(
+        targetEmail,
+        trimmedPassword,
+        matchedAccount?.name
+      );
+
+      if (!firebaseProfile) {
+        setOfficialError(
+          'Invalid email or password, or account does not have Council Official permissions.'
+        );
+        return;
       }
+
+      setOfficialPassword('');
+      setShowOfficialPassword(false);
+      onSignInOfficial(firebaseProfile);
+      onClose();
+    } finally {
+      setIsOfficialLoading(false);
+    }
+  };
+
+  const handleOfficialGoogleSignIn = async () => {
+    setOfficialError('');
+    setOfficialNotice('');
+    setIsOfficialLoading(true);
+    try {
+      const profile = await signInOfficialWithGoogle();
+      if (!profile) {
+        setOfficialError(
+          'This Google account is not registered as an SSC Official or Web Admin.'
+        );
+        return;
+      }
+      onSignInOfficial(profile);
+      onClose();
+    } catch {
+      setOfficialError('Google sign-in was cancelled or blocked.');
+    } finally {
+      setIsOfficialLoading(false);
+    }
+  };
+
+  const handleSendOfficialPasswordSetup = async () => {
+    const normalizedUser = email.trim().toLowerCase();
+    const matchedAccount = accounts.find(
+      (acc) =>
+        acc.email.toLowerCase() === normalizedUser ||
+        acc.name.toLowerCase() === normalizedUser
     );
-    onClose();
+    const targetEmail = matchedAccount?.email ?? normalizedUser;
+
+    if (!targetEmail || !targetEmail.includes('@')) {
+      setOfficialError(
+        'Enter your official email address above first to receive a password setup link.'
+      );
+      return;
+    }
+
+    setOfficialError('');
+    setOfficialNotice('');
+    setIsOfficialLoading(true);
+    try {
+      await sendOfficerPasswordSetupEmail(targetEmail);
+      setOfficialNotice(
+        `Password setup / reset link sent to ${targetEmail}. Check your inbox.`
+      );
+    } catch {
+      setOfficialError(
+        'Unable to send password reset email. Verify the email address and try again.'
+      );
+    } finally {
+      setIsOfficialLoading(false);
+    }
   };
 
   if (typeof document === 'undefined') return null;
@@ -1066,47 +1118,60 @@ export function OfficialAuthModal({
                       htmlFor="official-user"
                       className="block text-xs sm:text-sm font-medium text-[#f5f4f0] mb-1.5"
                     >
-                      User
+                      Official Email
                     </label>
                     <input
                       id="official-user"
-                      type="text"
+                      type="email"
                       autoComplete="username"
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter user or email"
+                      placeholder="official@slacssc.org"
                       className="w-full min-h-[44px] rounded-xl border border-white/[0.12] bg-[#0d0e11] px-3.5 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
                     />
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="official-code"
-                      className="block text-xs sm:text-sm font-medium text-[#f5f4f0] mb-1.5"
-                    >
-                      Passcode
-                    </label>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <label
+                        htmlFor="official-code"
+                        className="block text-xs sm:text-sm font-medium text-[#f5f4f0]"
+                      >
+                        Password
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => void handleSendOfficialPasswordSetup()}
+                        className="text-xs font-medium text-[#3ddc97] hover:underline cursor-pointer"
+                      >
+                        Send Password Setup / Reset Link
+                      </button>
+                    </div>
                     <div className="relative">
                       <input
                         id="official-code"
-                        type={showPasscode ? 'text' : 'password'}
+                        type={showOfficialPassword ? 'text' : 'password'}
                         autoComplete="current-password"
                         required
-                        value={passcode}
-                        onChange={(e) => setPasscode(e.target.value)}
-                        placeholder="Enter passcode"
+                        value={officialPassword}
+                        onChange={(e) => setOfficialPassword(e.target.value)}
+                        placeholder="Enter password"
                         className="w-full min-h-[44px] rounded-xl border border-white/[0.12] bg-[#0d0e11] pl-3.5 pr-12 py-2 text-sm text-[#f5f4f0] placeholder:text-[#949ba8]"
                       />
                       <button
                         type="button"
                         aria-label={
-                          showPasscode ? 'Hide passcode' : 'Show passcode'
+                          showOfficialPassword
+                            ? 'Hide password'
+                            : 'Show password'
                         }
-                        onClick={() => setShowPasscode((prev) => !prev)}
+                        onClick={() =>
+                          setShowOfficialPassword((prev) => !prev)
+                        }
                         className="absolute right-0.5 top-1/2 -translate-y-1/2 inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-[#949ba8] hover:text-[#f5f4f0] cursor-pointer"
                       >
-                        {showPasscode ? (
+                        {showOfficialPassword ? (
                           <EyeOff className="h-4 w-4" aria-hidden="true" />
                         ) : (
                           <Eye className="h-4 w-4" aria-hidden="true" />
@@ -1114,6 +1179,12 @@ export function OfficialAuthModal({
                       </button>
                     </div>
                   </div>
+
+                  {officialNotice && (
+                    <p className="rounded-xl bg-[#3ddc97]/10 border border-[#3ddc97]/30 px-3 py-2 text-xs font-medium text-[#3ddc97]">
+                      {officialNotice}
+                    </p>
+                  )}
 
                   {officialError && (
                     <p
@@ -1124,26 +1195,37 @@ export function OfficialAuthModal({
                     </p>
                   )}
 
-                  <div className="pt-1 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5">
+                  <div className="pt-1 flex flex-col gap-2.5">
+                    <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5">
+                      <button
+                        type="button"
+                        onClick={onClose}
+                        className="min-h-[44px] px-4 py-2 text-sm font-medium text-[#b4bac6] rounded-full border border-white/[0.12] bg-[#1a1d22] hover:text-[#f5f4f0] transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isOfficialLoading}
+                        className="gemini-cta min-h-[44px] px-5 py-2 text-sm font-semibold rounded-full inline-flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-60 transition-transform cursor-pointer"
+                      >
+                        {isOfficialLoading && (
+                          <Loader2
+                            className="h-4 w-4 animate-spin"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span>Sign In</span>
+                      </button>
+                    </div>
+
                     <button
                       type="button"
-                      onClick={onClose}
-                      className="min-h-[44px] px-4 py-2 text-sm font-medium text-[#b4bac6] rounded-full border border-white/[0.12] bg-[#1a1d22] hover:text-[#f5f4f0] transition-colors cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
                       disabled={isOfficialLoading}
-                      className="gemini-cta min-h-[44px] px-5 py-2 text-sm font-semibold rounded-full inline-flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-60 transition-transform cursor-pointer"
+                      onClick={() => void handleOfficialGoogleSignIn()}
+                      className="w-full min-h-[42px] px-4 py-2 text-xs sm:text-sm font-semibold text-[#f5f4f0] rounded-full border border-white/[0.14] bg-[#161920] hover:bg-[#1e222b] transition-colors cursor-pointer"
                     >
-                      {isOfficialLoading && (
-                        <Loader2
-                          className="h-4 w-4 animate-spin"
-                          aria-hidden="true"
-                        />
-                      )}
-                      <span>Sign In</span>
+                      Sign In with Official Google Account
                     </button>
                   </div>
                 </form>

@@ -1,16 +1,8 @@
 import type { CSSProperties } from 'react';
+import { auth } from '../firebase';
+import { siteConfig } from '../siteConfig';
 
-export const IMAGEKIT_URL_ENDPOINT = (
-  import.meta.env.VITE_IMAGEKIT_URL_ENDPOINT || 'https://ik.imagekit.io/slacssc'
-).replace(/\/+$/, '');
-
-export const IMAGEKIT_PUBLIC_KEY =
-  import.meta.env.VITE_IMAGEKIT_PUBLIC_KEY ||
-  'public_crsSe9M4B7Az8cXkO0XWZBjfRkY=';
-
-export const IMAGEKIT_PRIVATE_KEY =
-  import.meta.env.VITE_IMAGEKIT_PRIVATE_KEY ||
-  'private_2GDDjhN6T/Xkoo7cuLN2pPRbUhU=';
+const DEFAULT_IMAGEKIT_ENDPOINT = 'https://ik.imagekit.io/slacssc';
 
 export type ImageKitFolder =
   | 'logo'
@@ -21,266 +13,416 @@ export type ImageKitFolder =
   | 'council';
 
 export type CardFramePreset =
-  | 'portrait'
   | 'announcement'
   | 'event'
+  | 'portrait'
   | 'about'
-  | 'cover'
-  | 'logo';
+  | 'logo'
+  | 'cover';
+
+export interface CardAspectMeta {
+  label: string;
+  aspectClass: string;
+  stageWidthClass: string;
+  baseAspect: 'landscape' | 'portrait' | 'square';
+}
+
+export const CARD_ASPECT_CONFIG: Record<CardFramePreset, CardAspectMeta> = {
+  announcement: {
+    label: 'Announcement Card (16:9)',
+    aspectClass: 'aspect-announcement-card',
+    stageWidthClass: 'w-full max-w-[420px]',
+    baseAspect: 'landscape',
+  },
+  event: {
+    label: 'Event Banner (16:10)',
+    aspectClass: 'aspect-event-card',
+    stageWidthClass: 'w-full max-w-[400px]',
+    baseAspect: 'landscape',
+  },
+  portrait: {
+    label: 'Officer Portrait (4:5)',
+    aspectClass: 'aspect-officer-portrait',
+    stageWidthClass: 'w-full max-w-[260px]',
+    baseAspect: 'portrait',
+  },
+  about: {
+    label: 'Council Feature (4:3)',
+    aspectClass: 'aspect-about-card',
+    stageWidthClass: 'w-full max-w-[380px]',
+    baseAspect: 'landscape',
+  },
+  logo: {
+    label: 'Brand Seal (1:1)',
+    aspectClass: 'aspect-logo-mark',
+    stageWidthClass: 'w-full max-w-[220px]',
+    baseAspect: 'square',
+  },
+  cover: {
+    label: 'Cover Banner (16:9)',
+    aspectClass: 'aspect-announcement-card',
+    stageWidthClass: 'w-full max-w-[420px]',
+    baseAspect: 'landscape',
+  },
+};
 
 export interface ImageKitCloudFile {
   fileId: string;
   name: string;
-  filePath: string;
   url: string;
   thumbnail: string;
+  thumbnailUrl?: string;
+  filePath: string;
+  folder?: string;
+  createdAt?: string;
 }
 
-export interface ImageFraming {
-  fit: 'cover' | 'contain';
-  x: number;
-  y: number;
-  zoom: number;
-  cardPreset?: CardFramePreset;
-}
-
-export const CARD_ASPECT_CONFIG: Record<
-  CardFramePreset,
-  {
-    label: string;
-    aspectClass: string;
-    stageWidthClass: string;
-    baseAspect: 'portrait' | 'landscape' | 'square';
-  }
-> = {
-  portrait: {
-    label: 'Officer Portrait Card',
-    aspectClass: 'aspect-officer-card',
-    stageWidthClass: 'w-52 sm:w-60',
-    baseAspect: 'portrait',
-  },
-  announcement: {
-    label: 'Announcement Card',
-    aspectClass: 'aspect-announcement-card',
-    stageWidthClass: 'w-full max-w-lg',
-    baseAspect: 'landscape',
-  },
-  event: {
-    label: 'Event Gallery Card',
-    aspectClass: 'aspect-event-card',
-    stageWidthClass: 'w-full max-w-md',
-    baseAspect: 'landscape',
-  },
-  about: {
-    label: 'About SLAC Card',
-    aspectClass: 'aspect-about-card',
-    stageWidthClass: 'w-full max-w-md',
-    baseAspect: 'landscape',
-  },
-  cover: {
-    label: 'Banner Card',
-    aspectClass: 'aspect-announcement-card',
-    stageWidthClass: 'w-full max-w-lg',
-    baseAspect: 'landscape',
-  },
-  logo: {
-    label: 'Website Seal / Logo',
-    aspectClass: 'aspect-logo-card',
-    stageWidthClass: 'w-48 sm:w-56',
-    baseAspect: 'square',
-  },
-};
+export type ImageKitMediaItem = ImageKitCloudFile;
 
 export const DEFAULT_IMAGEKIT_ASSETS: ImageKitCloudFile[] = [
   {
-    fileId: 'ik-logo-main',
-    name: 'SLAC SSC Seal (512px)',
+    fileId: 'default-ssc-logo',
+    name: 'ssc-logo.png',
+    url: `${DEFAULT_IMAGEKIT_ENDPOINT}/smart-council/logo/ssc-logo_yvq35sFUH.png`,
+    thumbnail: `${DEFAULT_IMAGEKIT_ENDPOINT}/smart-council/logo/ssc-logo_yvq35sFUH.png?tr=w-300,q-80,f-auto`,
     filePath: '/smart-council/logo/ssc-logo_yvq35sFUH.png',
-    url: 'https://ik.imagekit.io/slacssc/smart-council/logo/ssc-logo_yvq35sFUH.png',
-    thumbnail:
-      'https://ik.imagekit.io/slacssc/smart-council/logo/ssc-logo_yvq35sFUH.png?tr=w-300',
+    folder: 'logo',
   },
   {
-    fileId: 'ik-logo-white',
-    name: 'SLAC SSC White Seal (1024px)',
-    filePath: '/smart-council/logo/ssc-logo-1024-white_nzLKj_s2x.png',
-    url: 'https://ik.imagekit.io/slacssc/smart-council/logo/ssc-logo-1024-white_nzLKj_s2x.png',
-    thumbnail:
-      'https://ik.imagekit.io/slacssc/smart-council/logo/ssc-logo-1024-white_nzLKj_s2x.png?tr=w-300',
-  },
-  {
-    fileId: 'ik-logo-dark',
-    name: 'SLAC SSC Dark Seal (1024px)',
-    filePath: '/smart-council/logo/ssc-logo-1024-dark_L-WgIDIvf.png',
-    url: 'https://ik.imagekit.io/slacssc/smart-council/logo/ssc-logo-1024-dark_L-WgIDIvf.png',
-    thumbnail:
-      'https://ik.imagekit.io/slacssc/smart-council/logo/ssc-logo-1024-dark_L-WgIDIvf.png?tr=w-300',
-  },
-  {
-    fileId: 'ik-council-office',
-    name: 'SLAC Council Collaboration',
-    filePath: '/smart-council/council-stock/council-office_axkKY8UNt.jpg',
-    url: 'https://ik.imagekit.io/slacssc/smart-council/council-stock/council-office_axkKY8UNt.jpg',
-    thumbnail:
-      'https://ik.imagekit.io/slacssc/smart-council/council-stock/council-office_axkKY8UNt.jpg?tr=w-400',
+    fileId: 'default-council-stock',
+    name: 'council-stock.png',
+    url: `${DEFAULT_IMAGEKIT_ENDPOINT}/smart-council/council-stock/council-stock_fA8tG9wLp.png`,
+    thumbnail: `${DEFAULT_IMAGEKIT_ENDPOINT}/smart-council/council-stock/council-stock_fA8tG9wLp.png?tr=w-400,q-80,f-auto`,
+    filePath: '/smart-council/council-stock/council-stock_fA8tG9wLp.png',
+    folder: 'council-stock',
   },
 ];
 
-export function getDefaultImageFraming(
-  aspect: 'portrait' | 'landscape' | 'square' = 'portrait'
-): ImageFraming {
-  return {
-    fit: aspect === 'square' ? 'contain' : 'cover',
-    x: 50,
-    y: aspect === 'portrait' ? 18 : 50,
-    zoom: 1,
-  };
-}
+export const ALLOWED_UPLOAD_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
 
-export function stripImageFramingHash(rawValue?: string): string {
-  if (!rawValue) return '';
-  const trimmed = rawValue.trim();
-  if (!trimmed) return '';
-  const hashIdx = trimmed.indexOf('#');
-  return hashIdx >= 0 ? trimmed.slice(0, hashIdx) : trimmed;
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+
+export const ALLOWED_IMAGEKIT_FOLDERS = new Set<string>([
+  'logo',
+  'council-stock',
+  'announcements',
+  'events',
+  'officers',
+  'council',
+]);
+
+/**
+ * Returns the configured ImageKit URL endpoint (e.g., https://ik.imagekit.io/slacssc).
+ * Never embeds any private keys in the client bundle.
+ */
+export function getImageKitEndpoint(): string {
+  const envEndpoint = (
+    import.meta.env.VITE_IMAGEKIT_URL_ENDPOINT as string | undefined
+  )?.trim();
+  const raw =
+    envEndpoint ||
+    siteConfig.brand.imagekitEndpoint ||
+    DEFAULT_IMAGEKIT_ENDPOINT;
+  return raw.replace(/\/+$/, '');
 }
 
 /**
- * Detects corrupted image strings (such as 500-char truncated base64 data URLs
- * previously written to Firestore, dead blob URLs, or removed local /assets/ paths).
+ * Detects whether a stored image URL or path was corrupted (e.g. a CSS gradient,
+ * spaces, or a truncated string without an image extension or valid HTTP/data prefix).
  */
-export function isCorruptedImageUrl(rawValue?: string): boolean {
-  if (!rawValue || typeof rawValue !== 'string') return true;
-  const withoutHash = stripImageFramingHash(rawValue).trim();
-  if (!withoutHash) return true;
+export function isCorruptedImageUrl(input: string | undefined | null): boolean {
+  if (!input) return false;
+  const trimmed = input.trim();
+  if (!trimmed) return false;
 
-  if (withoutHash.startsWith('/assets/aistudio/')) {
-    return false;
-  }
+  const base = stripImageFramingHash(trimmed);
+  if (!base) return true;
 
-  if (
-    withoutHash.startsWith('blob:') ||
-    withoutHash.startsWith('/assets/')
-  ) {
+  if (base.startsWith('data:image/')) return false;
+  if (base.startsWith('blob:')) return false;
+
+  if (/linear-gradient|radial-gradient|\s/i.test(base)) {
     return true;
   }
 
-  if (withoutHash.startsWith('data:image/')) {
-    // A real photo data URL is several KB; <= 650 chars means it was truncated at 500 chars by Firestore rules
-    if (withoutHash.length <= 650) return true;
-    const commaIdx = withoutHash.indexOf(',');
-    if (commaIdx < 0 || withoutHash.length - commaIdx < 200) return true;
+  if (base.startsWith('http://') || base.startsWith('https://')) {
+    try {
+      const parsed = new URL(base);
+      if (parsed.hostname.includes('ik.imagekit.io')) {
+        const segments = parsed.pathname.split('/').filter(Boolean);
+        if (segments.length < 2) return true;
+        const lastSegment = segments[segments.length - 1] || '';
+        if (!/\.(png|jpe?g|webp|gif|svg|avif)$/i.test(lastSegment)) {
+          return true;
+        }
+      }
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
+  if (base.startsWith('/')) {
+    const cleanPath = base.split('?')[0];
+    if (!/\.(png|jpe?g|webp|gif|svg|avif)$/i.test(cleanPath)) {
+      return true;
+    }
     return false;
   }
 
-  return false;
+  return true;
 }
 
 /**
- * Repairs any corrupted or invalid image URL by returning a clean ImageKit URL or fallback.
+ * Sanitizes an ImageKit URL or path and falls back to `fallbackUrl` if corrupted.
  */
 export function sanitizeImageKitUrl(
-  rawValue?: string,
-  fallbackUrl = ''
+  input: string | undefined | null,
+  fallbackUrl: string
 ): string {
-  if (!rawValue || typeof rawValue !== 'string') return fallbackUrl;
-  const trimmed = rawValue.trim();
-  if (!trimmed) return fallbackUrl;
-  if (isCorruptedImageUrl(trimmed)) return fallbackUrl;
+  if (!input || !input.trim()) return fallbackUrl;
+  if (isCorruptedImageUrl(input)) return fallbackUrl;
+  return normalizeImageKitInput(input);
+}
 
-  const hashIdx = trimmed.indexOf('#');
-  const hashSuffix = hashIdx >= 0 ? trimmed.slice(hashIdx) : '';
-  const base = normalizeImageKitInput(
-    hashIdx >= 0 ? trimmed.slice(0, hashIdx) : trimmed
-  );
-  return base ? `${base}${hashSuffix}` : fallbackUrl;
+/**
+ * Normalizes any user input into a clean URL or ImageKit path, preserving `#pos=...` framing hash.
+ */
+export function normalizeImageKitInput(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return '';
+
+  const hashIndex = trimmed.indexOf('#pos=');
+  const basePart = hashIndex >= 0 ? trimmed.slice(0, hashIndex) : trimmed;
+  const hashPart = hashIndex >= 0 ? trimmed.slice(hashIndex) : '';
+
+  if (
+    basePart.startsWith('http://') ||
+    basePart.startsWith('https://') ||
+    basePart.startsWith('data:image/') ||
+    basePart.startsWith('blob:')
+  ) {
+    return `${basePart}${hashPart}`;
+  }
+
+  const endpoint = getImageKitEndpoint();
+  const cleanRel = basePart.replace(/^\/+/, '');
+  if (!cleanRel) return '';
+
+  if (cleanRel.startsWith('assets/')) {
+    return `/${cleanRel}${hashPart}`;
+  }
+
+  return `${endpoint}/${cleanRel}${hashPart}`;
+}
+
+export interface ImageTransformOptions {
+  width?: number;
+  height?: number;
+  quality?: number;
+  focus?: 'auto' | 'face' | 'center';
+}
+
+/**
+ * Resolves any stored image URL or relative ImageKit path into a full CDN URL
+ * with automatic format (`f-auto`) and quality (`q-auto`) transformations.
+ * Supports either a raw ImageKit transformation string (e.g. `'w-900,c-at_max,f-auto,q-85'`)
+ * or an `ImageTransformOptions` object.
+ */
+export function resolveImageUrl(
+  src: string | undefined | null,
+  options?: string | ImageTransformOptions
+): string {
+  if (!src) return '';
+  const trimmed = stripImageFramingHash(src.trim());
+  if (!trimmed) return '';
+
+  if (
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('blob:') ||
+    trimmed.startsWith('/assets/')
+  ) {
+    return trimmed;
+  }
+
+  const endpoint = getImageKitEndpoint();
+  let fullUrl = trimmed;
+
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    const cleanPath = trimmed.replace(/^\/+/, '');
+    fullUrl = `${endpoint}/${cleanPath}`;
+  }
+
+  if (!fullUrl.includes('ik.imagekit.io')) {
+    return fullUrl;
+  }
+
+  let trValue = '';
+  if (typeof options === 'string') {
+    trValue = options.trim();
+  } else {
+    const trParts: string[] = ['f-auto'];
+    if (options?.quality) {
+      trParts.push(`q-${options.quality}`);
+    } else {
+      trParts.push('q-80');
+    }
+    if (options?.width) {
+      trParts.push(`w-${options.width}`);
+    }
+    if (options?.height) {
+      trParts.push(`h-${options.height}`);
+    }
+    if (options?.focus) {
+      trParts.push(`fo-${options.focus}`);
+    }
+    trValue = trParts.join(',');
+  }
+
+  if (!trValue) return fullUrl;
+
+  try {
+    const parsed = new URL(fullUrl);
+    if (!parsed.searchParams.has('tr')) {
+      parsed.searchParams.set('tr', trValue);
+    }
+    return parsed.toString();
+  } catch {
+    return fullUrl;
+  }
+}
+
+/**
+ * Generates a responsive `srcSet` string for ImageKit CDN URLs across standard widths.
+ */
+export function getImageKitSrcSet(
+  src: string | undefined | null,
+  widths: number[] = [400, 800, 1200]
+): string | undefined {
+  if (!src) return undefined;
+  const clean = stripImageFramingHash(src.trim());
+  if (!clean.includes('ik.imagekit.io')) return undefined;
+
+  return widths
+    .map((w) => `${resolveImageUrl(clean, { width: w })} ${w}w`)
+    .join(', ');
+}
+
+export interface ImageFraming {
+  x: number;
+  y: number;
+  zoom: number;
+  fit: 'cover' | 'contain';
+  cardPreset?: CardFramePreset;
+}
+
+export function getDefaultImageFraming(
+  aspect: 'landscape' | 'portrait' | 'square' | 'contain' | 'cover' = 'landscape'
+): ImageFraming {
+  if (aspect === 'square' || aspect === 'contain') {
+    return { x: 50, y: 50, zoom: 1, fit: 'contain' };
+  }
+  return { x: 50, y: 50, zoom: 1, fit: 'cover' };
 }
 
 export function parseImageFraming(
-  rawValue?: string,
-  aspect: 'portrait' | 'landscape' | 'square' = 'portrait'
+  src: string | undefined | null,
+  fallbackAspect:
+    | 'landscape'
+    | 'portrait'
+    | 'square'
+    | 'contain'
+    | 'cover' = 'landscape'
 ): ImageFraming {
-  const defaults = getDefaultImageFraming(aspect);
-  if (!rawValue) return defaults;
+  const defaults = getDefaultImageFraming(fallbackAspect);
+  if (!src) return defaults;
 
-  const hashIdx = rawValue.indexOf('#');
+  const hashIdx = src.indexOf('#pos=');
   if (hashIdx < 0) return defaults;
 
-  const hashStr = rawValue.slice(hashIdx + 1);
-  const params = new URLSearchParams(hashStr);
-
-  const rawFit = params.get('fit');
+  const rawParams = src.slice(hashIdx + 5).trim();
+  const parts = rawParams.split(',');
+  const x = Math.max(0, Math.min(100, Number(parts[0]) || 50));
+  const y = Math.max(0, Math.min(100, Number(parts[1]) || 50));
+  const zoom = Math.max(0.6, Math.min(2.5, Number(parts[2]) || 1));
   const fit: 'cover' | 'contain' =
-    rawFit === 'contain' || rawFit === 'cover' ? rawFit : defaults.fit;
+    parts[3] === 'contain'
+      ? 'contain'
+      : parts[3] === 'cover'
+        ? 'cover'
+        : defaults.fit;
+  const cardPreset = parts[4] as CardFramePreset | undefined;
 
-  const rawX = Number(params.get('x'));
-  const x =
-    Number.isFinite(rawX) && params.has('x')
-      ? Math.max(0, Math.min(100, Math.round(rawX)))
-      : defaults.x;
+  return {
+    x,
+    y,
+    zoom,
+    fit,
+    ...(cardPreset ? { cardPreset } : {}),
+  };
+}
 
-  const rawY = Number(params.get('y'));
-  const y =
-    Number.isFinite(rawY) && params.has('y')
-      ? Math.max(0, Math.min(100, Math.round(rawY)))
-      : defaults.y;
-
-  const rawZoom = Number(params.get('zoom'));
-  const zoom =
-    Number.isFinite(rawZoom) && params.has('zoom')
-      ? Math.max(0.6, Math.min(2.4, Math.round(rawZoom * 100) / 100))
-      : defaults.zoom;
-
-  const rawPreset = params.get('preset');
-  const cardPreset: CardFramePreset | undefined =
-    rawPreset === 'portrait' ||
-    rawPreset === 'announcement' ||
-    rawPreset === 'event' ||
-    rawPreset === 'about' ||
-    rawPreset === 'cover' ||
-    rawPreset === 'logo'
-      ? rawPreset
-      : undefined;
-
-  return { fit, x, y, zoom, cardPreset };
+export function stripImageFramingHash(src: string | undefined | null): string {
+  if (!src) return '';
+  const idx = src.indexOf('#pos=');
+  return idx >= 0 ? src.slice(0, idx) : src;
 }
 
 export function buildFramedImageUrl(
-  rawValue: string,
-  framing: ImageFraming,
-  aspect: 'portrait' | 'landscape' | 'square' = 'portrait'
+  src: string,
+  framing: Partial<ImageFraming>,
+  fallbackAspect:
+    | 'landscape'
+    | 'portrait'
+    | 'square'
+    | 'contain'
+    | 'cover' = 'landscape'
 ): string {
-  const base = normalizeImageKitInput(stripImageFramingHash(rawValue));
+  const base = stripImageFramingHash(src.trim());
   if (!base) return '';
+  const defaults = getDefaultImageFraming(fallbackAspect);
+  const rx = Math.round(Math.max(0, Math.min(100, framing.x ?? defaults.x)));
+  const ry = Math.round(Math.max(0, Math.min(100, framing.y ?? defaults.y)));
+  const rz = Number(
+    Math.max(0.6, Math.min(2.5, framing.zoom ?? defaults.zoom)).toFixed(2)
+  );
+  const fit = framing.fit ?? defaults.fit;
+  const preset = framing.cardPreset;
 
-  const defaults = getDefaultImageFraming(aspect);
-  const isDefault =
-    framing.fit === defaults.fit &&
-    Math.round(framing.x) === defaults.x &&
-    Math.round(framing.y) === defaults.y &&
-    Math.abs(framing.zoom - defaults.zoom) < 0.01 &&
-    !framing.cardPreset;
-
-  if (isDefault) {
+  if (rx === 50 && ry === 50 && rz === 1 && fit === defaults.fit && !preset) {
     return base;
   }
 
-  const params = new URLSearchParams();
-  params.set('fit', framing.fit);
-  params.set('x', String(Math.round(framing.x)));
-  params.set('y', String(Math.round(framing.y)));
-  params.set('zoom', String(Math.round(framing.zoom * 100) / 100));
-  if (framing.cardPreset) {
-    params.set('preset', framing.cardPreset);
-  }
-  return `${base}#${params.toString()}`;
+  const suffix = preset
+    ? `${rx},${ry},${rz},${fit},${preset}`
+    : `${rx},${ry},${rz},${fit}`;
+  return `${base}#pos=${suffix}`;
+}
+
+export function applyImageFramingHash(
+  src: string,
+  x: number,
+  y: number,
+  zoom = 1
+): string {
+  return buildFramedImageUrl(src, { x, y, zoom });
 }
 
 export function getImageFramingStyle(
-  rawValue?: string,
-  aspect: 'portrait' | 'landscape' | 'square' = 'portrait'
+  src: string | undefined | null,
+  fallbackAspect:
+    | 'landscape'
+    | 'portrait'
+    | 'square'
+    | 'contain'
+    | 'cover' = 'landscape'
 ): CSSProperties {
-  const { fit, x, y, zoom } = parseImageFraming(rawValue, aspect);
+  const { x, y, zoom, fit } = parseImageFraming(src, fallbackAspect);
   return {
     objectFit: fit,
     objectPosition: `${x}% ${y}%`,
@@ -289,309 +431,179 @@ export function getImageFramingStyle(
   };
 }
 
-/**
- * Normalizes a pasted ImageKit URL or relative storage path onto
- * https://ik.imagekit.io/slacssc while preserving valid external URLs.
- */
-export function normalizeImageKitInput(rawValue: string): string {
-  const trimmed = rawValue.trim();
-  if (!trimmed) return '';
-  if (isCorruptedImageUrl(trimmed)) return '';
-
-  const hashIdx = trimmed.indexOf('#');
-  const hashSuffix = hashIdx >= 0 ? trimmed.slice(hashIdx) : '';
-  const cleanUrl = hashIdx >= 0 ? trimmed.slice(0, hashIdx).trim() : trimmed;
-
-  if (
-    cleanUrl.startsWith('http://') ||
-    cleanUrl.startsWith('https://') ||
-    cleanUrl.startsWith('data:image/') ||
-    cleanUrl.startsWith('/assets/aistudio/')
-  ) {
-    return `${cleanUrl}${hashSuffix}`;
-  }
-
-  const cleanPath = cleanUrl.replace(/^\/+/, '');
-  return `${IMAGEKIT_URL_ENDPOINT}/${cleanPath}${hashSuffix}`;
+export interface ImageKitUploadResult {
+  url: string;
+  filePath: string;
+  name: string;
+  fileId: string;
 }
 
-/**
- * Resolves stored URLs or relative ImageKit paths into display URLs and applies
- * ImageKit transformation params (?tr=...) for ik.imagekit.io/slacssc images.
- */
-export function resolveImageUrl(rawValue?: string, transform?: string): string {
-  if (!rawValue || isCorruptedImageUrl(rawValue)) return '';
-  const withoutHash = stripImageFramingHash(rawValue);
-  const normalized = normalizeImageKitInput(withoutHash);
-  if (!normalized) return '';
-
-  if (
-    transform &&
-    normalized.startsWith(IMAGEKIT_URL_ENDPOINT) &&
-    !normalized.includes('tr=')
-  ) {
-    const safeTransform = transform
-      .split(',')
-      .filter((part) => !part.startsWith('fo-face'))
-      .join(',');
-    const separator = normalized.includes('?') ? '&' : '?';
-    return `${normalized}${separator}tr=${safeTransform}`;
-  }
-
-  return normalized;
-}
-
-export function isImageKitUrl(rawValue?: string): boolean {
-  if (!rawValue || isCorruptedImageUrl(rawValue)) return false;
-  const trimmed = stripImageFramingHash(rawValue);
-  return (
-    trimmed.startsWith(IMAGEKIT_URL_ENDPOINT) ||
-    (!trimmed.startsWith('http://') &&
-      !trimmed.startsWith('https://') &&
-      !trimmed.startsWith('data:') &&
-      trimmed.length > 0)
-  );
-}
-
-/**
- * Decodes and normalizes an uploaded image file via HTMLCanvasElement so
- * corrupted headers, unusual mobile camera encodings, or oversized dimensions
- * are cleanly normalized into a standard JPEG/PNG Blob + DataURL.
- */
-async function normalizeImageFile(
-  file: File,
-  folder: ImageKitFolder
-): Promise<{ blob: Blob; dataUrl: string; fileName: string }> {
-  const preserveAlpha =
-    folder === 'logo' ||
-    file.type === 'image/png' ||
-    file.type === 'image/webp' ||
-    file.type === 'image/svg+xml';
-  const targetMime = preserveAlpha ? 'image/png' : 'image/jpeg';
-  const ext = preserveAlpha ? 'png' : 'jpg';
-  const baseName =
-    file.name
-      .replace(/\.[^.]+$/, '')
-      .replace(/[^a-zA-Z0-9_-]/g, '-')
-      .slice(0, 48) || `ssc-${folder}`;
-  const cleanFileName = `${baseName}.${ext}`;
-
-  return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const maxDim = folder === 'logo' ? 1024 : 1600;
-        let width = img.naturalWidth || img.width || 800;
-        let height = img.naturalHeight || img.height || 600;
-        if (width > maxDim || height > maxDim) {
-          const ratio = Math.min(maxDim / width, maxDim / height);
-          width = Math.max(1, Math.round(width * ratio));
-          height = Math.max(1, Math.round(height * ratio));
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          URL.revokeObjectURL(objectUrl);
-          reject(new Error('Canvas context unavailable.'));
-          return;
-        }
-        ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL(
-          targetMime,
-          preserveAlpha ? undefined : 0.88
-        );
-        canvas.toBlob(
-          (blob) => {
-            URL.revokeObjectURL(objectUrl);
-            if (blob) {
-              resolve({ blob, dataUrl, fileName: cleanFileName });
-            } else {
-              reject(new Error('Failed to encode image.'));
-            }
-          },
-          targetMime,
-          preserveAlpha ? undefined : 0.88
-        );
-      } catch (err) {
-        URL.revokeObjectURL(objectUrl);
-        reject(err instanceof Error ? err : new Error('Failed to process image.'));
-      }
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(
-        new Error(
-          'Selected image file appears corrupted or unsupported. Please choose a valid PNG, JPG, or WebP image.'
-        )
-      );
-    };
-    img.src = objectUrl;
-  });
-}
-
-/**
- * Generates an HMAC-SHA1 hex signature in the browser using Web Crypto API
- * so direct uploads to https://upload.imagekit.io/api/v1/files/upload work
- * on static Firebase Hosting as well as local dev.
- */
-async function createClientUploadSignature(
-  token: string,
-  expire: number
-): Promise<string | null> {
-  if (typeof window === 'undefined' || !window.crypto?.subtle) return null;
-  try {
-    const enc = new TextEncoder();
-    const key = await window.crypto.subtle.importKey(
-      'raw',
-      enc.encode(IMAGEKIT_PRIVATE_KEY),
-      { name: 'HMAC', hash: 'SHA-1' },
-      false,
-      ['sign']
+async function getAuthBearerHeader(): Promise<Record<string, string>> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error(
+      'Please sign in with an SSC Official or Admin account before uploading.'
     );
-    const sigBuf = await window.crypto.subtle.sign(
-      'HMAC',
-      key,
-      enc.encode(`${token}${expire}`)
-    );
-    return Array.from(new Uint8Array(sigBuf))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
-  } catch {
-    return null;
   }
-}
-
-export async function uploadToImageKit(
-  file: File,
-  folder: ImageKitFolder
-): Promise<{ url: string; fileId: string; filePath: string; name: string }> {
-  if (!file.type.startsWith('image/')) {
-    throw new Error('Please choose a valid image file (PNG, JPG, WebP, or GIF).');
-  }
-  if (file.size > 15 * 1024 * 1024) {
-    throw new Error('Image must be 15 MB or smaller.');
-  }
-
-  const normalized = await normalizeImageFile(file, folder);
-
-  // 1. Primary path: Direct signed upload to ImageKit API (works on Firebase Hosting & everywhere)
-  try {
-    const token =
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `ik-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const expire = Math.floor(Date.now() / 1000) + 2400;
-    const signature = await createClientUploadSignature(token, expire);
-
-    if (signature) {
-      const formData = new FormData();
-      formData.append('file', normalized.blob, normalized.fileName);
-      formData.append('fileName', normalized.fileName);
-      formData.append('publicKey', IMAGEKIT_PUBLIC_KEY);
-      formData.append('signature', signature);
-      formData.append('expire', String(expire));
-      formData.append('token', token);
-      formData.append('folder', `/smart-council/${folder}`);
-      formData.append('useUniqueFileName', 'true');
-
-      const ikRes = await fetch(
-        'https://upload.imagekit.io/api/v1/files/upload',
-        {
-          method: 'POST',
-          body: formData,
-        }
-      );
-
-      const ikData = (await ikRes.json().catch(() => ({}))) as {
-        url?: string;
-        fileId?: string;
-        filePath?: string;
-        name?: string;
-      };
-
-      if (ikRes.ok && ikData.url) {
-        return {
-          url: ikData.url,
-          fileId: ikData.fileId ?? '',
-          filePath: ikData.filePath ?? '',
-          name: ikData.name ?? normalized.fileName,
-        };
-      }
-    }
-  } catch {
-    // Fall through to server endpoint
-  }
-
-  // 2. Secondary path: Express server endpoint (/api/imagekit/upload)
-  try {
-    const res = await fetch('/api/imagekit/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        file: normalized.dataUrl,
-        fileName: normalized.fileName,
-        folder,
-      }),
-    });
-
-    const payload = (await res.json().catch(() => ({}))) as {
-      url?: string;
-      fileId?: string;
-      filePath?: string;
-      name?: string;
-    };
-
-    if (res.ok && payload.url) {
-      return {
-        url: payload.url,
-        fileId: payload.fileId ?? '',
-        filePath: payload.filePath ?? '',
-        name: payload.name ?? normalized.fileName,
-      };
-    }
-  } catch {
-    // Fall through to verified normalized dataUrl for offline preview environments
-  }
-
-  // 3. Offline / sandboxed preview fallback (uses verified normalized canvas dataUrl)
+  const idToken = await currentUser.getIdToken();
   return {
-    url: normalized.dataUrl,
-    fileId: `local-${Date.now()}`,
-    filePath: `/smart-council/${folder}/${normalized.fileName}`,
-    name: normalized.fileName,
+    Authorization: `Bearer ${idToken}`,
   };
 }
 
-export async function listImageKitFiles(folder?: ImageKitFolder): Promise<{
-  configured: boolean;
-  files: ImageKitCloudFile[];
-  error?: string;
-}> {
+/**
+ * Lists files from ImageKit via the authenticated `/api/imagekit/list` endpoint.
+ */
+export async function listImageKitFiles(
+  folder = ''
+): Promise<{ files: ImageKitCloudFile[] }> {
   try {
-    const query = folder ? `?folder=${encodeURIComponent(folder)}` : '';
-    const res = await fetch(`/api/imagekit/list${query}`);
-    if (res.ok) {
-      const payload = (await res.json().catch(() => ({}))) as {
-        configured?: boolean;
-        files?: ImageKitCloudFile[];
-      };
-      if (Array.isArray(payload.files) && payload.files.length > 0) {
-        return {
-          configured: true,
-          files: payload.files,
-        };
-      }
+    const cleanFolder = folder
+      .replace(/^\/+|\/+$/g, '')
+      .replace(/^smart-council\/?/, '');
+    const authHeaders = await getAuthBearerHeader();
+    const query = cleanFolder
+      ? `?folder=${encodeURIComponent(cleanFolder)}`
+      : '';
+    const response = await fetch(`/api/imagekit/list${query}`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        ...authHeaders,
+      },
+    });
+    if (!response.ok) return { files: DEFAULT_IMAGEKIT_ASSETS };
+    const data = (await response.json()) as {
+      files?: Array<Record<string, unknown>>;
+    };
+    if (!Array.isArray(data.files) || data.files.length === 0) {
+      return { files: DEFAULT_IMAGEKIT_ASSETS };
     }
+    const mapped = data.files
+      .filter((item) => typeof item.url === 'string' && item.url)
+      .map((item) => ({
+        fileId: String(item.fileId ?? item.name ?? ''),
+        name: String(item.name ?? 'image'),
+        url: String(item.url),
+        thumbnail: String(item.thumbnail ?? item.url),
+        thumbnailUrl: String(item.thumbnail ?? item.url),
+        filePath: String(item.filePath ?? ''),
+        folder: cleanFolder || 'council',
+        createdAt:
+          typeof item.createdAt === 'string' ? item.createdAt : undefined,
+      }));
+    return {
+      files: mapped.length > 0 ? mapped : DEFAULT_IMAGEKIT_ASSETS,
+    };
   } catch {
-    // Fallback to default ImageKit cloud assets
+    return { files: DEFAULT_IMAGEKIT_ASSETS };
+  }
+}
+
+/**
+ * Validates file MIME type, size (<= 10 MB), and target folder allowlist,
+ * fetches a short-lived signature from `/api/imagekit/auth` (authenticated via Firebase ID token),
+ * and uploads the file directly to ImageKit's upload API (`https://upload.imagekit.io/api/v1/files/upload`).
+ */
+export async function uploadToImageKit(
+  file: File,
+  folder = 'council'
+): Promise<ImageKitUploadResult> {
+  if (!ALLOWED_UPLOAD_MIME_TYPES.has(file.type)) {
+    throw new Error(
+      `Unsupported image format (${file.type || 'unknown'}). Allowed: JPEG, PNG, WebP, GIF.`
+    );
+  }
+
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new Error('Image exceeds the 10 MB maximum file size limit.');
+  }
+
+  const cleanSubfolder = folder
+    .trim()
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/^smart-council\/?/, '');
+
+  const validatedSubfolder = ALLOWED_IMAGEKIT_FOLDERS.has(cleanSubfolder)
+    ? cleanSubfolder
+    : 'council';
+
+  const authHeaders = await getAuthBearerHeader();
+  const authResponse = await fetch(
+    `/api/imagekit/auth?folder=${encodeURIComponent(validatedSubfolder)}`,
+    {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        ...authHeaders,
+      },
+    }
+  );
+
+  const authData = (await authResponse.json()) as {
+    token?: string;
+    expire?: number;
+    signature?: string;
+    publicKey?: string;
+    folder?: string;
+    error?: string;
+  };
+
+  if (
+    !authResponse.ok ||
+    !authData.token ||
+    !authData.expire ||
+    !authData.signature ||
+    !authData.publicKey
+  ) {
+    throw new Error(
+      authData.error ||
+        'Unable to obtain signed upload credentials from server.'
+    );
+  }
+
+  const safeName =
+    file.name.replace(/[^a-zA-Z0-9._-]/g, '_') || `ssc-${Date.now()}.jpg`;
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('fileName', safeName);
+  formData.append('publicKey', authData.publicKey);
+  formData.append('signature', authData.signature);
+  formData.append('expire', String(authData.expire));
+  formData.append('token', authData.token);
+  formData.append(
+    'folder',
+    authData.folder || `/smart-council/${validatedSubfolder}`
+  );
+  formData.append('useUniqueFileName', 'true');
+
+  const uploadRes = await fetch(
+    'https://upload.imagekit.io/api/v1/files/upload',
+    {
+      method: 'POST',
+      body: formData,
+    }
+  );
+
+  const uploadData = (await uploadRes.json()) as {
+    url?: string;
+    filePath?: string;
+    name?: string;
+    fileId?: string;
+    message?: string;
+  };
+
+  if (!uploadRes.ok || !uploadData.url) {
+    throw new Error(
+      uploadData.message || 'Direct upload to ImageKit failed.'
+    );
   }
 
   return {
-    configured: true,
-    files: DEFAULT_IMAGEKIT_ASSETS,
+    url: uploadData.url,
+    filePath: uploadData.filePath || '',
+    name: uploadData.name || safeName,
+    fileId: uploadData.fileId || '',
   };
 }

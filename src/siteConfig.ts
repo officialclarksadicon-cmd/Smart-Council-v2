@@ -49,6 +49,18 @@ export const SSC_POSITIONS = [
   'Technical Officer',
 ] as const;
 
+/**
+ * Computes the current SLAC academic year label dynamically (e.g. "A.Y. 2025–2026" or "A.Y. 2026–2027").
+ * Academic years begin in August (month index >= 7).
+ */
+export function getCurrentAcademicYearLabel(prefix = 'A.Y. '): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const startYear = month >= 7 ? year : year - 1;
+  return `${prefix}${startYear}–${startYear + 1}`;
+}
+
 export type PageRoute =
   | 'home'
   | 'announcements'
@@ -66,7 +78,6 @@ export interface NavItem {
 export interface OfficialAccount {
   id: string;
   email: string;
-  passcode: string;
   name: string;
   position: string;
   role: 'admin' | 'official';
@@ -93,6 +104,7 @@ export interface StudentProfile {
 export interface AnnouncementItem {
   id: string;
   date: string;
+  publishedAt?: number;
   category: string;
   title: string;
   summary: string;
@@ -104,6 +116,7 @@ export interface GalleryEventItem {
   id: string;
   title: string;
   date: string;
+  startsAt?: number;
   time: string;
   location: string;
   category: string;
@@ -143,6 +156,7 @@ export interface FaqItem {
 export interface ForumReply {
   id: string;
   author: string;
+  authorUid?: string;
   yearLevel: string;
   time: string;
   message: string;
@@ -151,6 +165,7 @@ export interface ForumReply {
 export interface ForumThread {
   id: string;
   author: string;
+  authorUid?: string;
   yearLevel: string;
   postedAt: string;
   topic: string;
@@ -214,14 +229,14 @@ export const siteConfig = {
   },
 
   /* --------------------------------------------------------------------------
-   * 3. WEB-ADMIN PROVISIONED DATABASE ROSTER
+   * 3. WEB-ADMIN PROVISIONED DATABASE ROSTER (NO PASSCODES IN SOURCE)
    * -------------------------------------------------------------------------- */
   officialsAuth: {
     accounts: [
       {
         id: 'acc-admin-1',
+        authUid: 'r6KDRrPBerb0KiJ3M5QYpZ0Yjl62',
         email: 'official.clarksadicon@gmail.com',
-        passcode: '123456',
         name: 'Clark Sadicon',
         position: 'Head Of Technical',
         role: 'admin',
@@ -264,8 +279,7 @@ export const siteConfig = {
   hero: {
     eyebrow: 'SLAC Student Council',
     headline: 'Campus updates and student voice in one place.',
-    introduction:
-      'Advisories, schedules, and open student discussions.',
+    introduction: 'Advisories, schedules, and open student discussions.',
     primaryCtaText: 'Announcements',
     secondaryCtaText: 'Forum',
   },
@@ -351,7 +365,7 @@ export const siteConfig = {
       category: 'SSC Officials',
       question: 'How do SSC Official and Admin accounts work?',
       answer:
-        'Official accounts are pre-provisioned directly in the portal database by the Web Admin. Signed-in officials and admins can access SSC Suite to publish announcements, events, officer rosters, and custom filters.',
+        'Official accounts are pre-provisioned by the Web Admin using Firebase Authentication and Custom Role Claims. Signed-in officials and admins can access SSC Suite to publish announcements, events, officer rosters, and custom filters.',
     },
     {
       id: 'faq-5',
@@ -372,10 +386,8 @@ export const siteConfig = {
    * 13. FOOTER SECTION TEMPLATE
    * -------------------------------------------------------------------------- */
   footer: {
-    description:
-      'St. Louis Anne Colleges Supreme Student Council.',
+    description: 'St. Louis Anne Colleges Supreme Student Council.',
     copyright: '© 2026 Smart Council — SLAC SSC',
-    bottomNote:
-      'San Pedro, Laguna',
+    bottomNote: 'San Pedro, Laguna',
   },
 };

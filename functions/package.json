@@ -1,0 +1,22 @@
+{
+  "name": "smart-council-functions",
+  "version": "2.3.0",
+  "private": true,
+  "description": "Cloud Functions (2nd Gen) for Smart Council v2.3 — ImageKit signed uploads, Officer onboarding with Custom Claims, and atomic visit counter",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions"
+  },
+  "engines": {
+    "node": "22"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

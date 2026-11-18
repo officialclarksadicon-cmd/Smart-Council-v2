@@ -12,7 +12,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Check, LogOut, RefreshCw, X } from 'lucide-react';
+import { Check, LogOut, RefreshCw, WifiOff, X } from 'lucide-react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import {
   AnnouncementItem,
@@ -43,12 +43,13 @@ import { CouncilInfoSection } from './components/CouncilInfoSection';
 import { Footer } from './components/Footer';
 import { EdgeStretchShell } from './components/EdgeStretchShell';
 import { PageSkeleton } from './components/PageSkeleton';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import {
   OperationType,
   PRIMARY_ADMIN_UID,
   SITE_VISITS_DOC_ID,
+  addForumReplyInFirestore,
   auth,
-  autoSeedPortalToFirestore,
   collection,
   createAssignedTaskInFirestore,
   db,
@@ -62,11 +63,13 @@ import {
   isFirebaseAuthenticated,
   isLegacySeededOfficerId,
   isPrimaryAdminUser,
+  limit,
   onAuthStateChanged,
   onSnapshot,
   query,
+  resolveUserRoleClaim,
   signOut,
-  syncFullPortalStateToFirestore,
+  toggleForumSupportTransactionInFirestore,
   updateAssignedTaskStatusInFirestore,
   updateStudentIdentityInFirestore,
   upsertAnnouncementToFirestore,
@@ -78,22 +81,36 @@ import {
 } from './firebase';
 import { isCorruptedImageUrl, sanitizeImageKitUrl } from './utils/imagekit';
 
-import { AnnouncementsPage } from './pages/AnnouncementsPage';
-import { EventsPage } from './pages/EventsPage';
-import { OfficersPage } from './pages/OfficersPage';
-import { FaqPage } from './pages/FaqPage';
-import { ForumPage } from './pages/ForumPage';
-import { AdminDashboardPage } from './pages/AdminDashboardPage';
-
+// Route-level code splitting (Phase 2)
+const AnnouncementsPage = lazy(() =>
+  import('./pages/AnnouncementsPage').then((m) => ({
+    default: m.AnnouncementsPage,
+  }))
+);
+const EventsPage = lazy(() =>
+  import('./pages/EventsPage').then((m) => ({ default: m.EventsPage }))
+);
+const OfficersPage = lazy(() =>
+  import('./pages/OfficersPage').then((m) => ({ default: m.OfficersPage }))
+);
+const FaqPage = lazy(() =>
+  import('./pages/FaqPage').then((m) => ({ default: m.FaqPage }))
+);
+const ForumPage = lazy(() =>
+  import('./pages/ForumPage').then((m) => ({ default: m.ForumPage }))
+);
+const AdminDashboardPage = lazy(() =>
+  import('./pages/AdminDashboardPage').then((m) => ({
+    default: m.AdminDashboardPage,
+  }))
+);
 const ContactModal = lazy(() =>
   import('./components/ContactModal').then((m) => ({ default: m.ContactModal }))
 );
 
-const STORAGE_KEY = 'smart_council_portal_v11';
 const STUDENT_STORAGE_KEY = 'smart_council_student_v1';
 const OFFICIAL_STORAGE_KEY = 'smart_council_official_v1';
 const THEME_STORAGE_KEY = 'smart_council_theme_v2';
-const VISITED_STORAGE_KEY = 'smart_council_visited_v1';
 const SEEN_ITEMS_STORAGE_KEY = 'smart_council_seen_by_account_v3';
 
 export type ThemeMode = 'dark' | 'light';
@@ -108,19 +125,17 @@ const VALID_PAGES: PageRoute[] = [
   'admin',
 ];
 
-function getInitialPageFromHash(): PageRoute {
-  try {
-    const hasVisited = window.localStorage.getItem(VISITED_STORAGE_KEY);
-    if (!hasVisited) {
-      window.localStorage.setItem(VISITED_STORAGE_KEY, '1');
-      if (window.location.hash) {
-        window.location.hash = '';
-      }
-      return 'home';
-    }
-  } catch {
-    // Ignore storage errors
-  }
+const PAGE_TITLES: Record<PageRoute, string> = {
+  home: 'Smart Council — SLAC Supreme Student Council',
+  announcements: 'Announcements — Smart Council',
+  events: 'Upcoming Events — Smart Council',
+  officers: 'Council Officers — Smart Council',
+  faq: 'Frequently Asked Questions — Smart Council',
+  forum: 'Student Forum — Smart Council',
+  admin: 'SSC Suite — Smart Council',
+};
+
+function getPageFromLocationHash(): PageRoute {
   const hash = window.location.hash.replace('#', '') as PageRoute;
   return VALID_PAGES.includes(hash) ? hash : 'home';
 }
@@ -162,164 +177,17 @@ function loadSeenByAccount(): SeenByAccountState {
   return {};
 }
 
-interface StoredPortalState {
-  announcements: AnnouncementItem[];
-  events: GalleryEventItem[];
-  forumThreads: ForumThread[];
-  officerTerms: OfficerTermRoster[];
-  officialAccounts: OfficialAccount[];
-  faqs?: FaqItem[];
-  filters: PortalFilters;
-  branding: PortalBranding;
-  aiAutoSync: boolean;
-}
-
 const DEFAULT_BRANDING: PortalBranding = {
   customLogoUrl: siteConfig.brand.customLogoUrl,
   aboutSlacImage: siteConfig.councilSection.image,
 };
 
-function sanitizeStoredAnnouncements(
-  list: AnnouncementItem[]
-): AnnouncementItem[] {
-  return list.map((item) => ({
-    ...item,
-    image: item.image
-      ? sanitizeImageKitUrl(item.image, '') || undefined
-      : undefined,
-  }));
-}
-
-function hydrateOfficerTermsClean(
-  storedTerms: OfficerTermRoster[]
-): OfficerTermRoster[] {
-  return storedTerms
-    .map((roster) => {
-      const customOfficers = (roster.officers ?? [])
-        .filter(
-          (member) =>
-            !isLegacySeededOfficerId(member.id) &&
-            member.name.trim().length > 0
-        )
-        .map((member) => {
-          const normalizedCommittee: OfficerCommittee =
-            (member.committee as string) === 'Documentation'
-              ? 'Documentary'
-              : member.committee || inferCommitteeFromPosition(member.position);
-          const normalizedPosition =
-            member.position === 'Head Of Documentation'
-              ? 'Head Of Documentary'
-              : member.position;
-
-          const cleanImg = member.image
-            ? sanitizeImageKitUrl(member.image, '') || undefined
-            : undefined;
-
-          return {
-            ...member,
-            committee: normalizedCommittee,
-            position: normalizedPosition,
-            image: cleanImg,
-          };
-        });
-
-      return {
-        term: roster.term,
-        officers: customOfficers,
-      };
-    })
-    .filter((roster) => roster.officers.length > 0);
-}
-
-function hydrateEventsClean(
-  storedEvents: GalleryEventItem[],
-  fallbackHero = siteConfig.councilSection.image
-): GalleryEventItem[] {
-  return storedEvents.map((evt) => ({
-    ...evt,
-    image: sanitizeImageKitUrl(evt.image, fallbackHero) || fallbackHero,
-  }));
-}
-
-const LEGACY_SAMPLE_PASSCODES = new Set(['SLAC-ADMIN-2019', 'SLAC-SSC-2019']);
-
-function resolveMigratedAccounts(
-  _storedAccounts?: OfficialAccount[]
-): OfficialAccount[] {
-  // Always start with ONLY the primary admin account (official.clarksadicon@gmail.com).
-  // Any additional officer accounts come strictly from the live Firestore councilAccounts collection.
-  return siteConfig.officialsAuth.accounts.filter((acc) =>
-    isPrimaryAdminUser(acc.email)
-  );
-}
-
-function loadPortalState(): StoredPortalState {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<StoredPortalState>;
-      const resolvedBranding: PortalBranding = {
-        customLogoUrl:
-          sanitizeImageKitUrl(
-            parsed.branding?.customLogoUrl,
-            DEFAULT_BRANDING.customLogoUrl
-          ) || DEFAULT_BRANDING.customLogoUrl,
-        aboutSlacImage:
-          sanitizeImageKitUrl(
-            parsed.branding?.aboutSlacImage,
-            DEFAULT_BRANDING.aboutSlacImage
-          ) || DEFAULT_BRANDING.aboutSlacImage,
-      };
-      return {
-        announcements: Array.isArray(parsed.announcements)
-          ? sanitizeStoredAnnouncements(parsed.announcements)
-          : siteConfig.announcements,
-        events: Array.isArray(parsed.events)
-          ? hydrateEventsClean(parsed.events, resolvedBranding.aboutSlacImage)
-          : siteConfig.upcomingEvents,
-        forumThreads: Array.isArray(parsed.forumThreads)
-          ? parsed.forumThreads
-          : siteConfig.forumThreads,
-        officerTerms:
-          Array.isArray(parsed.officerTerms) && parsed.officerTerms.length > 0
-            ? hydrateOfficerTermsClean(parsed.officerTerms)
-            : siteConfig.officerTerms,
-        officialAccounts: resolveMigratedAccounts(parsed.officialAccounts),
-        faqs:
-          Array.isArray(parsed.faqs) && parsed.faqs.length > 0
-            ? parsed.faqs
-            : siteConfig.faqs,
-        filters: parsed.filters?.announcements
-          ? parsed.filters
-          : siteConfig.defaultFilters,
-        branding: resolvedBranding,
-        aiAutoSync: false,
-      };
-    }
-  } catch {
-    // Fall back to starter config
-  }
-
-  return {
-    announcements: siteConfig.announcements,
-    events: siteConfig.upcomingEvents,
-    forumThreads: siteConfig.forumThreads,
-    officerTerms: siteConfig.officerTerms,
-    officialAccounts: siteConfig.officialsAuth.accounts,
-    faqs: siteConfig.faqs,
-    filters: siteConfig.defaultFilters,
-    branding: DEFAULT_BRANDING,
-    aiAutoSync: false,
-  };
-}
-
 /**
  * SMART COUNCIL — MAIN APPLICATION
  */
 export default function App() {
-  const [initialState] = useState<StoredPortalState>(loadPortalState);
   const [currentPage, setCurrentPage] = useState<PageRoute>(
-    getInitialPageFromHash
+    getPageFromLocationHash
   );
   const [contactOpen, setContactOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -330,14 +198,44 @@ export default function App() {
   } | null>(null);
   const toastTimerRef = useRef<number | null>(null);
 
-  // Facebook-Style Silhouette Loading & Top Refresh Progress Bar State
-  const [isSkeletonLoading, setIsSkeletonLoading] = useState<boolean>(true);
+  // Network Online / Offline Status Banner (Phase 1 & Phase 5)
+  const [isOffline, setIsOffline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? !navigator.onLine : false
+  );
+
+  useEffect(() => {
+    const onOnline = () => setIsOffline(false);
+    const onOffline = () => setIsOffline(true);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+
+  // Real Data Readiness Tracking for Route Skeletons (Phase 3)
+  const [minBootElapsed, setMinBootElapsed] = useState<boolean>(false);
+  const [readyCollections, setReadyCollections] = useState<{
+    announcements: boolean;
+    events: boolean;
+    forum: boolean;
+    officers: boolean;
+    faqs: boolean;
+  }>({
+    announcements: false,
+    events: false,
+    forum: false,
+    officers: false,
+    faqs: false,
+  });
+
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [progressWidth, setProgressWidth] = useState<number>(30);
   const [progressVisible, setProgressVisible] = useState<boolean>(true);
   const [refreshTriggerCount, setRefreshTriggerCount] = useState<number>(0);
 
-  // Per-Account Notification Badge Tracking (Guest, Student, or Admin/Official)
+  // Per-Account Notification Badge Tracking
   const [seenByAccount, setSeenByAccount] =
     useState<SeenByAccountState>(loadSeenByAccount);
 
@@ -363,17 +261,66 @@ export default function App() {
     []
   );
 
-  // Initial page boot silhouette & top progress bar completion
+  // Minimum 150ms threshold so cached IndexedDB snapshots don't cause a sub-frame skeleton flash
   useEffect(() => {
-    const t1 = window.setTimeout(() => setProgressWidth(78), 120);
+    const t1 = window.setTimeout(() => {
+      setProgressWidth(85);
+      setMinBootElapsed(true);
+    }, 150);
+    // Fallback safety cap in case offline / first boot takes > 1.8s
+    const tFallback = window.setTimeout(() => {
+      setReadyCollections({
+        announcements: true,
+        events: true,
+        forum: true,
+        officers: true,
+        faqs: true,
+      });
+    }, 1800);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(tFallback);
+    };
+  }, []);
+
+  const isCurrentRouteDataReady = useMemo(() => {
+    if (!minBootElapsed) return false;
+    if (currentPage === 'home') {
+      return readyCollections.announcements && readyCollections.events;
+    }
+    if (currentPage === 'announcements') return readyCollections.announcements;
+    if (currentPage === 'events') return readyCollections.events;
+    if (currentPage === 'officers') return readyCollections.officers;
+    if (currentPage === 'forum') return readyCollections.forum;
+    if (currentPage === 'faq') return readyCollections.faqs;
+    return true;
+  }, [currentPage, minBootElapsed, readyCollections]);
+
+  useEffect(() => {
+    if (!isCurrentRouteDataReady) return;
+    setProgressWidth(100);
+    const t = window.setTimeout(() => {
+      setProgressVisible(false);
+      setProgressWidth(0);
+    }, 220);
+    return () => window.clearTimeout(t);
+  }, [isCurrentRouteDataReady]);
+
+  const triggerTopProgress = useCallback((durationMs = 320) => {
+    setProgressVisible(true);
+    setProgressWidth(35);
+    const t1 = window.setTimeout(
+      () => setProgressWidth(82),
+      Math.round(durationMs * 0.4)
+    );
     const t2 = window.setTimeout(() => {
       setProgressWidth(100);
-      setIsSkeletonLoading(false);
-    }, 420);
+      setIsRefreshing(false);
+    }, durationMs);
     const t3 = window.setTimeout(() => {
       setProgressVisible(false);
       setProgressWidth(0);
-    }, 680);
+    }, durationMs + 180);
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
@@ -381,40 +328,11 @@ export default function App() {
     };
   }, []);
 
-  const triggerTopProgressAndSkeleton = useCallback(
-    (durationMs = 380, withSkeleton = false) => {
-      setProgressVisible(true);
-      setProgressWidth(32);
-      if (withSkeleton) {
-        setIsSkeletonLoading(true);
-      }
-      const t1 = window.setTimeout(
-        () => setProgressWidth(80),
-        Math.round(durationMs * 0.35)
-      );
-      const t2 = window.setTimeout(() => {
-        setProgressWidth(100);
-        setIsSkeletonLoading(false);
-        setIsRefreshing(false);
-      }, durationMs);
-      const t3 = window.setTimeout(() => {
-        setProgressVisible(false);
-        setProgressWidth(0);
-      }, durationMs + 180);
-      return () => {
-        window.clearTimeout(t1);
-        window.clearTimeout(t2);
-        window.clearTimeout(t3);
-      };
-    },
-    []
-  );
-
   const handleRefreshWebsite = useCallback(() => {
     setIsRefreshing(true);
     setRefreshTriggerCount((c) => c + 1);
-    triggerTopProgressAndSkeleton(460, true);
-  }, [triggerTopProgressAndSkeleton]);
+    triggerTopProgress(420);
+  }, [triggerTopProgress]);
 
   const [official, setOfficial] = useState<OfficialProfile | null>(() => {
     try {
@@ -443,25 +361,30 @@ export default function App() {
   });
 
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>(
-    initialState.announcements
+    siteConfig.announcements
   );
-  const [events, setEvents] = useState<GalleryEventItem[]>(initialState.events);
+  const [events, setEvents] = useState<GalleryEventItem[]>(
+    siteConfig.upcomingEvents
+  );
   const [forumThreads, setForumThreads] = useState<ForumThread[]>(
-    initialState.forumThreads
+    siteConfig.forumThreads
   );
   const [officerTerms, setOfficerTerms] = useState<OfficerTermRoster[]>(
-    initialState.officerTerms
+    siteConfig.officerTerms
   );
   const [officialAccounts, setOfficialAccounts] = useState<OfficialAccount[]>(
-    initialState.officialAccounts
+    siteConfig.officialsAuth.accounts
   );
-  const [faqs, setFaqs] = useState<FaqItem[]>(
-    initialState.faqs ?? siteConfig.faqs
+  const [faqs, setFaqs] = useState<FaqItem[]>(siteConfig.faqs);
+  const [filters, setFilters] = useState<PortalFilters>(
+    siteConfig.defaultFilters
   );
-  const [filters, setFilters] = useState<PortalFilters>(initialState.filters);
-  const [branding, setBranding] = useState<PortalBranding>(
-    initialState.branding
-  );
+  const [branding, setBranding] = useState<PortalBranding>(DEFAULT_BRANDING);
+
+  const brandingRef = useRef(branding);
+  useEffect(() => {
+    brandingRef.current = branding;
+  }, [branding]);
 
   // Active account key (guest, student, or official/admin)
   const activeAccountKey = useMemo(() => {
@@ -487,11 +410,12 @@ export default function App() {
     [seenByAccount, activeAccountKey]
   );
 
+  // Per-route document title updates (Phase 5)
   useEffect(() => {
-    document.title = 'Smart Council';
-  }, []);
+    document.title = PAGE_TITLES[currentPage] || 'Smart Council';
+  }, [currentPage]);
 
-  // Persist seen items per account (guest, student, admin/official)
+  // Persist seen items per account in localStorage
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -524,7 +448,7 @@ export default function App() {
     [activeAccountKey]
   );
 
-  // Automatically clear section notification badge when guest, student, or admin views the section
+  // Automatically clear section notification badge when user views the section
   useEffect(() => {
     if (
       currentPage !== 'announcements' &&
@@ -581,79 +505,17 @@ export default function App() {
     [announcements, events, forumThreads, seenItems]
   );
 
-  // Keep latest state ref for background auto-seeding
-  const latestStateRef = useRef({
-    accounts: officialAccounts,
-    officerTerms,
-    announcements,
-    events,
-    forumThreads,
-    faqs,
-    filters,
-    branding,
-    aiAutoSync: false,
-  });
+  // Support browser Back / Forward buttons via popstate and hashchange (Phase 5)
   useEffect(() => {
-    latestStateRef.current = {
-      accounts: officialAccounts,
-      officerTerms,
-      announcements,
-      events,
-      forumThreads,
-      faqs,
-      filters,
-      branding,
-      aiAutoSync: false,
+    const syncRouteFromUrl = () => {
+      setCurrentPage(getPageFromLocationHash());
     };
-  }, [
-    officialAccounts,
-    officerTerms,
-    announcements,
-    events,
-    forumThreads,
-    faqs,
-    filters,
-    branding,
-  ]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      try {
-        const payload: StoredPortalState = {
-          announcements,
-          events,
-          forumThreads,
-          officerTerms,
-          officialAccounts,
-          faqs,
-          filters,
-          branding,
-          aiAutoSync: false,
-        };
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-      } catch {
-        // Ignore storage quota errors
-      }
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [
-    announcements,
-    events,
-    forumThreads,
-    officerTerms,
-    officialAccounts,
-    faqs,
-    filters,
-    branding,
-  ]);
-
-  useEffect(() => {
-    const onHashChange = () => {
-      const hash = window.location.hash.replace('#', '') as PageRoute;
-      setCurrentPage(VALID_PAGES.includes(hash) ? hash : 'home');
+    window.addEventListener('hashchange', syncRouteFromUrl);
+    window.addEventListener('popstate', syncRouteFromUrl);
+    return () => {
+      window.removeEventListener('hashchange', syncRouteFromUrl);
+      window.removeEventListener('popstate', syncRouteFromUrl);
     };
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
   useEffect(() => {
@@ -696,25 +558,31 @@ export default function App() {
     }
   }, [theme]);
 
-  // 1. Live Firestore Listener: /announcements (Auto-repairs corrupted image strings)
+  // 1. Live Firestore Listener: /announcements (Bounded with limit(50))
   useEffect(() => {
     const annQuery = query(
       collection(db, 'announcements'),
-      where('visibility', '==', 'public')
+      where('visibility', '==', 'public'),
+      limit(50)
     );
     const unsubscribe = onSnapshot(
       annQuery,
       (snapshot) => {
+        setReadyCollections((prev) =>
+          prev.announcements ? prev : { ...prev, announcements: true }
+        );
         if (snapshot.empty) {
           setAnnouncements([]);
           return;
         }
         const docsWithTime = snapshot.docs.map((docSnap) => {
           const d = docSnap.data();
-          const createdMillis =
-            typeof d.createdAt?.toMillis === 'function'
-              ? d.createdAt.toMillis()
-              : Date.now();
+          const publishedMillis =
+            typeof d.publishedAt?.toMillis === 'function'
+              ? d.publishedAt.toMillis()
+              : typeof d.createdAt?.toMillis === 'function'
+                ? d.createdAt.toMillis()
+                : Date.now();
           const rawImg = typeof d.image === 'string' ? d.image.trim() : '';
           const wasCorrupted = Boolean(rawImg && isCorruptedImageUrl(rawImg));
           const cleanImg = rawImg
@@ -725,6 +593,7 @@ export default function App() {
             id: String(d.id ?? docSnap.id),
             title: String(d.title ?? ''),
             date: String(d.date ?? 'Today'),
+            publishedAt: publishedMillis,
             category: String(d.category ?? 'Campus Life'),
             summary: String(d.summary ?? ''),
             issuedBy: String(d.issuedBy ?? 'SLAC SSC'),
@@ -735,12 +604,13 @@ export default function App() {
             void upsertAnnouncementToFirestore(item).catch(() => undefined);
           }
 
-          return { item, createdMillis };
+          return { item, publishedMillis };
         });
-        docsWithTime.sort((a, b) => b.createdMillis - a.createdMillis);
+        docsWithTime.sort((a, b) => b.publishedMillis - a.publishedMillis);
         setAnnouncements(docsWithTime.map((entry) => entry.item));
       },
       (error) => {
+        setReadyCollections((prev) => ({ ...prev, announcements: true }));
         try {
           handleFirestoreError(error, OperationType.LIST, 'announcements');
         } catch {
@@ -751,28 +621,33 @@ export default function App() {
     return () => unsubscribe();
   }, [refreshTriggerCount]);
 
-  // 2. Live Firestore Listener: /events (Auto-repairs corrupted image strings)
+  // 2. Live Firestore Listener: /events (Bounded with limit(50))
   useEffect(() => {
     const evtQuery = query(
       collection(db, 'events'),
-      where('visibility', '==', 'public')
+      where('visibility', '==', 'public'),
+      limit(50)
     );
     const unsubscribe = onSnapshot(
       evtQuery,
       (snapshot) => {
+        setReadyCollections((prev) =>
+          prev.events ? prev : { ...prev, events: true }
+        );
         if (snapshot.empty) {
           setEvents([]);
           return;
         }
         const fallbackImg =
-          latestStateRef.current.branding.aboutSlacImage ||
-          siteConfig.councilSection.image;
+          brandingRef.current.aboutSlacImage || siteConfig.councilSection.image;
         const docsWithTime = snapshot.docs.map((docSnap) => {
           const d = docSnap.data();
-          const createdMillis =
-            typeof d.createdAt?.toMillis === 'function'
-              ? d.createdAt.toMillis()
-              : Date.now();
+          const startsMillis =
+            typeof d.startsAt?.toMillis === 'function'
+              ? d.startsAt.toMillis()
+              : typeof d.createdAt?.toMillis === 'function'
+                ? d.createdAt.toMillis()
+                : Date.now();
           const rawImg = typeof d.image === 'string' ? d.image.trim() : '';
           const wasCorrupted = Boolean(rawImg && isCorruptedImageUrl(rawImg));
           const cleanImg =
@@ -782,6 +657,7 @@ export default function App() {
             id: String(d.id ?? docSnap.id),
             title: String(d.title ?? ''),
             date: String(d.date ?? 'TBA'),
+            startsAt: startsMillis,
             time: String(d.time ?? 'TBA'),
             location: String(d.location ?? 'SLAC Campus'),
             category: String(d.category ?? 'Governance'),
@@ -794,12 +670,13 @@ export default function App() {
             void upsertEventToFirestore(item).catch(() => undefined);
           }
 
-          return { item, createdMillis };
+          return { item, startsMillis };
         });
-        docsWithTime.sort((a, b) => b.createdMillis - a.createdMillis);
+        docsWithTime.sort((a, b) => b.startsMillis - a.startsMillis);
         setEvents(docsWithTime.map((e) => e.item));
       },
       (error) => {
+        setReadyCollections((prev) => ({ ...prev, events: true }));
         try {
           handleFirestoreError(error, OperationType.LIST, 'events');
         } catch {
@@ -810,15 +687,19 @@ export default function App() {
     return () => unsubscribe();
   }, [refreshTriggerCount]);
 
-  // 3. Live Firestore Listener: /forumThreads
+  // 3. Live Firestore Listener: /forumThreads (Bounded with limit(50))
   useEffect(() => {
     const forumQuery = query(
       collection(db, 'forumThreads'),
-      where('visibility', '==', 'public')
+      where('visibility', '==', 'public'),
+      limit(50)
     );
     const unsubscribe = onSnapshot(
       forumQuery,
       (snapshot) => {
+        setReadyCollections((prev) =>
+          prev.forum ? prev : { ...prev, forum: true }
+        );
         if (snapshot.empty) {
           setForumThreads([]);
           return;
@@ -834,6 +715,8 @@ export default function App() {
             (r: Record<string, unknown>, idx: number) => ({
               id: String(r?.id ?? `rep-${idx}`),
               author: String(r?.author ?? 'SLAC Student'),
+              authorUid:
+                typeof r?.authorUid === 'string' ? r.authorUid : undefined,
               yearLevel: String(r?.yearLevel ?? 'SLAC Student'),
               time: String(r?.time ?? 'Just now'),
               message: String(r?.message ?? ''),
@@ -842,6 +725,7 @@ export default function App() {
           const item: ForumThread = {
             id: String(d.id ?? docSnap.id),
             author: String(d.author ?? 'SLAC Student'),
+            authorUid: typeof d.authorUid === 'string' ? d.authorUid : undefined,
             yearLevel: String(d.yearLevel ?? 'SLAC Student'),
             postedAt: String(d.postedAt ?? 'Just now'),
             topic: String(d.topic ?? 'Suggestions'),
@@ -856,6 +740,7 @@ export default function App() {
         setForumThreads(docsWithTime.map((entry) => entry.item));
       },
       (error) => {
+        setReadyCollections((prev) => ({ ...prev, forum: true }));
         try {
           handleFirestoreError(error, OperationType.LIST, 'forumThreads');
         } catch {
@@ -870,7 +755,8 @@ export default function App() {
   useEffect(() => {
     const settingsQuery = query(
       collection(db, 'portalSettings'),
-      where('visibility', '==', 'public')
+      where('visibility', '==', 'public'),
+      limit(5)
     );
     const unsubscribe = onSnapshot(
       settingsQuery,
@@ -919,15 +805,26 @@ export default function App() {
     return () => unsubscribe();
   }, [refreshTriggerCount]);
 
-  // 5. Live Firestore Listener: /councilOfficers (Auto-repairs corrupted image strings)
+  // 5. Live Firestore Listener: /councilOfficers (Scoped to Home, Officers, and Admin pages)
   useEffect(() => {
+    if (
+      currentPage !== 'home' &&
+      currentPage !== 'officers' &&
+      currentPage !== 'admin'
+    ) {
+      return;
+    }
     const officersQuery = query(
       collection(db, 'councilOfficers'),
-      where('visibility', '==', 'public')
+      where('visibility', '==', 'public'),
+      limit(150)
     );
     const unsubscribe = onSnapshot(
       officersQuery,
       (snapshot) => {
+        setReadyCollections((prev) =>
+          prev.officers ? prev : { ...prev, officers: true }
+        );
         const customDocs = snapshot.docs
           .filter((docSnap) => {
             const d = docSnap.data();
@@ -999,6 +896,7 @@ export default function App() {
         });
       },
       (error) => {
+        setReadyCollections((prev) => ({ ...prev, officers: true }));
         try {
           handleFirestoreError(error, OperationType.LIST, 'councilOfficers');
         } catch {
@@ -1007,17 +905,24 @@ export default function App() {
       }
     );
     return () => unsubscribe();
-  }, [refreshTriggerCount]);
+  }, [currentPage, refreshTriggerCount]);
 
-  // 6. Live Firestore Listener: /faqs
+  // 6. Live Firestore Listener: /faqs (Scoped to FAQ and Admin pages)
   useEffect(() => {
+    if (currentPage !== 'faq' && currentPage !== 'admin') {
+      return;
+    }
     const faqsQuery = query(
       collection(db, 'faqs'),
-      where('visibility', '==', 'public')
+      where('visibility', '==', 'public'),
+      limit(50)
     );
     const unsubscribe = onSnapshot(
       faqsQuery,
       (snapshot) => {
+        setReadyCollections((prev) =>
+          prev.faqs ? prev : { ...prev, faqs: true }
+        );
         if (snapshot.empty) return;
         const docsWithOrder = snapshot.docs.map((docSnap, idx) => {
           const d = docSnap.data();
@@ -1040,6 +945,7 @@ export default function App() {
         setFaqs(docsWithOrder.map((entry) => entry.item));
       },
       (error) => {
+        setReadyCollections((prev) => ({ ...prev, faqs: true }));
         try {
           handleFirestoreError(error, OperationType.LIST, 'faqs');
         } catch {
@@ -1048,13 +954,17 @@ export default function App() {
       }
     );
     return () => unsubscribe();
-  }, [refreshTriggerCount]);
+  }, [currentPage, refreshTriggerCount]);
 
-  // 7. Live 2-Way Firestore Listener: /councilAccounts (Replaces state directly from DB; retains primary admin)
+  // 7. Live Firestore Listener: /councilAccounts (Strictly for authenticated Officials & Admins; no passcodes)
   useEffect(() => {
+    if (!official || !auth.currentUser) {
+      return;
+    }
     const accountsQuery = query(
       collection(db, 'councilAccounts'),
-      where('role', 'in', ['admin', 'official'])
+      where('role', 'in', ['admin', 'official']),
+      limit(50)
     );
     const unsubscribe = onSnapshot(
       accountsQuery,
@@ -1063,7 +973,6 @@ export default function App() {
           id: 'acc-admin-1',
           authUid: PRIMARY_ADMIN_UID,
           email: 'official.clarksadicon@gmail.com',
-          passcode: '123456',
           name: 'Clark Sadicon',
           position: 'Head Of Technical',
           role: 'admin',
@@ -1088,7 +997,6 @@ export default function App() {
             id: docId,
             authUid: resolvedUid,
             email,
-            passcode: String(d.passcode ?? '123456'),
             name: String(d.name ?? 'SSC Official'),
             position: String(d.position ?? 'Head Of Technical'),
             role: d.role === 'admin' ? 'admin' : 'official',
@@ -1098,19 +1006,17 @@ export default function App() {
         setOfficialAccounts(Array.from(map.values()));
       },
       () => {
-        // Ignore if unauthenticated guest
+        // Ignore if user does not hold official/admin claim
       }
     );
     return () => unsubscribe();
   }, [refreshTriggerCount, official, authReadyUid]);
 
-  // 8. Listen to Firebase Auth state & sync unified councilAccounts
+  // 8. Listen to Firebase Auth state & verify Custom Role Claim / councilAccounts record
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (user) => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
       setAuthReadyUid(user ? user.uid : null);
       if (!user) return;
-
-      void autoSeedPortalToFirestore(latestStateRef.current);
 
       if (isPrimaryAdminUser(user.email)) {
         setOfficial((prev) =>
@@ -1125,28 +1031,31 @@ export default function App() {
                 role: 'admin',
               }
         );
-      } else {
-        void getDoc(doc(db, 'councilAccounts', user.uid))
-          .then((snap) => {
-            if (snap.exists()) {
-              const d = snap.data();
-              const resolvedRole: 'admin' | 'official' =
-                d.role === 'admin' ? 'admin' : 'official';
-              setOfficial((prev) =>
-                prev
-                  ? { ...prev, authUid: user.uid }
-                  : {
-                      id: String(d.id ?? user.uid),
-                      authUid: user.uid,
-                      email: user.email ?? '',
-                      name: String(d.name ?? user.displayName ?? 'SSC Official'),
-                      position: String(d.position ?? 'SSC Officer'),
-                      role: resolvedRole,
-                    }
-              );
-            }
-          })
-          .catch(() => undefined);
+        return;
+      }
+
+      const claimRole = await resolveUserRoleClaim(user);
+      try {
+        const snap = await getDoc(doc(db, 'councilAccounts', user.uid));
+        if (snap.exists()) {
+          const d = snap.data();
+          const resolvedRole: 'admin' | 'official' =
+            d.role === 'admin' || claimRole === 'admin' ? 'admin' : 'official';
+          setOfficial((prev) =>
+            prev
+              ? { ...prev, authUid: user.uid, role: resolvedRole }
+              : {
+                  id: String(d.id ?? user.uid),
+                  authUid: user.uid,
+                  email: user.email ?? '',
+                  name: String(d.name ?? user.displayName ?? 'SSC Official'),
+                  position: String(d.position ?? 'SSC Officer'),
+                  role: resolvedRole,
+                }
+          );
+        }
+      } catch {
+        // Ignore if student user
       }
     });
 
@@ -1155,7 +1064,7 @@ export default function App() {
     };
   }, []);
 
-  // 9. Live Firestore Listener: /tasks (Assigned Tasks linked to Council Accounts)
+  // 9. Live Firestore Listener: /tasks (Scoped to authenticated Officials & Admins)
   useEffect(() => {
     const activeUid =
       authReadyUid ||
@@ -1173,10 +1082,11 @@ export default function App() {
       official.role === 'admin' || isPrimaryAdminUser(official.email);
 
     const tasksQuery = isAdminOfficer
-      ? query(collection(db, 'tasks'))
+      ? query(collection(db, 'tasks'), limit(100))
       : query(
           collection(db, 'tasks'),
-          where('assignedToUid', '==', auth.currentUser.uid)
+          where('assignedToUid', '==', auth.currentUser.uid),
+          limit(100)
         );
 
     const unsubscribe = onSnapshot(
@@ -1236,8 +1146,9 @@ export default function App() {
     return () => unsubscribe();
   }, [refreshTriggerCount, official, authReadyUid]);
 
-  // 10. Live Real-Time Firestore Listener: /siteStats/visits
+  // 10. Live Real-Time Firestore Listener: /siteStats/visits (Scoped to Admin Dashboard)
   useEffect(() => {
+    if (currentPage !== 'admin' && !official) return;
     const visitsRef = doc(db, 'siteStats', SITE_VISITS_DOC_ID);
     const unsubscribe = onSnapshot(
       visitsRef,
@@ -1258,7 +1169,7 @@ export default function App() {
       }
     );
     return () => unsubscribe();
-  }, [refreshTriggerCount]);
+  }, [currentPage, official, refreshTriggerCount]);
 
   // Record atomic +1 visit once per browser session via sessionStorage
   useEffect(() => {
@@ -1278,6 +1189,7 @@ export default function App() {
     setAuthModalOpen(true);
   }, []);
 
+  // Push history state on route navigation so browser Back/Forward works naturally (Phase 5)
   const navigateTo = useCallback(
     (page: PageRoute) => {
       if (page === 'admin' && !official) {
@@ -1295,22 +1207,33 @@ export default function App() {
         page === 'home'
           ? window.location.pathname + window.location.search
           : `${window.location.pathname}${window.location.search}#${page}`;
-      window.history.replaceState(null, '', nextUrl);
+      window.history.pushState({ page }, '', nextUrl);
       window.scrollTo({ top: 0, behavior: 'auto' });
     },
     [currentPage, official, openAuthModal]
   );
 
+  // Optimistic updates with state rollback and toast notification on failure (Phase 1)
   const handleAddCouncilTask = useCallback(
     (created: CouncilTask) => {
+      const prevTasks = councilTasks;
       setCouncilTasks((prev) => [created, ...prev]);
-      void createAssignedTaskInFirestore(created).catch(() => undefined);
-      showAuthNotification(
-        `Task assigned to ${created.assignedToName}.`,
-        'login'
-      );
+      void createAssignedTaskInFirestore(created)
+        .then(() => {
+          showAuthNotification(
+            `Task assigned to ${created.assignedToName}.`,
+            'login'
+          );
+        })
+        .catch(() => {
+          setCouncilTasks(prevTasks);
+          showAuthNotification(
+            'Failed to assign task. Changes rolled back.',
+            'logout'
+          );
+        });
     },
-    [showAuthNotification]
+    [councilTasks, showAuthNotification]
   );
 
   const handleToggleCouncilTask = useCallback(
@@ -1329,6 +1252,7 @@ export default function App() {
         );
         return;
       }
+      const prevTasks = councilTasks;
       const nextStatus: 'pending' | 'completed' =
         target.status === 'completed' ? 'pending' : 'completed';
       const nowLabel =
@@ -1347,17 +1271,31 @@ export default function App() {
             : t
         )
       );
-      void updateAssignedTaskStatusInFirestore(taskId, nextStatus).catch(
-        () => undefined
-      );
+      void updateAssignedTaskStatusInFirestore(taskId, nextStatus).catch(() => {
+        setCouncilTasks(prevTasks);
+        showAuthNotification(
+          'Failed to update task status. Changes rolled back.',
+          'logout'
+        );
+      });
     },
     [councilTasks, official, showAuthNotification]
   );
 
-  const handleDeleteCouncilTask = useCallback((taskId: string) => {
-    setCouncilTasks((prev) => prev.filter((t) => t.id !== taskId));
-    void deleteAssignedTaskFromFirestore(taskId).catch(() => undefined);
-  }, []);
+  const handleDeleteCouncilTask = useCallback(
+    (taskId: string) => {
+      const prevTasks = councilTasks;
+      setCouncilTasks((prev) => prev.filter((t) => t.id !== taskId));
+      void deleteAssignedTaskFromFirestore(taskId).catch(() => {
+        setCouncilTasks(prevTasks);
+        showAuthNotification(
+          'Failed to delete task. Changes rolled back.',
+          'logout'
+        );
+      });
+    },
+    [councilTasks, showAuthNotification]
+  );
 
   const handleUpdateBranding = useCallback(
     (patch: Partial<PortalBranding>) => {
@@ -1366,31 +1304,54 @@ export default function App() {
           ...prev,
           ...patch,
         };
-        void upsertPortalSettingsToFirestore(filters, false, next).catch(
-          () => undefined
-        );
+        void upsertPortalSettingsToFirestore(filters, false, next).catch(() => {
+          setBranding(prev);
+          showAuthNotification(
+            'Failed to update portal branding. Changes rolled back.',
+            'logout'
+          );
+        });
         return next;
       });
     },
-    [filters]
+    [filters, showAuthNotification]
   );
 
   const handleAddAnnouncement = (created: AnnouncementItem) => {
-    const updated = [created, ...announcements];
-    setAnnouncements(updated);
-    void upsertAnnouncementToFirestore(created).catch(() => undefined);
-    showAuthNotification('Announcement published.', 'login');
+    const prevAnnouncements = announcements;
+    setAnnouncements([created, ...announcements]);
+    void upsertAnnouncementToFirestore(created)
+      .then(() => {
+        showAuthNotification('Announcement published.', 'login');
+      })
+      .catch(() => {
+        setAnnouncements(prevAnnouncements);
+        showAuthNotification(
+          'Failed to publish announcement. Changes rolled back.',
+          'logout'
+        );
+      });
   };
 
   const handleAddEvent = (created: GalleryEventItem) => {
-    const updated = [created, ...events];
-    setEvents(updated);
-    void upsertEventToFirestore(created).catch(() => undefined);
-    showAuthNotification('Event published.', 'login');
+    const prevEvents = events;
+    setEvents([created, ...events]);
+    void upsertEventToFirestore(created)
+      .then(() => {
+        showAuthNotification('Event published.', 'login');
+      })
+      .catch(() => {
+        setEvents(prevEvents);
+        showAuthNotification(
+          'Failed to publish event. Changes rolled back.',
+          'logout'
+        );
+      });
   };
 
   const handleUpdateStudentIdentity = useCallback(
     (nextName: string, nextYearCourse: string) => {
+      const prevStudent = student;
       setStudent((prev) =>
         prev
           ? {
@@ -1400,19 +1361,30 @@ export default function App() {
             }
           : prev
       );
-      void updateStudentIdentityInFirestore(nextName, nextYearCourse).catch(
-        () => undefined
-      );
-      showAuthNotification('Student identity updated.', 'login');
+      void updateStudentIdentityInFirestore(nextName, nextYearCourse)
+        .then(() => {
+          showAuthNotification('Student identity updated.', 'login');
+        })
+        .catch(() => {
+          setStudent(prevStudent);
+          showAuthNotification(
+            'Failed to update student identity. Changes rolled back.',
+            'logout'
+          );
+        });
     },
-    [showAuthNotification]
+    [student, showAuthNotification]
   );
 
   const handleAddForumThread = (created: ForumThread) => {
-    const updated = [created, ...forumThreads];
-    setForumThreads(updated);
+    const prevThreads = forumThreads;
+    const threadWithUid: ForumThread = {
+      ...created,
+      authorUid: auth.currentUser?.uid || created.authorUid,
+    };
+    setForumThreads([threadWithUid, ...forumThreads]);
 
-    const cleanTopic = created.topic.trim();
+    const cleanTopic = threadWithUid.topic.trim();
     if (
       cleanTopic &&
       !filters.forum.some(
@@ -1433,34 +1405,60 @@ export default function App() {
       }
     }
 
-    void upsertForumThreadToFirestore(created, Boolean(official)).catch(
-      () => undefined
+    void upsertForumThreadToFirestore(threadWithUid, Boolean(official)).catch(
+      () => {
+        setForumThreads(prevThreads);
+        showAuthNotification(
+          'Please sign in to post a forum discussion.',
+          'logout'
+        );
+      }
     );
   };
 
   const handleAddForumReply = (threadId: string, reply: ForumReply) => {
+    const prevThreads = forumThreads;
+    const replyWithUid: ForumReply = {
+      ...reply,
+      authorUid: auth.currentUser?.uid || reply.authorUid,
+    };
     let targetThread: ForumThread | null = null;
     setForumThreads((prev) =>
       prev.map((t) => {
         if (t.id !== threadId) return t;
-        targetThread = { ...t, replies: [...t.replies, reply] };
+        targetThread = { ...t, replies: [...t.replies, replyWithUid] };
         return targetThread;
       })
     );
     if (targetThread) {
-      void upsertForumThreadToFirestore(targetThread, false).catch(
-        () => undefined
-      );
+      void addForumReplyInFirestore(targetThread, replyWithUid).catch(() => {
+        setForumThreads(prevThreads);
+        showAuthNotification(
+          'Please sign in to reply to this discussion.',
+          'logout'
+        );
+      });
     }
   };
 
   const handleDeleteForumThread = (threadId: string) => {
+    const prevThreads = forumThreads;
     setForumThreads((prev) => prev.filter((t) => t.id !== threadId));
-    void deleteForumThreadFromFirestore(threadId).catch(() => undefined);
-    showAuthNotification('Thread removed.', 'logout');
+    void deleteForumThreadFromFirestore(threadId)
+      .then(() => {
+        showAuthNotification('Thread removed.', 'logout');
+      })
+      .catch(() => {
+        setForumThreads(prevThreads);
+        showAuthNotification(
+          'Only the thread author or a moderator can delete this thread.',
+          'logout'
+        );
+      });
   };
 
   const handleDeleteForumReply = (threadId: string, replyId: string) => {
+    const prevThreads = forumThreads;
     let targetThread: ForumThread | null = null;
     setForumThreads((prev) =>
       prev.map((t) => {
@@ -1473,371 +1471,407 @@ export default function App() {
       })
     );
     if (targetThread) {
-      void upsertForumThreadToFirestore(targetThread, false).catch(
-        () => undefined
-      );
+      void upsertForumThreadToFirestore(targetThread, false)
+        .then(() => {
+          showAuthNotification('Reply removed.', 'logout');
+        })
+        .catch(() => {
+          setForumThreads(prevThreads);
+          showAuthNotification(
+            'Failed to remove reply. Changes rolled back.',
+            'logout'
+          );
+        });
     }
-    showAuthNotification('Reply removed.', 'logout');
   };
 
   const handleToggleForumSupport = (threadId: string, delta: number) => {
-    let targetThread: ForumThread | null = null;
+    const prevThreads = forumThreads;
     setForumThreads((prev) =>
-      prev.map((t) => {
-        if (t.id !== threadId) return t;
-        targetThread = {
-          ...t,
-          supportCount: Math.max(0, t.supportCount + delta),
-        };
-        return targetThread;
-      })
+      prev.map((t) =>
+        t.id === threadId
+          ? { ...t, supportCount: Math.max(0, t.supportCount + delta) }
+          : t
+      )
     );
-    if (targetThread) {
-      void upsertForumThreadToFirestore(targetThread, false).catch(
-        () => undefined
-      );
-    }
-  };
-
-  const handleResetDefaults = () => {
-    setAnnouncements(siteConfig.announcements);
-    setEvents(siteConfig.upcomingEvents);
-    setForumThreads(siteConfig.forumThreads);
-    setOfficerTerms(siteConfig.officerTerms);
-    setOfficialAccounts(siteConfig.officialsAuth.accounts);
-    setFaqs(siteConfig.faqs);
-    setFilters(siteConfig.defaultFilters);
-    setBranding(DEFAULT_BRANDING);
-    void syncFullPortalStateToFirestore({
-      announcements: siteConfig.announcements,
-      events: siteConfig.upcomingEvents,
-      forumThreads: siteConfig.forumThreads,
-      officerTerms: siteConfig.officerTerms,
-      faqs: siteConfig.faqs,
-      filters: siteConfig.defaultFilters,
-      branding: DEFAULT_BRANDING,
-      aiAutoSync: false,
-    });
+    void toggleForumSupportTransactionInFirestore(threadId, delta)
+      .then((verifiedCount) => {
+        setForumThreads((prev) =>
+          prev.map((t) =>
+            t.id === threadId ? { ...t, supportCount: verifiedCount } : t
+          )
+        );
+      })
+      .catch(() => {
+        setForumThreads(prevThreads);
+        showAuthNotification(
+          'Sign in to support a forum discussion.',
+          'logout'
+        );
+      });
   };
 
   return (
-    <MotionConfig reducedMotion="never">
-      <div className="relative min-h-screen flex flex-col bg-[var(--bg-canvas)] text-[var(--text-primary)] overflow-x-clip">
-        {/* Top Refresh & Navigation Progress Bar */}
-        <AnimatePresence>
-          {progressVisible && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              className="fixed top-0 left-0 right-0 z-[80] h-[3px] bg-transparent pointer-events-none"
-            >
-              <div
-                style={{ width: `${progressWidth}%` }}
-                className="h-full bg-[#2f6f4e] transition-[width] duration-200 ease-out"
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* 1. Header Section */}
-        <Header
-          currentPage={currentPage}
-          official={official}
-          student={student}
-          theme={theme}
-          customLogoUrl={branding.customLogoUrl}
-          unreadCounts={unreadCounts}
-          onToggleTheme={() =>
-            setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
-          }
-          onNavigate={navigateTo}
-          onOpenAuth={openAuthModal}
-          onUpdateStudentIdentity={handleUpdateStudentIdentity}
-          onSignOutOfficial={() => {
-            setOfficial(null);
-            if (!student && auth.currentUser) {
-              void signOut(auth);
-            }
-            setCurrentPage('home');
-            window.location.hash = '';
-            window.scrollTo({ top: 0, behavior: 'auto' });
-            showAuthNotification('Signed out.', 'logout');
-          }}
-          onSignOutStudent={() => {
-            setStudent(null);
-            if (!official && auth.currentUser) {
-              void signOut(auth);
-            }
-            setCurrentPage('home');
-            window.location.hash = '';
-            window.scrollTo({ top: 0, behavior: 'auto' });
-            showAuthNotification('Signed out.', 'logout');
-          }}
-        />
-
-        {/* Login / Logout / Refresh Status Notification Toast */}
-        <AnimatePresence>
-          {authNotification && (
-            <motion.div
-              role="status"
-              aria-live="polite"
-              initial={{ opacity: 0, y: -12, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.98 }}
-              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-              className="fixed top-20 right-4 sm:right-6 z-50 max-w-sm rounded-xl border border-white/[0.14] bg-[#121620] px-4 py-3 shadow-lg flex items-center gap-3"
-            >
-              <span
-                className={`inline-flex h-7 w-7 items-center justify-center rounded-lg shrink-0 ${
-                  authNotification.type === 'login' ||
-                  authNotification.type === 'refresh'
-                    ? 'bg-[#3ddc97]/15 text-[#3ddc97]'
-                    : 'bg-[#facc15]/15 text-[#facc15]'
-                }`}
+    <ErrorBoundary>
+      <MotionConfig reducedMotion="user">
+        <div className="relative min-h-screen flex flex-col bg-[var(--bg-canvas)] text-[var(--text-primary)] overflow-x-clip">
+          {/* Top Refresh & Navigation Progress Bar */}
+          <AnimatePresence>
+            {progressVisible && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="fixed top-0 left-0 right-0 z-[80] h-[3px] bg-transparent pointer-events-none"
               >
-                {authNotification.type === 'login' ? (
-                  <Check className="h-4 w-4" aria-hidden="true" />
-                ) : authNotification.type === 'refresh' ? (
-                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                ) : (
-                  <LogOut className="h-4 w-4" aria-hidden="true" />
-                )}
-              </span>
-              <p className="text-xs sm:text-sm font-semibold text-[#f5f4f0]">
-                {authNotification.message}
-              </p>
-              <button
-                type="button"
-                aria-label="Dismiss notification"
-                onClick={() => setAuthNotification(null)}
-                className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-[#949ba8] hover:text-[#f5f4f0] cursor-pointer"
-              >
-                <X className="h-3.5 w-3.5" aria-hidden="true" />
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <EdgeStretchShell isRefreshing={isRefreshing} onPullRefresh={handleRefreshWebsite}>
-          {/* 2. Active Page View (with Facebook-Style Silhouette Loading State) */}
-          <main className="flex flex-col flex-1">
-            {isSkeletonLoading ? (
-              <PageSkeleton page={currentPage} />
-            ) : (
-              <>
                 <div
-                  className={currentPage === 'home' ? 'block' : 'hidden'}
-                  aria-hidden={currentPage !== 'home'}
-                >
-                  <HeroSection
-                    announcements={announcements}
-                    events={events}
-                    forumThreads={forumThreads}
-                    theme={theme}
-                    customLogoUrl={branding.customLogoUrl}
-                    isActive={currentPage === 'home'}
-                    unreadCounts={unreadCounts}
-                    onToggleTheme={() =>
-                      setTheme((prev) =>
-                        prev === 'dark' ? 'light' : 'dark'
-                      )
-                    }
-                    onNavigate={navigateTo}
-                  />
-                  <CurrentOfficersSection
-                    officerTerms={officerTerms}
-                    onNavigate={navigateTo}
-                  />
-                  <CouncilInfoSection
-                    aboutImage={branding.aboutSlacImage}
-                    customLogoUrl={branding.customLogoUrl}
-                    official={official}
-                    onUpdateBranding={handleUpdateBranding}
-                    onOpenContact={() => setContactOpen(true)}
-                  />
-                </div>
-
-                {currentPage === 'announcements' && (
-                  <AnnouncementsPage
-                    announcements={announcements}
-                    filterOptions={filters.announcements}
-                    official={official}
-                    seenIds={seenItems.announcements}
-                    onMarkSeen={(id) => markItemSeen('announcements', id)}
-                    onNavigate={navigateTo}
-                    onAddAnnouncement={handleAddAnnouncement}
-                  />
-                )}
-                {currentPage === 'events' && (
-                  <EventsPage
-                    events={events}
-                    filterOptions={filters.events}
-                    official={official}
-                    seenIds={seenItems.events}
-                    onMarkSeen={(id) => markItemSeen('events', id)}
-                    onNavigate={navigateTo}
-                    onAddEvent={handleAddEvent}
-                  />
-                )}
-                {currentPage === 'officers' && (
-                  <OfficersPage
-                    terms={officerTerms}
-                    official={official}
-                    onNavigate={navigateTo}
-                  />
-                )}
-                {currentPage === 'faq' && (
-                  <FaqPage
-                    faqs={faqs}
-                    official={official}
-                    onNavigate={navigateTo}
-                  />
-                )}
-                {currentPage === 'forum' && (
-                  <ForumPage
-                    threads={forumThreads}
-                    filterOptions={filters.forum}
-                    official={official}
-                    student={student}
-                    seenIds={seenItems.forum}
-                    onMarkSeen={(id) => markItemSeen('forum', id)}
-                    onOpenStudentAuth={() => openAuthModal('student')}
-                    onNavigate={navigateTo}
-                    onAddThread={handleAddForumThread}
-                    onAddReply={handleAddForumReply}
-                    onDeleteThread={handleDeleteForumThread}
-                    onDeleteReply={handleDeleteForumReply}
-                    onToggleSupport={handleToggleForumSupport}
-                  />
-                )}
-                {currentPage === 'admin' && official && (
-                  <AdminDashboardPage
-                    official={official}
-                    announcements={announcements}
-                    events={events}
-                    forumThreads={forumThreads}
-                    officerTerms={officerTerms}
-                    accounts={officialAccounts}
-                    faqs={faqs}
-                    filters={filters}
-                    branding={branding}
-                    tasks={councilTasks}
-                    totalVisits={totalVisits}
-                    theme={theme}
-                    onToggleTheme={() =>
-                      setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
-                    }
-                    onSignOutOfficial={() => {
-                      setOfficial(null);
-                      if (!student && auth.currentUser) {
-                        void signOut(auth);
-                      }
-                      setCurrentPage('home');
-                      window.location.hash = '';
-                      window.scrollTo({ top: 0, behavior: 'auto' });
-                      showAuthNotification('Signed out.', 'logout');
-                    }}
-                    onNavigate={navigateTo}
-                    onSetAnnouncements={setAnnouncements}
-                    onSetEvents={setEvents}
-                    onSetForumThreads={setForumThreads}
-                    onSetOfficerTerms={setOfficerTerms}
-                    onSetAccounts={setOfficialAccounts}
-                    onSetFaqs={setFaqs}
-                    onSetFilters={setFilters}
-                    onUpdateBranding={handleUpdateBranding}
-                    onAddTask={handleAddCouncilTask}
-                    onToggleTask={handleToggleCouncilTask}
-                    onDeleteTask={handleDeleteCouncilTask}
-                    onResetDefaults={handleResetDefaults}
-                    onNotify={showAuthNotification}
-                  />
-                )}
-                {currentPage === 'admin' && !official && (
-                  <div className="w-full py-10 px-6 text-center space-y-4">
-                    <div className="mx-auto max-w-md rounded-2xl border border-white/[0.08] bg-[#121620] p-6 sm:p-8 space-y-4">
-                      <h1 className="text-2xl font-bold text-[#f5f4f0]">
-                        SSC Official Sign-In Required
-                      </h1>
-                      <p className="text-sm text-[#b4bac6]">
-                        Sign in with an officer or admin account to open SSC Suite.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => openAuthModal('official')}
-                        className="gemini-cta min-h-[42px] px-5 py-2 text-sm font-semibold rounded-lg cursor-pointer"
-                      >
-                        Open Official Sign In
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
+                  style={{ width: `${progressWidth}%` }}
+                  className="h-full bg-[#2f6f4e] transition-[width] duration-200 ease-out"
+                />
+              </motion.div>
             )}
-          </main>
+          </AnimatePresence>
 
-          {/* 3. Footer Section (Full Footer on Home Only, Very Bottom Bar on Other Pages, Hidden on SSC Suite) */}
-          {currentPage !== 'admin' && (
-            <Footer
-              currentPage={currentPage}
-              customLogoUrl={branding.customLogoUrl}
-              onNavigate={navigateTo}
-              onOpenContact={() => setContactOpen(true)}
-              onOpenOfficialAuth={() => openAuthModal('official')}
-            />
-          )}
-        </EdgeStretchShell>
+          {/* Offline Network Status Banner (Phase 1 & Phase 5) */}
+          <AnimatePresence>
+            {isOffline && (
+              <motion.div
+                role="status"
+                aria-live="polite"
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="w-full bg-[#b5483a] text-[#fffdf8] px-4 py-2 text-xs font-semibold flex items-center justify-center gap-2 z-[90]"
+              >
+                <WifiOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>
+                  You are currently offline. Viewing cached portal data — changes
+                  will sync when reconnected.
+                </span>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        {/* Contact SSC Dialog */}
-        {contactOpen && (
-          <Suspense fallback={null}>
-            <ContactModal
-              isOpen={contactOpen}
-              onClose={() => setContactOpen(false)}
-            />
-          </Suspense>
-        )}
-
-        {/* Separated Student & Official Auth Dialog */}
-        <OfficialAuthModal
-          isOpen={authModalOpen}
-          initialMode={authMode}
-          accounts={officialAccounts}
-          currentStudent={student}
-          onClose={() => setAuthModalOpen(false)}
-          onSignInOfficial={(signedOfficial) => {
-            setOfficial(signedOfficial);
-            setCurrentPage('home');
-            window.location.hash = '';
-            window.scrollTo({ top: 0, behavior: 'auto' });
-            showAuthNotification(
-              `Signed in as ${signedOfficial.name}.`,
-              'login'
-            );
-          }}
-          onSignInStudent={(signedStudent) => {
-            setStudent(signedStudent);
-            setCurrentPage('home');
-            window.location.hash = '';
-            window.scrollTo({ top: 0, behavior: 'auto' });
-            showAuthNotification(
-              `Signed in as ${signedStudent.name}.`,
-              'login'
-            );
-          }}
-          onContinueAsGuest={() => {
-            if (student) {
-              showAuthNotification('Signed out.', 'logout');
+          {/* 1. Header Section */}
+          <Header
+            currentPage={currentPage}
+            official={official}
+            student={student}
+            theme={theme}
+            customLogoUrl={branding.customLogoUrl}
+            unreadCounts={unreadCounts}
+            onToggleTheme={() =>
+              setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
             }
-            setStudent(null);
-            setCurrentPage('home');
-            window.location.hash = '';
-            window.scrollTo({ top: 0, behavior: 'auto' });
-          }}
-        />
-      </div>
-    </MotionConfig>
+            onNavigate={navigateTo}
+            onOpenAuth={openAuthModal}
+            onUpdateStudentIdentity={handleUpdateStudentIdentity}
+            onSignOutOfficial={() => {
+              setOfficial(null);
+              if (!student && auth.currentUser) {
+                void signOut(auth);
+              }
+              setCurrentPage('home');
+              window.history.pushState({ page: 'home' }, '', window.location.pathname);
+              window.scrollTo({ top: 0, behavior: 'auto' });
+              showAuthNotification('Signed out.', 'logout');
+            }}
+            onSignOutStudent={() => {
+              setStudent(null);
+              if (!official && auth.currentUser) {
+                void signOut(auth);
+              }
+              setCurrentPage('home');
+              window.history.pushState({ page: 'home' }, '', window.location.pathname);
+              window.scrollTo({ top: 0, behavior: 'auto' });
+              showAuthNotification('Signed out.', 'logout');
+            }}
+          />
+
+          {/* Login / Logout / Refresh / Error Status Notification Toast */}
+          <AnimatePresence>
+            {authNotification && (
+              <motion.div
+                role="status"
+                aria-live="polite"
+                initial={{ opacity: 0, y: -12, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                className="fixed top-20 right-4 sm:right-6 z-50 max-w-sm rounded-xl border border-white/[0.14] bg-[#121620] px-4 py-3 shadow-lg flex items-center gap-3"
+              >
+                <span
+                  className={`inline-flex h-7 w-7 items-center justify-center rounded-lg shrink-0 ${
+                    authNotification.type === 'login' ||
+                    authNotification.type === 'refresh'
+                      ? 'bg-[#3ddc97]/15 text-[#3ddc97]'
+                      : 'bg-[#facc15]/15 text-[#facc15]'
+                  }`}
+                >
+                  {authNotification.type === 'login' ? (
+                    <Check className="h-4 w-4" aria-hidden="true" />
+                  ) : authNotification.type === 'refresh' ? (
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <LogOut className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </span>
+                <p className="text-xs sm:text-sm font-semibold text-[#f5f4f0]">
+                  {authNotification.message}
+                </p>
+                <button
+                  type="button"
+                  aria-label="Dismiss notification"
+                  onClick={() => setAuthNotification(null)}
+                  className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-[#949ba8] hover:text-[#f5f4f0] cursor-pointer"
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <EdgeStretchShell
+            isRefreshing={isRefreshing}
+            onPullRefresh={handleRefreshWebsite}
+          >
+            {/* 2. Active Page View (with Real Data-Bound Silhouette Loading State) */}
+            <main className="flex flex-col flex-1">
+              {!isCurrentRouteDataReady ? (
+                <PageSkeleton page={currentPage} />
+              ) : (
+                <Suspense fallback={<PageSkeleton page={currentPage} />}>
+                  <div
+                    className={currentPage === 'home' ? 'block' : 'hidden'}
+                    aria-hidden={currentPage !== 'home'}
+                  >
+                    <HeroSection
+                      announcements={announcements}
+                      events={events}
+                      forumThreads={forumThreads}
+                      theme={theme}
+                      customLogoUrl={branding.customLogoUrl}
+                      isActive={currentPage === 'home'}
+                      unreadCounts={unreadCounts}
+                      onToggleTheme={() =>
+                        setTheme((prev) =>
+                          prev === 'dark' ? 'light' : 'dark'
+                        )
+                      }
+                      onNavigate={navigateTo}
+                    />
+                    <CurrentOfficersSection
+                      officerTerms={officerTerms}
+                      onNavigate={navigateTo}
+                    />
+                    <CouncilInfoSection
+                      aboutImage={branding.aboutSlacImage}
+                      customLogoUrl={branding.customLogoUrl}
+                      official={official}
+                      onUpdateBranding={handleUpdateBranding}
+                      onOpenContact={() => setContactOpen(true)}
+                    />
+                  </div>
+
+                  {currentPage === 'announcements' && (
+                    <AnnouncementsPage
+                      announcements={announcements}
+                      filterOptions={filters.announcements}
+                      official={official}
+                      seenIds={seenItems.announcements}
+                      onMarkSeen={(id) => markItemSeen('announcements', id)}
+                      onNavigate={navigateTo}
+                      onAddAnnouncement={handleAddAnnouncement}
+                    />
+                  )}
+                  {currentPage === 'events' && (
+                    <EventsPage
+                      events={events}
+                      filterOptions={filters.events}
+                      official={official}
+                      seenIds={seenItems.events}
+                      onMarkSeen={(id) => markItemSeen('events', id)}
+                      onNavigate={navigateTo}
+                      onAddEvent={handleAddEvent}
+                    />
+                  )}
+                  {currentPage === 'officers' && (
+                    <OfficersPage
+                      terms={officerTerms}
+                      official={official}
+                      onNavigate={navigateTo}
+                    />
+                  )}
+                  {currentPage === 'faq' && (
+                    <FaqPage
+                      faqs={faqs}
+                      official={official}
+                      onNavigate={navigateTo}
+                    />
+                  )}
+                  {currentPage === 'forum' && (
+                    <ForumPage
+                      threads={forumThreads}
+                      filterOptions={filters.forum}
+                      official={official}
+                      student={student}
+                      seenIds={seenItems.forum}
+                      onMarkSeen={(id) => markItemSeen('forum', id)}
+                      onOpenStudentAuth={() => openAuthModal('student')}
+                      onNavigate={navigateTo}
+                      onAddThread={handleAddForumThread}
+                      onAddReply={handleAddForumReply}
+                      onDeleteThread={handleDeleteForumThread}
+                      onDeleteReply={handleDeleteForumReply}
+                      onToggleSupport={handleToggleForumSupport}
+                    />
+                  )}
+                  {currentPage === 'admin' && official && (
+                    <AdminDashboardPage
+                      official={official}
+                      announcements={announcements}
+                      events={events}
+                      forumThreads={forumThreads}
+                      officerTerms={officerTerms}
+                      accounts={officialAccounts}
+                      faqs={faqs}
+                      filters={filters}
+                      branding={branding}
+                      tasks={councilTasks}
+                      totalVisits={totalVisits}
+                      theme={theme}
+                      onToggleTheme={() =>
+                        setTheme((prev) =>
+                          prev === 'dark' ? 'light' : 'dark'
+                        )
+                      }
+                      onSignOutOfficial={() => {
+                        setOfficial(null);
+                        if (!student && auth.currentUser) {
+                          void signOut(auth);
+                        }
+                        setCurrentPage('home');
+                        window.history.pushState(
+                          { page: 'home' },
+                          '',
+                          window.location.pathname
+                        );
+                        window.scrollTo({ top: 0, behavior: 'auto' });
+                        showAuthNotification('Signed out.', 'logout');
+                      }}
+                      onNavigate={navigateTo}
+                      onSetAnnouncements={setAnnouncements}
+                      onSetEvents={setEvents}
+                      onSetForumThreads={setForumThreads}
+                      onSetOfficerTerms={setOfficerTerms}
+                      onSetAccounts={setOfficialAccounts}
+                      onSetFaqs={setFaqs}
+                      onSetFilters={setFilters}
+                      onUpdateBranding={handleUpdateBranding}
+                      onAddTask={handleAddCouncilTask}
+                      onToggleTask={handleToggleCouncilTask}
+                      onDeleteTask={handleDeleteCouncilTask}
+                      onNotify={showAuthNotification}
+                    />
+                  )}
+                  {currentPage === 'admin' && !official && (
+                    <div className="w-full py-10 px-6 text-center space-y-4">
+                      <div className="mx-auto max-w-md rounded-2xl border border-white/[0.08] bg-[#121620] p-6 sm:p-8 space-y-4">
+                        <h1 className="text-2xl font-bold text-[#f5f4f0]">
+                          SSC Official Sign-In Required
+                        </h1>
+                        <p className="text-sm text-[#b4bac6]">
+                          Sign in with an officer or admin account to open SSC
+                          Suite.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => openAuthModal('official')}
+                          className="gemini-cta min-h-[42px] px-5 py-2 text-sm font-semibold rounded-lg cursor-pointer"
+                        >
+                          Open Official Sign In
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </Suspense>
+              )}
+            </main>
+
+            {/* 3. Footer Section */}
+            {currentPage !== 'admin' && (
+              <Footer
+                currentPage={currentPage}
+                customLogoUrl={branding.customLogoUrl}
+                onNavigate={navigateTo}
+                onOpenContact={() => setContactOpen(true)}
+                onOpenOfficialAuth={() => openAuthModal('official')}
+              />
+            )}
+          </EdgeStretchShell>
+
+          {/* Contact SSC Dialog */}
+          {contactOpen && (
+            <Suspense fallback={null}>
+              <ContactModal
+                isOpen={contactOpen}
+                onClose={() => setContactOpen(false)}
+              />
+            </Suspense>
+          )}
+
+          {/* Separated Student & Official Auth Dialog */}
+          <OfficialAuthModal
+            isOpen={authModalOpen}
+            initialMode={authMode}
+            accounts={officialAccounts}
+            currentStudent={student}
+            onClose={() => setAuthModalOpen(false)}
+            onSignInOfficial={(signedOfficial) => {
+              setOfficial(signedOfficial);
+              setCurrentPage('home');
+              window.history.pushState(
+                { page: 'home' },
+                '',
+                window.location.pathname
+              );
+              window.scrollTo({ top: 0, behavior: 'auto' });
+              showAuthNotification(
+                `Signed in as ${signedOfficial.name}.`,
+                'login'
+              );
+            }}
+            onSignInStudent={(signedStudent) => {
+              setStudent(signedStudent);
+              setCurrentPage('home');
+              window.history.pushState(
+                { page: 'home' },
+                '',
+                window.location.pathname
+              );
+              window.scrollTo({ top: 0, behavior: 'auto' });
+              showAuthNotification(
+                `Signed in as ${signedStudent.name}.`,
+                'login'
+              );
+            }}
+            onContinueAsGuest={() => {
+              if (student) {
+                showAuthNotification('Signed out.', 'logout');
+              }
+              setStudent(null);
+              setCurrentPage('home');
+              window.history.pushState(
+                { page: 'home' },
+                '',
+                window.location.pathname
+              );
+              window.scrollTo({ top: 0, behavior: 'auto' });
+            }}
+          />
+        </div>
+      </MotionConfig>
+    </ErrorBoundary>
   );
 }

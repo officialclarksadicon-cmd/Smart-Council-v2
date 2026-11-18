@@ -143,7 +143,7 @@ h4,
 }
 
 /* ==========================================================================
-   CLAUDE-INSPIRED COLOR-CODED TAGS & WINDOW BAR TOKENS (image_5866d37d.png)
+   ARCHITECTURAL COLOR-CODED TAGS & WINDOW BAR TOKENS
    ========================================================================== */
 .claude-tag {
   display: inline-flex;
@@ -266,11 +266,11 @@ html[data-theme="dark"] .claude-pill-version {
   box-shadow: none;
 }
 
-/* State 2 (Light): Scrolled or Inner Section — Frosted Blur Interpolated with Section Surface (#f4f1e7) */
+/* State 2 (Light): Scrolled or Inner Section — 100% Opaque Solid Surface (#f4f1e7) */
 .karst-header-solid {
-  background-color: rgba(244, 241, 231, 0.82);
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  background-color: #f4f1e7;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   border-color: rgba(23, 24, 22, 0.18);
   box-shadow: 0 4px 16px -6px rgba(23, 24, 22, 0.08);
 }
@@ -284,11 +284,11 @@ html[data-theme="dark"] .karst-header-glass {
   box-shadow: none;
 }
 
-/* State 2 (Dark): Scrolled or Inner Section — Frosted Blur Interpolated with Section Surface (#1a201d) */
+/* State 2 (Dark): Scrolled or Inner Section — 100% Opaque Solid Surface (#1a201d) */
 html[data-theme="dark"] .karst-header-solid {
-  background-color: rgba(26, 32, 29, 0.82);
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  background-color: #1a201d;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   border-color: rgba(245, 243, 238, 0.15);
   box-shadow: 0 4px 20px -6px rgba(0, 0, 0, 0.32);
 }
@@ -303,7 +303,7 @@ html[data-theme="dark"] .karst-header-solid {
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background-color: rgba(244, 241, 231, 0.78);
+  background-color: #f4f1e7;
   border: 1px solid rgba(23, 24, 22, 0.16);
   color: #151715;
   box-shadow: 0 2px 6px -1px rgba(23, 24, 22, 0.07);
@@ -331,7 +331,7 @@ html[data-theme="dark"] .karst-header-solid {
 }
 
 html[data-theme="dark"] .mavi-burger-btn {
-  background-color: rgba(34, 41, 37, 0.86);
+  background-color: #222925;
   border: 1px solid rgba(245, 243, 238, 0.16);
   color: #f5f3ee;
   box-shadow: 0 2px 8px -1px rgba(0, 0, 0, 0.32);
@@ -414,9 +414,7 @@ html[data-theme="dark"] .mavi-burger-btn.is-open {
    MAVI DESIGN MENU OVERLAY SURFACE & INTERACTIVE MENU BUTTON VARIANTS
    ========================================================================== */
 .mavi-menu-surface {
-  background-color: rgba(248, 246, 239, 0.98);
-  backdrop-filter: blur(24px) saturate(150%);
-  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  background-color: #f8f6ef;
   border-color: rgba(23, 24, 22, 0.16);
   box-shadow:
     0 24px 48px -12px rgba(23, 24, 22, 0.18),
@@ -424,9 +422,7 @@ html[data-theme="dark"] .mavi-burger-btn.is-open {
 }
 
 html[data-theme="dark"] .mavi-menu-surface {
-  background-color: rgba(22, 27, 24, 0.97);
-  backdrop-filter: blur(24px) saturate(150%);
-  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  background-color: #161b18;
   border-color: rgba(245, 243, 238, 0.16);
   box-shadow:
     0 24px 48px -12px rgba(0, 0, 0, 0.6),

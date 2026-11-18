@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react';
 import {
   ArrowRight,
   ArrowUpRight,
@@ -11,12 +12,16 @@ import {
   ForumThread,
   GalleryEventItem,
   PageRoute,
+  getCurrentAcademicYearLabel,
   siteConfig,
 } from '../siteConfig';
 import type { ThemeMode } from '../App';
-import { HeroOffice3D } from './HeroOffice3D';
 import { ScrollReveal } from './ScrollReveal';
 import { WordRevealText } from './WordRevealText';
+
+const HeroOffice3D = lazy(() =>
+  import('./HeroOffice3D').then((m) => ({ default: m.HeroOffice3D }))
+);
 
 interface HeroSectionProps {
   announcements: AnnouncementItem[];
@@ -36,10 +41,8 @@ interface HeroSectionProps {
 
 /**
  * BODY SECTION 1: UNIFIED FULL-BLEED 3D COUNCIL OFFICE & SKY STAGE + KARST HIGHLIGHTS GRID
- * - The 3D Scene Stage (z-20) sits ABOVE the Campus Highlights body section (z-10) so the isometric
- *   3D office platform is never clipped or buried beneath the body.
- * - Both Mobile and PC use a true transparent glass-blur Hero text card (zero solid background color)
- *   positioned harmoniously inside the 3D scene stage.
+ * - Lazy-loads HeroOffice3D via React.lazy + IntersectionObserver so Three.js is split out of the initial critical bundle.
+ * - Respects prefers-reduced-motion with a static architectural fallback.
  */
 export function HeroSection({
   announcements,
@@ -64,6 +67,7 @@ export function HeroSection({
   const forumBadge = unreadCounts?.forum ?? 0;
 
   const isDark = theme === 'dark';
+  const academicYearLabel = getCurrentAcademicYearLabel();
 
   // Day (Sunny Blue Sky) / Night (Starry Deep Sky) backdrop behind the transparent-alpha 3D WebGL stage
   const skyBackdropStyle = {
@@ -85,7 +89,6 @@ export function HeroSection({
       : 'linear-gradient(90deg, rgba(230, 226, 214, 0.95) 0%, rgba(230, 226, 214, 0.72) 50%, rgba(230, 226, 214, 0) 100%)',
   };
 
-  // Secondary CTA button without backdrop blur
   const secondaryButtonStyle = {
     backgroundColor: isDark
       ? 'rgba(255, 255, 255, 0.12)'
@@ -107,14 +110,16 @@ export function HeroSection({
         style={skyBackdropStyle}
         className="relative z-20 w-full h-[650px] sm:h-[680px] lg:h-[690px] transition-colors duration-300"
       >
-        {/* Full-Bleed Interactive 3D Isometric Office & Sky Canvas (z-10, transparent alpha) */}
+        {/* Full-Bleed Interactive 3D Isometric Office & Sky Canvas (z-10, code-split via React.lazy) */}
         <div className="absolute inset-0 z-10">
-          <HeroOffice3D
-            theme={theme}
-            customLogoUrl={customLogoUrl}
-            isActive={isActive}
-            onToggleTheme={onToggleTheme}
-          />
+          <Suspense fallback={null}>
+            <HeroOffice3D
+              theme={theme}
+              customLogoUrl={customLogoUrl}
+              isActive={isActive}
+              onToggleTheme={onToggleTheme}
+            />
+          </Suspense>
         </div>
 
         {/* Pure Fading Gradient Backdrop (No card shapes, 3D scene stays clearly visible) */}
@@ -129,9 +134,7 @@ export function HeroSection({
           className="pointer-events-none hidden lg:block absolute inset-y-0 left-0 z-20 w-[58%] transition-colors duration-300"
         />
 
-        {/* Hero Text Content (Zero card shapes, borders, or blur):
-            - Mobile (< lg): Sits in the lower portion while the 3D office is elevated clearly in the upper half.
-            - Desktop (>= lg): Sits on the left while the 3D office is positioned clearly on the right. */}
+        {/* Hero Text Content */}
         <div className="relative z-30 pointer-events-none mx-auto max-w-[1440px] h-full px-4 sm:px-8 lg:px-12 pt-16 pb-7 sm:pb-9 lg:py-20 flex items-end lg:items-center">
           <div className="pointer-events-auto w-full max-w-[445px] space-y-3.5 sm:space-y-4">
             <div className="flex flex-wrap items-center gap-3 text-xs font-semibold">
@@ -147,7 +150,7 @@ export function HeroSection({
                   isDark ? 'text-[#e2e6ee]' : 'text-[#262825]'
                 }`}
               >
-                A.Y. 2025–2026
+                {academicYearLabel}
               </span>
             </div>
 

@@ -1,0 +1,23 @@
+{
+  "name": "Smart Council — SLAC Supreme Student Council",
+  "short_name": "Smart Council",
+  "description": "Official student portal of the SLAC Supreme Student Council (Est. 2019). Check announcements, upcoming campus events, council officers, FAQs, and student forum discussions.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#e6e2d6",
+  "theme_color": "#171816",
+  "icons": [
+    {
+      "src": "https://ik.imagekit.io/slacssc/smart-council/logo/ssc-logo_yvq35sFUH.png?tr=w-192,h-192,f-png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://ik.imagekit.io/slacssc/smart-council/logo/ssc-logo_yvq35sFUH.png?tr=w-512,h-512,f-png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

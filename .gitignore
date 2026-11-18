@@ -1,8 +1,23 @@
+# Dependencies
 node_modules/
-build/
+functions/node_modules/
+
+# Build outputs
 dist/
-coverage/
-.DS_Store
+functions/lib/
+server.js
+
+# Local & Firebase caches
+.firebase/
+.aistudio/
+*.tsbuildinfo
+
+# Environment secrets (keep .env.example committed)
+.env
+.env.local
+.env.*.local
+
+# Logs & Editor files
 *.log
-.env*
-!.env.example
+npm-debug.log*
+.DS_Store

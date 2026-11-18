@@ -49,77 +49,14 @@
       },
       "required": ["uid", "name", "email", "yearCourse", "createdAt", "updatedAt"]
     },
-    "OfficialUser": {
-      "title": "OfficialUser",
-      "description": "Verified Firebase Auth UID registry for provisioned SSC Officials and Web Admins.",
-      "type": "object",
-      "properties": {
-        "uid": {
-          "type": "string",
-          "description": "Firebase Auth UID of the official.",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "accountId": {
-          "type": "string",
-          "description": "Corresponding CouncilAccount document ID.",
-          "minLength": 1,
-          "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
-        },
-        "name": {
-          "type": "string",
-          "description": "Official full name.",
-          "minLength": 1,
-          "maxLength": 120
-        },
-        "position": {
-          "type": "string",
-          "description": "Official SLAC SSC position title.",
-          "minLength": 1,
-          "maxLength": 80
-        },
-        "role": {
-          "type": "string",
-          "description": "Access role (admin or official).",
-          "enum": ["admin", "official"]
-        },
-        "visibility": {
-          "type": "string",
-          "description": "Visibility marker for admin queries.",
-          "enum": ["public"]
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Server creation timestamp."
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Server update timestamp."
-        }
-      },
-      "required": [
-        "uid",
-        "accountId",
-        "name",
-        "position",
-        "role",
-        "visibility",
-        "createdAt",
-        "updatedAt"
-      ]
-    },
     "CouncilAccount": {
       "title": "CouncilAccount",
-      "description": "Provisioned SSC Officer or Web Admin account managed exclusively by official.clarksadicon@gmail.com.",
+      "description": "Provisioned SSC Officer or Web Admin account (no plaintext passcodes; roles enforced via Firebase Auth Custom Claims and councilAccounts UID mapping).",
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
-          "description": "Account identifier.",
+          "description": "Account identifier (matches Firebase Auth UID).",
           "minLength": 1,
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
@@ -130,12 +67,6 @@
           "description": "Registered email for the council officer or admin.",
           "minLength": 3,
           "maxLength": 160
-        },
-        "passcode": {
-          "type": "string",
-          "description": "Assigned officer login passcode.",
-          "minLength": 4,
-          "maxLength": 64
         },
         "name": {
           "type": "string",
@@ -181,7 +112,6 @@
       "required": [
         "id",
         "email",
-        "passcode",
         "name",
         "position",
         "role",
@@ -192,7 +122,7 @@
     },
     "CouncilOfficer": {
       "title": "CouncilOfficer",
-      "description": "Public SLAC SSC Council Officer directory record pushed when the Web Admin or an official updates officer rosters, stored separately from normal student users.",
+      "description": "Public SLAC SSC Council Officer directory record pushed when the Web Admin or an official updates officer rosters.",
       "type": "object",
       "properties": {
         "id": {
@@ -296,6 +226,11 @@
           "minLength": 1,
           "maxLength": 60
         },
+        "publishedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Sortable publication timestamp."
+        },
         "category": {
           "type": "string",
           "description": "Announcement category filter tag.",
@@ -371,6 +306,11 @@
           "minLength": 1,
           "maxLength": 80
         },
+        "startsAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Sortable event start timestamp."
+        },
         "time": {
           "type": "string",
           "description": "Event time window.",
@@ -440,7 +380,7 @@
     },
     "ForumThreadDoc": {
       "title": "ForumThreadDoc",
-      "description": "Live student forum discussion thread and bounded replies list.",
+      "description": "Live student forum discussion thread with authorUid ownership.",
       "type": "object",
       "properties": {
         "id": {
@@ -455,6 +395,12 @@
           "description": "Verified student or officer display name.",
           "minLength": 1,
           "maxLength": 120
+        },
+        "authorUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the thread author.",
+          "minLength": 1,
+          "maxLength": 128
         },
         "yearLevel": {
           "type": "string",
@@ -492,7 +438,7 @@
         },
         "replies": {
           "type": "array",
-          "description": "Bounded list of up to 100 reply objects."
+          "description": "Bounded list of reply objects."
         },
         "visibility": {
           "type": "string",
@@ -525,9 +471,87 @@
         "updatedAt"
       ]
     },
+    "ForumReplyDoc": {
+      "title": "ForumReplyDoc",
+      "description": "Forum reply stored in /forumThreads/{threadId}/replies/{replyId}.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "author": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "authorUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "yearLevel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "time": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "threadId",
+        "author",
+        "authorUid",
+        "yearLevel",
+        "time",
+        "message",
+        "createdAt"
+      ]
+    },
+    "ForumSupportDoc": {
+      "title": "ForumSupportDoc",
+      "description": "Per-user forum support record stored at /forumThreads/{threadId}/supports/{userId}.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "threadId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "threadId", "createdAt"]
+    },
     "PortalSettings": {
       "title": "PortalSettings",
-      "description": "Synchronized category filter tags and AI filter settings for all portal visitors.",
+      "description": "Synchronized category filter tags and branding assets for all portal visitors.",
       "type": "object",
       "properties": {
         "id": {
@@ -643,7 +667,7 @@
     },
     "CouncilTask": {
       "title": "CouncilTask",
-      "description": "SSC Suite task item that can be a personal task for an officer or assigned to a specific SSC position.",
+      "description": "SSC Suite task item assigned to a specific SSC officer.",
       "type": "object",
       "properties": {
         "id": {
@@ -716,7 +740,7 @@
       "properties": {
         "visits": {
           "type": "number",
-          "description": "Cumulative website visits incremented atomically by +1 per session."
+          "description": "Cumulative website visits incremented atomically by +1."
         },
         "updatedAt": {
           "type": "string",
@@ -732,17 +756,13 @@
       "schema": "StudentUser",
       "description": "Normal student users authenticated with Google Sign-In (isolated from council officers)."
     },
-    "/officialUsers/{userId}": {
-      "schema": "OfficialUser",
-      "description": "Verified Firebase Auth UID registry for provisioned SSC Officials and Web Admins."
-    },
     "/councilAccounts/{accountId}": {
       "schema": "CouncilAccount",
-      "description": "Provisioned SSC Officer and Web Admin accounts managed exclusively by official.clarksadicon@gmail.com."
+      "description": "Provisioned SSC Officer and Web Admin accounts readable strictly by officials/admins."
     },
     "/councilOfficers/{officerId}": {
       "schema": "CouncilOfficer",
-      "description": "Council officers collection populated and streamed live across all users."
+      "description": "Public council officers collection populated and streamed live across all users."
     },
     "/announcements/{announcementId}": {
       "schema": "Announcement",
@@ -755,6 +775,14 @@
     "/forumThreads/{threadId}": {
       "schema": "ForumThreadDoc",
       "description": "Live student forum discussions readable by all visitors and writable by signed-in students and officers."
+    },
+    "/forumThreads/{threadId}/replies/{replyId}": {
+      "schema": "ForumReplyDoc",
+      "description": "Subcollection of replies for a forum thread."
+    },
+    "/forumThreads/{threadId}/supports/{userId}": {
+      "schema": "ForumSupportDoc",
+      "description": "Per-UID support tracking documents for a forum thread."
     },
     "/portalSettings/{settingId}": {
       "schema": "PortalSettings",
